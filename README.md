@@ -6,14 +6,14 @@ Javascript utilities, shared by, amongst others:
 ``snackabra-webclient``, ``snackabra-roomserver``, and
 ``snackabra-storageserver``.
 
-For general documentation on Snackabra see:
-
-* https://snackabra.io
+For general documentation on Snackabra see: https://snackabra.io
 
 If you would like to contribute or help out with the snackabra
 project, please feel free to reach out to us at snackabra@gmail.com or
 snackabra@protonmail.com
 
+All of Snackabra is licensed under GPL-v3, see [GPL v3 license
+file](LICENSE.md) for details.
 
 ## Usage
 

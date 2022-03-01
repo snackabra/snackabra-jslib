@@ -1,10 +1,10 @@
 {
   "name": "snackabra",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Snackabra JS Library",
   "main": "main.js",
   "scripts": {
-    "prepare": "eslint src/main.js && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
+    "prepare": "eslint src/main.js && rollup -c > index.mjs && BROWSER=true rollup -c > main.mjs",
     "pretest": "eslint src/main.js && rollup -c > index.mjs",
     "test": "NODE_OPTIONS=--experimental-vm-modules jest"
   },
@@ -27,11 +27,11 @@
   },
   "homepage": "https://snackabra.io",
   "browser": {
-    "./index.mjs": "./browser.mjs"
+    "./index.mjs": "./main.mjs"
   },
   "files": [
     "index.mjs",
-    "browser.mjs"
+    "main.mjs"
   ],
   "sideEffects": false,
   "devDependencies": {

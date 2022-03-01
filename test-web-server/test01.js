@@ -4,11 +4,11 @@
 //  <script type="module" src="./test01.js"></script>
 
 // import {jest} from '@jest/globals';
-import {hello, arrayBufferToString, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues,
-       stringToArrayBuffer} from './browser.mjs';
+import {library_version, arrayBufferToString, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues,
+       stringToArrayBuffer} from './main.mjs';
 
 let z = document.getElementById("testResults");
-z.innerHTML += "hello " + hello() + "\n";
+z.innerHTML += "Checking version of library: " + library_version() + "\n";
 
 let test_pass = 0, test_fail = 0;
 
@@ -107,7 +107,7 @@ if (true)
     getRandomValues(array);
     let s1 = arrayBufferToString(array);
     let s2 = stringToArrayBuffer(s1)
-    if (s0 === s2) {
+    if (compare_uint8(array, s2)) {
       z.innerHTML += `Pass for random (binary) string test #${i}<br\>`;
       test_pass ++;
     } else {
@@ -116,12 +116,8 @@ if (true)
       console.log(array);
       test_fail ++;
     }
-
-    expect(s2).toEqual(array);
   }
-});
-
-
+}
 
 if (true)
 {

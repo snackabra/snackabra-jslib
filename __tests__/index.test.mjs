@@ -7,11 +7,11 @@
 
 // nota bene ... pretty basic testing, not very sophisticated yet
 
-import {hello, arrayBufferToString, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues,
+import {library_version, arrayBufferToString, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues,
        stringToArrayBuffer} from './index.mjs';
 
 test('hello world (check loading)', () => {
-  expect(hello()).toEqual('world');
+  expect(library_version()).toEqual('This is the NODE.JS version of the library');
 });
 
 test('string returns to same result', () => {

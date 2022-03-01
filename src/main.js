@@ -1,20 +1,25 @@
-/**
- * @fileoverview Main file for snackabra javascript utilities
- * @package
- */
-
 /* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
+
+
+export function library_version() {
+  if (process.browser)
+    return 'This is the BROWSER version of the library';
+  else
+    return 'This is the NODE.JS version of the library';
+}
+
+
+/**
+ * @fileoverview Main file for snackabra javascript utilities.
+ *               See https://snackabra.io for details.
+ * @package
+ */
 
 /* TODO - list of modules that main.js can now fully support:
           (note: some MI-internal references)
    m042/src/scripts/components/FormSubmission.js
 */
-
-// for testing module loading
-export function hello() {
-  return 'world';
-}
 
 // the below general exception handler can be improved so us to
 // retain the error stack, per:
