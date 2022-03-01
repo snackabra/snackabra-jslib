@@ -15,19 +15,63 @@ snackabra@protonmail.com
 All of Snackabra is licensed under GPL-v3, see [GPL v3 license
 file](LICENSE.md) for details.
 
-## Usage
-
-```
 # Installation:
 npm install snackabra -g
 
-# Use in Node:
-import {library_version} from 'snackabra';
+## Usage in Node.js
 
+A couple of ways to load ES module version in nodejs:
 
-# Use in browsers:
-<script src="snackabra.js">
+```javascript
+// method 1:
+import * as sb from 'snackabra';
+console.log(sb.str2sb('hello'));
+
+// method 2 (the default export)
+import Snackabra from 'snackabra';
+console.log(Snackabra.str2ab('hello'));
+
+// method 3
+const sb = await import('snackabra');
+console.log(sb.str2ab('hello'));
+
+// method 4
+import {str2ab} from 'snackabra';
+console.log(str2ab('hello'));
 ```
+
+## Use in browsers
+
+From a local copy:
+
+```html
+  <script type="module" src="browser.mjs"></script>
+```
+
+Or from npm package:
+
+```
+  <!-- This gets latest version: -->
+  <script type="module" src="https://unpkg.com/snackabra/browser.mjs"></script>
+  <!-- This gets specific version: -->
+  <script type="module" src="https://unpkg.com/snackabra@0.4.10/browser.mjs"></script>
+```
+
+You can also do dynamic import of latest version:
+
+```html
+  <h2>Test Results</h2>
+  <p id='testResults'></p>
+  <script>
+    import('https://unpkg.com/snackabra/browser.mjs').then((sb) => {
+      let z = document.getElementById("testResults");
+      z.innerHTML += `Test: ${sb.str2ab('hello')}`;
+    });
+  </script>
+```html
+
+You can also access the loaded functions globally, e.g. ``window.Snackabra.str2ab('hello')``.
+
 
 ## Development
 

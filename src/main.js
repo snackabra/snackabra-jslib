@@ -321,3 +321,18 @@ export function packageEncryptDict(dict, publicKeyPEM, callback) {
   );
 } // packageEncrypt()
 
+const Snackabra = {
+  SB_libraryVersion: SB_libraryVersion,
+  ab2str: ab2str,
+  str2ab: str2ab,
+  base64ToArrayBuffer: base64ToArrayBuffer,
+  arrayBufferToBase64: arrayBufferToBase64,
+  getRandomValues: getRandomValues
+};
+
+export default Snackabra;
+
+
+if (process.browser)
+  window.Snackabra = Snackabra;
+

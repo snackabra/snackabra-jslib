@@ -304,4 +304,16 @@ function packageEncryptDict(dict, publicKeyPEM, callback) {
   );
 } // packageEncrypt()
 
-export { SB_libraryVersion, ab2str, arrayBufferToBase64, base64ToArrayBuffer, getRandomValues, importPublicKey, packageEncryptDict, simpleRand256, str2ab };
+const Snackabra = {
+  SB_libraryVersion: SB_libraryVersion,
+  ab2str: ab2str,
+  str2ab: str2ab,
+  base64ToArrayBuffer: base64ToArrayBuffer,
+  arrayBufferToBase64: arrayBufferToBase64,
+  getRandomValues: getRandomValues
+};
+
+
+window.Snackabra = Snackabra;
+
+export { SB_libraryVersion, ab2str, arrayBufferToBase64, base64ToArrayBuffer, Snackabra as default, getRandomValues, importPublicKey, packageEncryptDict, simpleRand256, str2ab };
