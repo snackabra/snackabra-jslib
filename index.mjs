@@ -2,7 +2,7 @@
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
 
 
-function library_version() {
+function SB_libraryVersion() {
   return 'This is the NODE.JS version of the library';
 }
 
@@ -125,6 +125,10 @@ function _assertUint8Array(obj) {
 
 const b64_regex = new RegExp('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$');
 
+/**
+   Returns 'true' if (and only if) string is well-formed base64.
+   Works same on browsers and nodejs.
+ */
 function _assertBase64(base64) {
   return (b64_regex.exec(base64)?.[0] === base64);
 }
@@ -134,7 +138,7 @@ function _assertBase64(base64) {
     @param {string} string
     @return {Uint8Array} buffer
  */
-function stringToArrayBuffer(string) {
+function str2ab(string) {
   const length = string.length;
   const buffer = new Uint8Array(length);
   for (let i = 0; i < length; i++)
@@ -147,9 +151,9 @@ function stringToArrayBuffer(string) {
     @param {string} string
     @return {Uint8Array} buffer
  */
-function arrayBufferToString(buffer) {
+function ab2str(buffer) {
   if (!_assertUint8Array(buffer))
-    _sb_exception('arrayBufferToString()', 'parameter is not a Uint8Array buffer'); // this will throw
+    _sb_exception('ab2str()', 'parameter is not a Uint8Array buffer'); // this will throw
   return String.fromCharCode.apply(null, new Uint8Array(buffer));
 }
 
@@ -220,7 +224,7 @@ function simpleRand256() {
     @param {callback} callback function, called with results
  */
 function packageEncryptDict(dict, publicKeyPEM, callback) {
-  const clearDataArrayBufferView = stringToArrayBuffer(JSON.stringify(dict));
+  const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
   const aesAlgorithmKeyGen = {name: 'AES-GCM', length: 256};
   const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: _crypto.getRandomValues(new Uint8Array(16))};
   if (!publicKeyPEM)
@@ -277,4 +281,4 @@ function packageEncryptDict(dict, publicKeyPEM, callback) {
   );
 } // packageEncrypt()
 
-export { arrayBufferToBase64, arrayBufferToString, base64ToArrayBuffer, getRandomValues, importPublicKey, library_version, packageEncryptDict, simpleRand256, stringToArrayBuffer };
+export { SB_libraryVersion, ab2str, arrayBufferToBase64, base64ToArrayBuffer, getRandomValues, importPublicKey, packageEncryptDict, simpleRand256, str2ab };

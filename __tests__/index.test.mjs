@@ -7,16 +7,15 @@
 
 // nota bene ... pretty basic testing, not very sophisticated yet
 
-import {library_version, arrayBufferToString, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues,
-       stringToArrayBuffer} from './index.mjs';
+import {SB_libraryVersion, ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues} from './index.mjs';
 
 test('hello world (check loading)', () => {
-  expect(library_version()).toEqual('This is the NODE.JS version of the library');
+  expect(SB_libraryVersion()).toEqual('This is the NODE.JS version of the library');
 });
 
 test('string returns to same result', () => {
   const s = "0123456789abcdefghijklmnop";
-  expect(arrayBufferToString(base64ToArrayBuffer(arrayBufferToBase64(stringToArrayBuffer(s))))).toEqual(s);
+  expect(ab2str(base64ToArrayBuffer(arrayBufferToBase64(str2ab(s))))).toEqual(s);
 });
 
 test('ten random buffers of random length', () => {
@@ -53,8 +52,8 @@ const z = [
 
 test("some string <-> binary conversions", () => {
   for (const s0 of z) {
-    let s1 = stringToArrayBuffer(s0);
-    let s2 = arrayBufferToString(s1);
+    let s1 = str2ab(s0);
+    let s2 = ab2str(s1);
     expect(s0).toEqual(s2);    
   }
 });
@@ -65,8 +64,8 @@ test('ten random binary strings of random length', () => {
     getRandomValues(random_length);
     let array = new Uint8Array(random_length[0]);
     getRandomValues(array);
-    let s1 = arrayBufferToString(array);
-    let s2 = stringToArrayBuffer(s1)
+    let s1 = ab2str(array);
+    let s2 = str2ab(s1)
     expect(s2).toEqual(array);
   }
 });
@@ -75,10 +74,10 @@ test('ten random binary strings of random length', () => {
 test("some yucky strings", () => {
   for (const e of z) {
     let s0 = e;
-    let s1 = stringToArrayBuffer(s0);
+    let s1 = str2ab(s0);
     let s2 = arrayBufferToBase64(s1);
     let s3 = base64ToArrayBuffer(s2);
-    let s4 = arrayBufferToString(s3);
+    let s4 = ab2str(s3);
     if (s0 !== s4) {
       console.log('Failed conversion of string, details:');
       console.log(` s0: ${s0}\n s1: ${s1}\n s2: ${s2}\n s3: ${s3}\n s4: ${s4}\n`);
@@ -88,6 +87,6 @@ test("some yucky strings", () => {
 });
 
 test("our exception handler", () => {
-  expect(() => {arrayBufferToString('foo')}).toThrow('<< SB lib error (arrayBufferToString(): parameter is not a Uint8Array buffer) >>');
+  expect(() => {ab2str('foo')}).toThrow('<< SB lib error (ab2str(): parameter is not a Uint8Array buffer) >>');
 });
 

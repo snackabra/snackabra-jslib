@@ -22,7 +22,8 @@ file](LICENSE.md) for details.
 npm install snackabra -g
 
 # Use in Node:
-var sb = require('snackabra')
+import {library_version} from 'snackabra';
+
 
 # Use in browsers:
 <script src="snackabra.js">
@@ -54,6 +55,15 @@ python3 -m http.server --bind 127.0.0.1
 ```
 
 And then point a browser to it.
+
+## Publishing
+
+If you have write/admin access to ``npmjs``:
+
+```
+npm login  # if needed
+npm publish
+```
 
 
 ## LICENSE

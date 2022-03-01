@@ -2,7 +2,7 @@
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
 
 
-export function library_version() {
+export function SB_libraryVersion() {
   if (process.browser)
     return 'This is the BROWSER version of the library';
   else
@@ -128,7 +128,7 @@ export function base64ToArrayBuffer(asc) {
         : r2 === 64 ? _fromCC(u24 >> 16 & 255, u24 >> 8 & 255)
         : _fromCC(u24 >> 16 & 255, u24 >> 8 & 255, u24 & 255);
     }
-    return stringToArrayBuffer(bin);
+    return str2ab(bin);
   } else {
     return _U8Afrom(Buffer.from(asc, 'base64'));
   }
@@ -165,6 +165,10 @@ function _assertUint8Array(obj) {
 
 const b64_regex = new RegExp('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$');
 
+/**
+   Returns 'true' if (and only if) string is well-formed base64.
+   Works same on browsers and nodejs.
+ */
 function _assertBase64(base64) {
   return (b64_regex.exec(base64)?.[0] === base64);
 }
@@ -174,7 +178,7 @@ function _assertBase64(base64) {
     @param {string} string
     @return {Uint8Array} buffer
  */
-export function stringToArrayBuffer(string) {
+export function str2ab(string) {
   const length = string.length;
   const buffer = new Uint8Array(length);
   for (let i = 0; i < length; i++)
@@ -187,9 +191,9 @@ export function stringToArrayBuffer(string) {
     @param {string} string
     @return {Uint8Array} buffer
  */
-export function arrayBufferToString(buffer) {
+export function ab2str(buffer) {
   if (!_assertUint8Array(buffer))
-    _sb_exception('arrayBufferToString()', 'parameter is not a Uint8Array buffer'); // this will throw
+    _sb_exception('ab2str()', 'parameter is not a Uint8Array buffer'); // this will throw
   return String.fromCharCode.apply(null, new Uint8Array(buffer));
 }
 
@@ -260,7 +264,7 @@ export function simpleRand256() {
     @param {callback} callback function, called with results
  */
 export function packageEncryptDict(dict, publicKeyPEM, callback) {
-  const clearDataArrayBufferView = stringToArrayBuffer(JSON.stringify(dict));
+  const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
   const aesAlgorithmKeyGen = {name: 'AES-GCM', length: 256};
   const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: _crypto.getRandomValues(new Uint8Array(16))};
   if (!publicKeyPEM)

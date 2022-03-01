@@ -4,11 +4,10 @@
 //  <script type="module" src="./test01.js"></script>
 
 // import {jest} from '@jest/globals';
-import {library_version, arrayBufferToString, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues,
-       stringToArrayBuffer} from './main.mjs';
+import {SB_libraryVersion, ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues} from './browser.mjs';
 
 let z = document.getElementById("testResults");
-z.innerHTML += "Checking version of library: " + library_version() + "\n";
+z.innerHTML += "Checking version of library: " + SB_libraryVersion() + "\n";
 
 let test_pass = 0, test_fail = 0;
 
@@ -63,7 +62,7 @@ if (true)
   let z = document.getElementById('test01a');
   for (const e of z1) {
     z.innerHTML += `String is '${e}'<br\>`;
-    const buffer = stringToArrayBuffer(e);
+    const buffer = str2ab(e);
     test_with_array(z, i, buffer);
     i += 1;
   }
@@ -85,8 +84,8 @@ if (true)
 {
   let z = document.getElementById('test02');
   for (const s0 of z2) {
-    let s1 = stringToArrayBuffer(s0);
-    let s2 = arrayBufferToString(s1);
+    let s1 = str2ab(s0);
+    let s2 = ab2str(s1);
     if (s0 === s2) {
       z.innerHTML += `Pass for string '${s0}'<br\>`;
       test_pass ++;
@@ -105,8 +104,8 @@ if (true)
     getRandomValues(random_length);
     let array = new Uint8Array(random_length[0]);
     getRandomValues(array);
-    let s1 = arrayBufferToString(array);
-    let s2 = stringToArrayBuffer(s1)
+    let s1 = ab2str(array);
+    let s2 = str2ab(s1)
     if (compare_uint8(array, s2)) {
       z.innerHTML += `Pass for random (binary) string test #${i}<br\>`;
       test_pass ++;
