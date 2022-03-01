@@ -1,7 +1,6 @@
 ![Snackabra 'michat' Mascot](snackabra.svg | width=100)
 
 # Snackabra Javascript Library
-=============================
 
 Javascript utilities, shared by, amongst others:
 ``snackabra-webclient``, ``snackabra-roomserver``, and
