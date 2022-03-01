@@ -17,7 +17,8 @@ file](LICENSE.md) for details.
 
 _Note: this module is under active development as we refactor
 the snackabra codebase; currently there's a lot of copy-pasted
-code in the various snackabra parts._
+code in the various snackabra parts and that are intended to
+migrate to this shared library._
 
 
 ## Usage in Node
