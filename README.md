@@ -91,14 +91,15 @@ npm pack
 
 ## Testing
 
-Test the node version of the library:
+There are three main ways to test the library. First test the node version:
 
 ```
 npm pack && npm test
 ```
 
-To test the browser version, open the
-![index.html](test-web-server/index.html) test page. Note: you will
+To test browser usage, you will need to open 
+![index.html](test-web-server/index.html) test page.
+For that, you will
 need to be running a web server, for example:
 
 ```
@@ -106,7 +107,19 @@ cd test-web-server
 python3 -m http.server --bind 127.0.0.1
 ```
 
-And then point a browser to it.
+We will assume you you have the page served locally at ``127.0.0.1``.
+You can then just point your browser at it, e.g. on a Mac just do
+``open index.html``, and the file self-tests and reports results.
+
+You can also automate it with puppeteer:
+
+```
+cd test-web-server
+node test02.js
+```
+
+Which will report on command line if all the tests passed or not.
+
 
 ## Publishing
 
