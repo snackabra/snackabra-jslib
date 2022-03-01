@@ -15,10 +15,18 @@ snackabra@protonmail.com
 All of Snackabra is licensed under GPL-v3, see [GPL v3 license
 file](LICENSE.md) for details.
 
-# Installation:
-npm install snackabra -g
+_Note: this module is under active development as we refactor
+the snackabra codebase; currently there's a lot of copy-pasted
+code in the various snackabra parts._
 
-## Usage in Node.js
+
+## Usage in Node
+
+Install:
+
+```
+npm install snackabra -g
+```
 
 A couple of ways to load ES module version in nodejs:
 
@@ -40,7 +48,7 @@ import {str2ab} from 'snackabra';
 console.log(str2ab('hello'));
 ```
 
-## Use in browsers
+## Usage in browsers
 
 From a local copy:
 
@@ -57,7 +65,7 @@ Or from npm package:
   <script type="module" src="https://unpkg.com/snackabra@0.4.10/browser.mjs"></script>
 ```
 
-You can also do dynamic import of latest version:
+Dynamic import of latest version from unpkg:
 
 ```html
   <h2>Test Results</h2>
