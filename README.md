@@ -1,4 +1,4 @@
-![Snackabra 'michat' Mascot](snackabra.svg | width=100)
+![Snackabra 'michat' Mascot](https://user-images.githubusercontent.com/844289/156240563-cfa8d1ff-fd55-43d7-a867-e9e7c77d183e.svg|width=100)
 
 # Snackabra Javascript Library
 =============================
