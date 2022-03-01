@@ -76,7 +76,7 @@ Dynamic import of latest version from unpkg:
       z.innerHTML += `Test: ${sb.str2ab('hello')}`;
     });
   </script>
-```html
+```
 
 You can also access the loaded functions globally, e.g. ``window.Snackabra.str2ab('hello')``.
 
