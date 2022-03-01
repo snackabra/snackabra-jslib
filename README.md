@@ -1,4 +1,4 @@
-![Snackabra 'michat' Mascot](snackabra.svg)
+![Snackabra 'michat' Mascot](snackabra.svg | width=100)
 
 # Snackabra Javascript Library
 =============================
@@ -37,8 +37,7 @@ Build components (and install dependencies):
 npm pack
 ```
 
-Testing
-===========
+## Testing
 
 Test the node version of the library:
 
@@ -58,8 +57,7 @@ python3 -m http.server --bind 127.0.0.1
 And then point a browser to it.
 
 
-LICENSE
-=======
+## LICENSE
 
 Copyright (c) 2016-2021 Magnusson Institute, All Rights Reserved.
 
