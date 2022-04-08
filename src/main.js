@@ -254,6 +254,29 @@ export function simpleRand256() {
   return _crypto.getRandomValues(new Uint8Array(1))[0];
 }
 
+
+const base32mi = '0123456789abcdefyhEjkLmnHpFrRTUW';
+
+/** Returns a random string in requested encoding
+    @param {n} number of characters
+    @param {code} encoding, supported types: 'base32mi'
+    @return {string} random string
+
+    'base32mi': '0123456789abcdefyhEjkLmnHpFrRTUW'
+*/
+export function simpleRandomString(n, code) {
+    if (code == 'base32mi') {
+	// yeah of course we need to add base64 etc
+	const z = _crypto.getRandomValues(new Uint8Array(n));
+	let r = ''
+	for (let i = 0; i < n; i++)
+	    r += base32mi[z[i] & 31];
+	return r;
+    }
+    _sb_exception('simpleRandomString', 'code ' + code + ' not supported');
+}
+
+
 /** Takes an arbitrary dict object, a public key in PEM
     format, and a callback function: generates a random AES key,
     wraps that in (RSA) key, and when all done will call the
