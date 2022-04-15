@@ -276,6 +276,43 @@ export function simpleRandomString(n, code) {
     _sb_exception('simpleRandomString', 'code ' + code + ' not supported');
 }
 
+/** Disambiguates strings that are known to be 'base32mi' type
+    @param {s} string
+    @return {string} cleaned up string
+
+    'base32mi': '0123456789abcdefyhEjkLmnHpFrRTUW'
+
+    This is the base32mi disambiguation table:
+
+    [OoQD] -> '0'
+    [lIiJ] -> '1'
+    [Zz] -> '2'
+    [A] -> '4'
+    [Ss] -> '5'
+    [G] -> '6'
+    [t] -> '7'
+    [B] -> '8'
+    [gq] -> '9'
+    [C] -> 'c'
+    [Y] -> 'y'
+    [KxX] -> 'k'
+    [M] -> 'm'
+    [N] -> 'n'
+    [P] -> 'p'
+    [uvV] -> 'U'
+    [w] -> 'w'
+
+    Another way to think of it is that this, becomes this ('.' means no change):
+
+    0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
+    ................9.1..1..0.9.57UUk.248c0EF6.11kLmn0p0.5..Uky2
+
+*/
+export function cleanBase32mi(s) {
+    // this of course is not the most efficient
+    return s.replace(/[OoQD]/g,'0').replace(/[lIiJ]/g,'1').replace(/[Zz]/g,'2').replace(/[A]/g,'4').replace(/[Ss]/g,'5').replace(/[G]/g,'6').replace(/[t]/g,'7').replace(/[B]/g,'8').replace(/[gq]/g,'9').replace(/[C]/g,'c').replace(/[Y]/g,'y').replace(/[KxX]/g,'k').replace(/[M]/g,'m').replace(/[N]/g,'n').replace(/[P]/g,'p').replace(/[uvV]/g,'U').replace(/[w]/g,'w');
+}
+
 
 /** Takes an arbitrary dict object, a public key in PEM
     format, and a callback function: generates a random AES key,
