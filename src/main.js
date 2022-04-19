@@ -268,10 +268,10 @@ export function simpleRandomString(n, code) {
     if (code == 'base32mi') {
 	// yeah of course we need to add base64 etc
 	const z = _crypto.getRandomValues(new Uint8Array(n));
-	let r = ''
+	let r = '';
 	for (let i = 0; i < n; i++)
-	    r += base32mi[z[i] & 31];
-	return r;
+            r += base32mi[z[i] & 31];
+        return r;
     }
     _sb_exception('simpleRandomString', 'code ' + code + ' not supported');
 }
@@ -310,7 +310,7 @@ export function simpleRandomString(n, code) {
 */
 export function cleanBase32mi(s) {
     // this of course is not the most efficient
-    return s.replace(/[OoQD]/g,'0').replace(/[lIiJ]/g,'1').replace(/[Zz]/g,'2').replace(/[A]/g,'4').replace(/[Ss]/g,'5').replace(/[G]/g,'6').replace(/[t]/g,'7').replace(/[B]/g,'8').replace(/[gq]/g,'9').replace(/[C]/g,'c').replace(/[Y]/g,'y').replace(/[KxX]/g,'k').replace(/[M]/g,'m').replace(/[N]/g,'n').replace(/[P]/g,'p').replace(/[uvV]/g,'U').replace(/[w]/g,'w');
+    return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[N]/g, 'n').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
 }
 
 

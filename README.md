@@ -53,7 +53,7 @@ console.log(str2ab('hello'));
 
 From a local copy:
 
-```html
+```
   <script type="module" src="browser.mjs"></script>
 ```
 
@@ -68,7 +68,7 @@ Or from npm package:
 
 Dynamic import of latest version from unpkg:
 
-```html
+```
   <h2>Test Results</h2>
   <p id='testResults'></p>
   <script>
@@ -84,11 +84,21 @@ You can also access the loaded functions globally, e.g. ``window.Snackabra.str2a
 
 ## Development
 
+First time around, remember to:
+
+```
+# install devDependencies
+npm install
+```
+
 Build components (and install dependencies):
 
 ```
 npm pack
 ```
+
+This will generate the ``browser.mjs`` and ``index.mjs`` files;
+the former is for use in browsers, the latter for use with node.
 
 ## Testing
 
@@ -130,6 +140,10 @@ If you have write/admin access to ``npmjs``:
 npm login  # if needed
 npm publish
 ```
+
+Remember to bump the version number in ![package.json](package.json) before publishing.
+
+Package should get updated at https://www.npmjs.com/package/snackabra 
 
 
 ## LICENSE
