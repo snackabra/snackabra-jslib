@@ -34,7 +34,7 @@ A couple of ways to load ES module version in nodejs:
 ```javascript
 // method 1:
 import * as sb from 'snackabra';
-console.log(sb.str2sb('hello'));
+console.log(sb.str2ab('hello'));
 
 // method 2 (the default export)
 import Snackabra from 'snackabra';

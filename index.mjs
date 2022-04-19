@@ -130,7 +130,15 @@ const b64_regex = new RegExp('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-
    Works same on browsers and nodejs.
  */
 function _assertBase64(base64) {
-  return (b64_regex.exec(base64)?.[0] === base64);
+    /* webpack 4 doesn't support optional chaining, requires webpack 5;
+       since wp 5 is pretty recent (2020-10-10), we'll avoid using
+       optional chaining in this library for a while */
+    // return (b64_regex.exec(base64)?.[0] === base64);
+    const z = b64_regex.exec(base64);
+    if (z)
+	return (z[0] === base64);
+    else
+	return false;
 }
 
 /** Standardized 'str2ab()' function, string to array buffer.
