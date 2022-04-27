@@ -308,7 +308,7 @@ export function simpleRandomString(n, code) {
     [N] -> 'n'
     [P] -> 'p'
     [uvV] -> 'U'
-    [w] -> 'w'
+    [w] -> 'W'
 
     Another way to think of it is that this, becomes this ('.' means no change):
 
