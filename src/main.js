@@ -305,7 +305,7 @@ export function simpleRandomString(n, code) {
     [Y] -> 'y'
     [KxX] -> 'k'
     [M] -> 'm'
-    [N] -> 'n'
+    [n] -> 'N'
     [P] -> 'p'
     [uvV] -> 'U'
     [w] -> 'W'
@@ -313,12 +313,12 @@ export function simpleRandomString(n, code) {
     Another way to think of it is that this, becomes this ('.' means no change):
 
     0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
-    ................9.1..1..0.9.57UUk.248c0EF6.11kLmn0p0.5..Uky2
+    ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
 
 */
 export function cleanBase32mi(s) {
     // this of course is not the most efficient
-    return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[N]/g, 'n').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
+    return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
 }
 
 
