@@ -263,7 +263,7 @@ export function simpleRand256() {
 }
 
 
-const base32mi = '0123456789abcdefyhEjkLmnHpFrRTUW';
+const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
 
 /** Returns a random string in requested encoding
     @param {n} number of characters
