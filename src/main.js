@@ -270,7 +270,7 @@ const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
     @param {code} encoding, supported types: 'base32mi'
     @return {string} random string
 
-    'base32mi': '0123456789abcdefyhEjkLmnHpFrRTUW'
+    'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
 */
 export function simpleRandomString(n, code) {
     if (code == 'base32mi') {
@@ -288,7 +288,7 @@ export function simpleRandomString(n, code) {
     @param {s} string
     @return {string} cleaned up string
 
-    'base32mi': '0123456789abcdefyhEjkLmnHpFrRTUW'
+    'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
 
     This is the base32mi disambiguation table:
 
