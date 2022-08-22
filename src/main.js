@@ -140,6 +140,18 @@ export function base64ToArrayBuffer(asc) {
   }
 }
 
+export function _appendBuffer(buffer1, buffer2) {
+  try {
+    const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
+    tmp.set(new Uint8Array(buffer1), 0);
+    tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
+    return tmp.buffer;
+  } catch (e) {
+    console.log(e);
+    return {};
+  }
+};
+
 /* ****************************************************************
  *  These are wrappers to handle both browser and node targets
  *  with the same code. The 'process.browser' value is replaced
@@ -395,9 +407,122 @@ export function packageEncryptDict(dict, publicKeyPEM, callback) {
   );
 } // packageEncrypt()
 
+export function partition(str, n) {
+  const returnArr = [];
+  let i, l;
+  for (i = 0, l = str.length; i < l; i += n) {
+    returnArr.push(str.substr(i, n));
+  }
+  return returnArr;
+}
+
+function extractPayloadV1(payload) {
+  try {
+    const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
+    const decoder = new TextDecoder();
+    const metadata = JSON.parse(decoder.decode(payload.slice(4, 4 + metadataSize)));
+    let startIndex = 4 + metadataSize;
+    const data = {};
+    for (const key in metadata) {
+      if (data.hasOwnProperty(key)) {
+        data[key] = payload.slice(startIndex, startIndex + metadata[key]);
+        startIndex += metadata[key];
+      }
+    }
+    return data;
+  } catch (e) {
+    console.log(e);
+    return {};
+  }
+}
+
+export function assemblePayload(data) {
+  try {
+    const metadata = {};
+    metadata['version'] = '002';
+    let keyCount = 0;
+    let startIndex = 0;
+    for (const key in data) {
+      if (data.hasOwnProperty(key)) {
+        keyCount++;
+        metadata[keyCount.toString()] = {name: key, start: startIndex, size: data[key].byteLength};
+        startIndex += data[key].byteLength;
+      }
+    }
+    const encoder = new TextEncoder();
+    const metadataBuffer = encoder.encode(JSON.stringify(metadata));
+    const metadataSize = new Uint32Array([metadataBuffer.byteLength]);
+    let payload = _appendBuffer(metadataSize.buffer, metadataBuffer);
+    for (const key in data) {
+      if (data.hasOwnProperty(key)) {
+        payload = _appendBuffer(payload, data[key]);
+      }
+    }
+    return payload;
+  } catch (e) {
+    console.log(e);
+    return {};
+  }
+}
+
+export function extractPayload(payload) {
+  try {
+    const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
+    const decoder = new TextDecoder();
+    console.log('METADATASIZE: ', metadataSize);
+    console.log('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
+    const _metadata = JSON.parse(decoder.decode(payload.slice(4, 4 + metadataSize)));
+    console.log('METADATA EXTRACTED', JSON.stringify(_metadata));
+    const startIndex = 4 + metadataSize;
+    if (!_metadata.hasOwnProperty('version')) {
+      _metadata['version'] = '001';
+    }
+    console.log(_metadata['version']);
+    switch (_metadata['version']) {
+      case '001':
+        return extractPayloadV1(payload);
+      case '002':
+        const data = {};
+        for (let i = 1; i < Object.keys(_metadata).length; i++) {
+          const _index = i.toString();
+          if (_metadata.hasOwnProperty(_index)) {
+            const propertyStartIndex = _metadata[_index]['start'];
+            console.log(propertyStartIndex);
+            const size = _metadata[_index]['size'];
+            data[_metadata[_index]['name']] = payload.slice(startIndex + propertyStartIndex, startIndex + propertyStartIndex + size);
+          }
+        }
+        return data;
+      default:
+        throw new Error('Unsupported payload version (' + _metadata['version'] + ') - fatal');
+    }
+  } catch (e) {
+    // console.log("HIGH LEVEL ERROR", e.message);
+    throw new Error('extractPayload() exception (' + e.message + ')');
+  }
+}
+
+export function encodeB64Url(input) {
+  return input.replaceAll('+', '-').replaceAll('/', '_');
+}
+
+export function decodeB64Url(input) {
+  input = input.replaceAll('-', '+').replaceAll('_', '/');
+
+  // Pad out with standard base64 required padding characters
+  const pad = input.length % 4;
+  if (pad) {
+    if (pad === 1) {
+      throw new Error('InvalidLengthError: Input base64url string is the wrong length to determine padding');
+    }
+    input += new Array(5 - pad).join('=');
+  }
+
+  return input;
+}
+
+
 // A class that contains all the SB specific crypto functions
-
-
 class Crypto {
   extractPubKey(privateKey) {
     try {
@@ -494,7 +619,7 @@ class Crypto {
   getFileKey(fileHash, _salt) {
     return new Promise(async (resolve, reject) => {
       try {
-        const keyMaterial = await this.importKey('raw', utils.base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+        const keyMaterial = await this.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
 
         // TODO - Support deriving from PBKDF2 in deriveKey function
         const key = await _crypto.subtle.deriveKey(
@@ -1103,7 +1228,7 @@ class StorageApi {
   storeData(type, fileId) {
     return new Promise(async (resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
-        method: "POST",
+        method: 'POST',
         body: assemblePayload({
           iv: encrypt_data.iv,
           salt: encrypt_data.salt,
