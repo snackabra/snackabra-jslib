@@ -668,8 +668,8 @@ class Crypto {
           reject(e);
         }
         resolve((outputType === 'string') ? {
-          content: encodeURIComponent(utils.arrayBufferToBase64(encrypted)),
-          iv: encodeURIComponent(utils.arrayBufferToBase64(iv))
+          content: encodeURIComponent(arrayBufferToBase64(encrypted)),
+          iv: encodeURIComponent(arrayBufferToBase64(iv))
         } : {content: encrypted, iv: iv});
       } catch (e) {
         console.log(e);
@@ -681,8 +681,8 @@ class Crypto {
   decrypt(secretKey, contents, outputType = 'string') {
     return new Promise(async (resolve, reject) => {
       try {
-        const ciphertext = typeof contents.content === 'string' ? utils.base64ToArrayBuffer(decodeURIComponent(contents.content)) : contents.content;
-        const iv = typeof contents.iv === 'string' ? utils.base64ToArrayBuffer(decodeURIComponent(contents.iv)) : contents.iv;
+        const ciphertext = typeof contents.content === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.content)) : contents.content;
+        const iv = typeof contents.iv === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.iv)) : contents.iv;
         const decrypted = await _crypto.subtle.decrypt(
           {
             name: 'AES-GCM',
@@ -713,7 +713,7 @@ class Crypto {
             secretKey,
             encoded
           );
-          resolve(encodeURIComponent(utils.arrayBufferToBase64(sign)));
+          resolve(encodeURIComponent(arrayBufferToBase64(sign)));
         } catch (error) {
           reject(error);
         }
@@ -726,7 +726,7 @@ class Crypto {
   verify(secretKey, sign, contents) {
     return new Promise(async (resolve, reject) => {
       try {
-        const _sign = utils.base64ToArrayBuffer(decodeURIComponent(sign));
+        const _sign = base64ToArrayBuffer(decodeURIComponent(sign));
         const encoder = new TextEncoder();
         const encoded = encoder.encode(contents);
         try {
@@ -1076,6 +1076,37 @@ class Channel {
       this.verifiedGuest = isVerifiedGuest;
     });
   }
+
+  async unwrapMessages(new_messages) {
+    const unwrapped_messages = {};
+    for (const id in new_messages) {
+      if (new_messages[id].hasOwnProperty('encrypted_contents')) {
+        try {
+          const decryption_key = this.state.keys.encryptionKey;
+          let msg = await this.decrypt(decryption_key, new_messages[id].encrypted_contents);
+          if (msg.error) {
+            msg = await this.decrypt(this.state.keys.locked_key, new_messages[id].encrypted_contents);
+          }
+          console.log(msg);
+          const _json_msg = JSON.parse(msg.plaintext);
+          console.log(_json_msg);
+          if (!_json_msg.hasOwnProperty('control')) {
+            unwrapped_messages[id] = _json_msg;
+          } else {
+            // console.log(_json_msg);
+            this.setState({controlMessages: [...this.state.controlMessages, _json_msg]});
+          }
+        } catch (e) {
+          console.warn(e);
+          // Skip the message if decryption fails - its probably due to the user not having <roomId>_lockedKey.
+        }
+      } else {
+        unwrapped_messages[id] = new_messages[id];
+      }
+      localStorage.setItem(this.roomId + '_lastSeenMessage', id.slice(this.roomId.length));
+    }
+    return unwrapped_messages;
+  }
 }
 
 // A SB Socket
@@ -1087,11 +1118,11 @@ class ChannelSocket {
   init;
   #keys;
   #queue = Queue;
-  #payload = ChannelPayload;
+  #payload = Payload;
 
   constructor(crypto, queue, wsUrl) {
     this.#queue = queue;
-    this.#payload = new ChannelPayload();
+    this.#payload = new Payload();
     this.url = wsUrl;
     return this;
   }
@@ -1121,7 +1152,7 @@ class ChannelSocket {
       },
       timeout: 500
     };
-    const socket = new ManagedWS(options);
+    const socket = new WS_Protocol(options);
     this.events = socketEvents;
     this._id = socketId;
     this.connection = socket;
@@ -1156,7 +1187,7 @@ class StorageApi {
   }
 
   async #getFileKey(fileHash, _salt) {
-    const keyMaterial = await SB_Crypto.importKey('raw', utils.base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+    const keyMaterial = await SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
 
     // TODO - Support deriving from PBKDF2 in deriveKey function
     const key = await window.crypto.subtle.deriveKey(
@@ -1251,10 +1282,90 @@ class StorageApi {
     });
   }
 
-  fetchData() {
-
+  storeImage(image, image_id, keyData, type) {
+    return new Promise(async (resolve, reject) => {
+      const storeReqResp = await this.storeRequest(image_id);
+      const encrypt_data = extractPayload(storeReqResp);
+      const key = await this.#getFileKey(keyData, encrypt_data.salt);
+      const data = await SB_Crypto.encrypt(image, key, 'arrayBuffer', encrypt_data.iv);
+      const storageTokenReq = await this.storage;
+      if (storageTokenReq.hasOwnProperty('error')) {
+        return {error: storageTokenReq.error};
+      }
+      // storageToken = new TextEncoder().encode(storageTokenReq.token);
+      const storageToken = JSON.stringify(storageTokenReq);
+      const resp = await fetch(STORAGE_SERVER + '/storeData?type=' + type + '&key=' + encodeURIComponent(image_id),
+        {
+          method: 'POST',
+          body: assemblePayload({
+            iv: encrypt_data.iv,
+            salt: encrypt_data.salt,
+            image: data.content,
+            storageToken: (new TextEncoder()).encode(storageToken),
+            vid: window.crypto.getRandomValues(new Uint8Array(48))
+          })
+        });
+      const resp_json = await resp.json();
+      // console.log("Response for " + type + ": ", resp_json)
+      if (resp_json.hasOwnProperty('error')) {
+        // TODO - why can't we throw exceptions?
+        // Promise.reject(new Error('Server error on storing image (' + resp_json.error + ')'));
+        return {error: 'Error: storeImage() failed (' + resp_json.error + ')'};
+      }
+      return {verificationToken: resp_json.verification_token, id: resp_json.image_id, type: type};
+    });
   }
 
+  fetchData(msgId, verificationToken) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.server + '/fetchData?id=' + encodeURIComponent(msgId) + '&verification_token=' + verificationToken, {
+        method: 'GET'
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.arrayBuffer();
+        })
+        .then((data) => {
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
+  }
+
+  #unpadData(data_buffer) {
+    // console.log(data_buffer, typeof data_buffer)
+    const _size = new Uint32Array(data_buffer.slice(-4))[0];
+    return data_buffer.slice(0, _size);
+  }
+
+  async retrieveData(msgId, messages, controlMessages) {
+    const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
+    const image_id = imageMetaData.previewId;
+    const control_msg = controlMessages.find((msg) => msg.hasOwnProperty('id') && msg.id.startsWith(image_id));
+    if (!control_msg) {
+      return {'error': 'Failed to fetch data - missing control message for that image'};
+    }
+    const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
+    const data = extractPayload(imageFetch);
+    const iv = data.iv;
+    const salt = data.salt;
+    const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
+    const encrypted_image = data.image;
+    const padded_img = await SB_Crypto.decrypt(image_key, {content: encrypted_image, iv: iv}, 'arrayBuffer');
+    const img = this.#unpadData(padded_img.plaintext);
+    //console.log(img)
+    //console.log("data:image/jpeg;base64,"+this.arrayBufferToBase64(img.plaintext))
+    if (img.error) {
+      console.log('(Image error: ' + img.error + ')');
+      throw new Error('Failed to fetch data - authentication or formatting error');
+    }
+    return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
+  }
+
+  /* Unused Currently
   migrateStorage() {
 
   }
@@ -1262,74 +1373,219 @@ class StorageApi {
   fetchDataMigration() {
 
   }
+   */
 }
 
 class ChannelApi {
   channelId;
   server;
   #identity;
+  #channel;
+  #channelApi;
+  #channelServer;
+  #payload;
 
-  constructor(server, channelID, identity) {
-    this.channelId = channelID;
+  constructor(server, channel, identity) {
+    this.channelId = channel._id;
     this.server = server;
+    this.#channel = channel;
+    this.#payload = new Payload();
+    this.#channelApi = 'https://' + server + '/api/';
+    this.#channelServer = 'https://' + server + '/api/room/';
     this.#identity = identity;
   }
 
-  room() {
-
+  getLastMessageTimes(_rooms) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelApi + '/getLastMessageTimes', {
+        method: 'POST',
+        body: JSON.stringify(Object.keys(_rooms))
+      }).then((response) => {
+        if (!response.ok) {
+          reject(new Error('Network response was not OK'));
+        }
+        return response.json();
+      }).then((message_times) => {
+        Object.keys(_rooms).forEach((room) => {
+          _rooms[room]['lastMessageTime'] = message_times[room];
+        });
+        resolve(_rooms);
+      });
+    });
   }
 
-  notifications() {
-
+  getOldMessages(currentMessagesLength) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelServer + this.channelId + +'/oldMessages?currentMessagesLength=' + currentMessagesLength, {
+        method: 'GET',
+      }).then((response) => {
+        if (!response.ok) {
+          reject(new Error('Network response was not OK'));
+        }
+        return response.json();
+      }).then(async (_encrypted_messages) => {
+        resolve(_encrypted_messages);
+      });
+    });
   }
 
-  getLastMessageTimes() {
-
-  }
-
-  oldMessages() {
-
-  }
-
-  updateChannelCapacity() {
-
+  updateChannelCapacity(roomCapacity) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelServer + this.channelId + '/updateRoomCapacity?capacity=' + roomCapacity, {
+        method: 'GET',
+        credentials: 'include'
+      }).then((response) => {
+        if (!response.ok) {
+          reject(new Error('Network response was not OK'));
+        }
+        return response.json();
+      }).then(async (data) => {
+        resolve(data);
+      });
+    });
   }
 
   getChannelCapacity() {
-
-  }
-
-  getPubKeys() {
-
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelServer + this.channelId + '/getRoomCapacity', {
+        method: 'GET',
+        credentials: 'include'
+      }).then((response) => {
+        if (!response.ok) {
+          reject(new Error('Network response was not OK'));
+        }
+        return response.json();
+      }).then(async (data) => {
+        resolve(data.capacity);
+      });
+    });
   }
 
   getJoinRequests() {
-
+    return new Promise(async (resolve, reject) => {
+      fetch(this.server + this.channelId + '/getJoinRequests', {
+        method: 'GET',
+        credentials: 'include'
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then(async (data) => {
+          if (data.error) {
+            reject(new Error(data.error));
+          }
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
   lockRoom() {
-
+    return new Promise(async (resolve, reject) => {
+      if (this.#channel.keys.locked_key == null && this.#channel.channel_admin) {
+        const _locked_key = await window.crypto.subtle.generateKey({
+          name: 'AES-GCM',
+          length: 256
+        }, true, ['encrypt', 'decrypt']);
+        const _exportable_locked_key = await window.crypto.subtle.exportKey('jwk', _locked_key);
+        fetch(this.server + this.channelId + '/lockRoom', {
+          method: 'GET',
+          credentials: 'include'
+        })
+          .then((response) => {
+            if (!response.ok) {
+              reject(new Error('Network response was not OK'));
+            }
+            return response.json();
+          })
+          .then(async (data) => {
+            if (data.locked) {
+              await this.acceptVisitor(JSON.stringify(this.#identity.exportable_pubKey));
+            }
+            resolve({locked: data.locked, lockedKey: _exportable_locked_key});
+          }).catch((error) => {
+          reject(error);
+        });
+      }
+    });
   }
 
-  acceptVisitor() {
-
+  acceptVisitor(pubKey) {
+    return new Promise(async (resolve, reject) => {
+      const shared_key = await SB_Crypto.deriveKey(this.#identity.keys.privateKey, await SB_Crypto.importKey('jwk', JSON.parse(pubKey), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
+      const _encrypted_locked_key = await SB_Crypto.encrypt(JSON.stringify(this.#channel.keys.exportable_locked_key), shared_key, 'string');
+      fetch(this.server + this.channelId + '/acceptVisitor', {
+        method: 'POST',
+        body: JSON.stringify({pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key)}),
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data) => {
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
-  roomLocked() {
-
+  isChannelLocked() {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelServer + this.channelId + '/roomLocked', {
+        method: 'GET',
+        credentials: 'include'
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data) => {
+          resolve(data.locked);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
-  ownerUnread() {
-
-  }
-
-  motd() {
-
+  setMOTD(motd) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.server + this.channelId + '/motd', {
+        method: 'POST',
+        body: JSON.stringify({motd: motd}),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data) => {
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
   ownerKeyRotation() {
     return new Promise(async (resolve, reject) => {
-      fetch(this.server + this.channelId + '/ownerKeyRotation', {
+      fetch(this.#channelServer + this.channelId + '/ownerKeyRotation', {
         method: 'GET',
         credentials: 'include',
         headers: {
@@ -1352,11 +1608,9 @@ class ChannelApi {
 
   getAdminData() {
     return new Promise(async (resolve, reject) => {
-      if (this.state.room_owner) {
+      if (this.#channel.channel_owner) {
         const token_data = new Date().getTime().toString();
         const token_sign = await SB_Crypto.sign(this.#identity.personal_signKey, token_data);
-        request.headers = {authorization: token_data + '.' + token_sign};
-
         fetch(this.server + this.channelId + '/getAdminData', {
           method: 'GET',
           credentials: 'include',
@@ -1372,6 +1626,9 @@ class ChannelApi {
             return response.json();
           })
           .then((data) => {
+            if (data.error) {
+              reject(new Error(data.error));
+            }
             resolve(data);
           }).catch((error) => {
           reject(error);
@@ -1380,10 +1637,6 @@ class ChannelApi {
         reject(new Error('Must be channel owner to get admin data'));
       }
     });
-  }
-
-  registerDevice() {
-
   }
 
   downloadData() {
@@ -1432,13 +1685,29 @@ class ChannelApi {
     });
   }
 
-  authorizeRoom() {
-
+  authorizeChannel(ownerPublicKey) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.server + this.channelId + '/authorizeRoom', {
+        method: 'POST',
+        body: {roomId: this.channelId, SERVER_SECRET: this.#channel.secret, ownerKey: ownerPublicKey}
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data) => {
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
   postPubKey(_exportable_pubKey) {
     return new Promise(async (resolve, reject) => {
-      fetch(this.server + this.channelId + '/postPubKey?type=guestKey', {
+      fetch(this.#channelServer + this.channelId + '/postPubKey?type=guestKey', {
         method: 'POST',
         body: JSON.stringify(_exportable_pubKey),
         headers: {
@@ -1480,6 +1749,27 @@ class ChannelApi {
         reject(error);
       });
     });
+  }
+
+  // unused
+  notifications() {
+
+  }
+
+  //unused
+  getPubKeys() {
+
+  }
+
+  // unused
+  ownerUnread() {
+
+  }
+
+
+  // unused
+  registerDevice() {
+
   }
 }
 
