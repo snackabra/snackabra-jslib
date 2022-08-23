@@ -952,6 +952,7 @@ class Channel {
       this._id = channel_id;
     }
     this.#api = new ChannelApi(url, this, identity);
+    this.#socket = new ChannelSocket(url, this, identity);
   }
 
   get keys() {
@@ -1086,11 +1087,13 @@ class ChannelSocket {
   #keys;
   #queue = Queue;
   #payload = Payload;
+  #channel;
+  #identity;
 
-  constructor(crypto, queue, wsUrl) {
-    this.#queue = queue;
-    this.#payload = new Payload();
+  constructor(wsUrl, channel, identity) {
     this.url = wsUrl;
+    this.#channel = channel;
+    this.#identity = identity;
     return this;
   }
 

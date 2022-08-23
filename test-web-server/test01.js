@@ -153,6 +153,26 @@ if (true)
 
 }
 
+z = {
+  "roomData": {
+    "bq9F_c75CtB7eeHl4cFp-PxTfKpOkX7bzOOkr2Cfo43Q1JyYPE-LfKYkWvi6UV7B": {
+      "key": "{\"crv\":\"P-384\",\"d\":\"TZ9VQH2Vzc2dI2hrrLosJmWCMiPiyd7Jjor9HdR0tEozXKfyxsVwQhWGeY74gVUW\",\"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",\"x\":\"E-FbwOsy2aMGDX-bi_F1dSLRyeSnpZPdOPQ_Lx04OZf-kLsINcq4s-wvcPiRtzJH\",\"y\":\"U79nO8A2ZR-9LBX2_bIVCUprlT5LjC4XA4dJt84t9EPp_bpQQEBtTqGrjJNJv2Co\"}",
+      "lastSeenMessage": "011000001011001101000010011111000111101100"
+    }
+  },
+  "contacts": {
+    "E-FbwOsy2aMGDX-bi_F1dSLRyeSnpZPdOPQ_Lx04OZf-kLsINcq4s-wvcPiRtzJH U79nO8A2ZR-9LBX2_bIVCUprlT5LjC4XA4dJt84t9EPp_bpQQEBtTqGrjJNJv2Co": "Me"
+  },
+  "roomMetadata": {
+    "bq9F_c75CtB7eeHl4cFp-PxTfKpOkX7bzOOkr2Cfo43Q1JyYPE-LfKYkWvi6UV7B": {
+      "name": "Room 1"
+    }
+  },
+  "pem": false
+}
+
+window.z = z;
+
 if (true)
 {
   // final results posting
