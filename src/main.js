@@ -48,7 +48,7 @@ export class MessageBus {
   }
 }
 
-const sleep = (ms) => {
+function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 };
 
@@ -780,7 +780,7 @@ class Identity {
 }
 
 // Takes a message object and turns it into a payload to be used by SB protocol
-class Payload {
+class Payload { // eslint-disable-line no-unused-vars
   async wrap(contents, key) {
     try {
       return {encrypted_contents: await SB_Crypto.encrypt(JSON.stringify(contents), key, 'string')};
@@ -807,9 +807,10 @@ class Payload {
 // Protocol code that we wrap our WebSocket in
 // I will be updating this to send messages and remove the wait to send messages only when ack received
 // The benefit is reduced latency in communication protocol
-class WS_Protocol {
+class WS_Protocol { // eslint-disable-line no-unused-vars
   currentWebSocket;
   _id;
+  events = new MessageBus();
   options = {
     url: '', onOpen: null, onMessage: null, onClose: null, onError: null, timeout: 30000
   };
@@ -856,15 +857,15 @@ class WS_Protocol {
           const ackResponse = () => {
             this.currentWebSocket.send(message);
             clearTimeout(timeout);
-            window.removeListener('ws_ack_' + ackPayload._id, ackResponse);
+            this.events.unsubscribe('ws_ack_' + ackPayload._id, ackResponse);
             resolve();
           };
 
-          window.on('ws_ack_' + ackPayload._id, ackResponse);
+          this.events.subscribe('ws_ack_' + ackPayload._id, ackResponse);
           const timeout = setTimeout(() => {
             const error = `Websocket request timed out after ${this.options.timeout}ms`;
             console.error(error);
-            window.removeListener('ws_ack_' + ackPayload._id, ackResponse);
+            this.events.unsubscribe('ws_ack_' + ackPayload._id, ackResponse);
             reject(new Error(error));
           }, this.options.timeout);
         }
@@ -897,7 +898,7 @@ class WS_Protocol {
       const data = JSON.parse(event.data);
 
       if (data.ack) {
-        window.emit('ws_ack_' + data._id);
+        this.events.publish('ws_ack_' + data._id);
         return;
       }
       if (data.nack) {
@@ -1098,19 +1099,24 @@ class ChannelSocket {
   }
 
   open(socketId, user) {
-    const socketEvents = new EventEmitter();
+    console.log(socketId, user);
+    const socketEvents = new MessageBus();
     const options = {
       url: this.url + socketId + '/websocket', onOpen: async (event) => {
         this.init = {name: JSON.stringify(user.exportable_pubKey)};
         await socket.send(JSON.stringify(this.init));
-        socketEvents.emit('open', event);
-      }, onMessage: (event) => {
-        socketEvents.emit('message', event);
-      }, onClose: (event) => {
-        socketEvents.emit('close', event);
-      }, onError: (event) => {
-        socketEvents.emit('error', event);
-      }, timeout: 500
+        socketEvents.publish('open', event);
+      },
+      onMessage: (event) => {
+        socketEvents.publish('message', event);
+      },
+      onClose: (event) => {
+        socketEvents.publish('close', event);
+      },
+      onError: (event) => {
+        socketEvents.publish('error', event);
+      },
+      timeout: 500
     };
     const socket = new WS_Protocol(options);
     this.events = socketEvents;
@@ -1854,13 +1860,18 @@ class FileSystemDB {
 class IndexedKV {
   indexedDB;
   db;
-  events = new EventEmitter();
+  events = new MessageBus();
   options = {
     db: 'MyDB', table: 'default', onReady: null
   };
 
   constructor(options) {
     this.options = Object.assign(this.options, options);
+    if (typeof this.options.onReady === 'function') {
+      this.events.subscribe(`ready`, (e) => {
+        this.options.onReady(e);
+      });
+    }
     if (!process.browser) {
       this.indexedDB = global.indexedDB;
     } else {
@@ -1880,7 +1891,7 @@ class IndexedKV {
 
     openReq.onsuccess = (event) => {
       this.db = event.target.result;
-      this.events.emit('ready');
+      this.events.publish('ready');
     };
 
     this.indexedDB.onerror = (event) => {
@@ -1891,7 +1902,7 @@ class IndexedKV {
       this.db = event.target.result;
       this.db.createObjectStore(this.options.table, {keyPath: 'key'});
       this.#useDatabase();
-      this.events.emit('ready');
+      this.events.publish('ready');
     };
   }
 
@@ -2053,7 +2064,7 @@ class Queue {
   currentWS;
   onOffline;
   lastProcessed = Date.now();
-  events = new EventEmitter();
+  events = new MessageBus();
   options = {
     name: 'queue_default', processor: false
   };
@@ -2110,7 +2121,7 @@ class Queue {
     }).catch(() => {
       console.log('Your client is offline, your message will be sent when you reconnect');
       if (typeof this.onOffline === 'function') {
-        this.events.emit('offline');
+        this.events.publish('offline');
         this.onOffline(message);
         this.setLastProcessed();
       }
@@ -2185,6 +2196,7 @@ class Queue {
 }
 
 class Snackabra {
+  MessageBus = MessageBus;
   #channel = Channel;
   #storage = StorageApi;
   #identity = Identity;
