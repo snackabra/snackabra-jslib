@@ -23,15 +23,15 @@ module.exports = {
   // collectCoverageFrom: undefined,
 
   // The directory where Jest should output its coverage files
-  coverageDirectory: "coverage",
+  coverageDirectory: 'coverage',
 
   // An array of regexp pattern strings used to skip coverage collection
   coveragePathIgnorePatterns: [
-    "/node_modules/"
+    '/node_modules/'
   ],
 
   // Indicates which provider should be used to instrument code for coverage
-  coverageProvider: "v8",
+  coverageProvider: 'v8',
 
   // A list of reporter names that Jest uses when writing coverage reports
   // coverageReporters: [
@@ -63,7 +63,7 @@ module.exports = {
   // specified as % or a number. E.g. maxWorkers: 10% will use 10% of
   // your CPU amount + 1 as the maximum worker number. maxWorkers: 2
   // will use a maximum of 2 workers.
-  maxWorkers: "50%",
+  maxWorkers: '50%',
 
   // An array of directory names to be searched recursively up from the requiring module's location
   // moduleDirectories: [
@@ -142,18 +142,18 @@ module.exports = {
   // https://stackoverflow.com/questions/63114333/how-to-import-mjs-modules-in-jests-xyz-test-js
 
   // The regexp pattern or array of patterns that Jest uses to detect test files
-  testRegex: "(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|js?|tsx?|ts?|mjs?)$",
+  testRegex: '(/__tests__/.*|(\\.|/)(test|spec))\\.(jsx?|js?|tsx?|ts?|mjs?)$',
 
   // A map from regular expressions to paths to transformers
   transform: {
-    "^.+\\.jsx?$": "babel-jest",
-    "^.+\\.mjs$": "babel-jest",
+    '^.+\\.jsx?$': 'babel-jest',
+    '^.+\\.mjs$': 'babel-jest',
   },
   // An array of regexp pattern strings that are matched against all test paths, matched tests are skipped
-  testPathIgnorePatterns: ["<rootDir>/build/", "<rootDir>/node_modules/"],
+  testPathIgnorePatterns: ['<rootDir>/build/', '<rootDir>/node_modules/'],
 
   // An array of file extensions your modules use
-  moduleFileExtensions: ["js", "jsx", "mjs"], // leaving out "ts", "tsx", "json", "node"
+  moduleFileExtensions: ['js', 'jsx', 'mjs'], // leaving out "ts", "tsx", "json", "node"
 
 
   // This option allows the use of a custom results processor

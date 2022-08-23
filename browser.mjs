@@ -2,58 +2,14 @@
 
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
 
+
 function SB_libraryVersion() {
   return 'This is the BROWSER version of the library';
 }
 
-/* SB simple events (mesage bus) class */
-class MessageBus {
-  constructor(args) {
-    this.args = args;
-    this.bus = {};
-  }
-
-  /* for possible future use with cleaner identifiers */
-  * #uniqueID() {
-    let i = 0;
-    while (true) {
-      i += 1;
-      yield i;
-    }
-  }
-
-  /* safely returns handler for any event */
-  #select(event) {
-    return this.bus[event] || (this.bus[event] = []);
-  }
-
-  /* 'event' is a string, special case '*' means everything */
-  subscribe(event, handler) {
-    this.#select(event).push(handler);
-  }
-
-  unsubscribe(event, handler) {
-    let i = -1;
-    if (event in this.bus) {
-      if ((i = this.bus[event].findLastIndex((e) => e == handler)) != -1) {
-	this.bus[event].splice(i, 1);
-      }
-    }
-  }
-
-  publish(event, ...args) {
-    for (const handler of this.#select('*')) {
-      handler(event, ...args);
-    }
-    for (const handler of this.#select(event)) {
-      handler(...args);
-    }
-  }
-}
-
-function sleep(ms) {
+const sleep = (ms) => {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
+};
 
 /**
  * @fileoverview Main file for snackabra javascript utilities.
@@ -247,199 +203,6 @@ function ab2str(buffer) {
   return String.fromCharCode.apply(null, new Uint8Array(buffer));
 }
 
-/* ****************************************************************
- *  TODO functions - look for duplicates
- * ****************************************************************/
-
-/* TODO
-export function verifyCookie(request, env) {
-  // room.mjs uses without env, storage with env
-}
-*/
-
-// the publicKeyPEM paramater below needs to look like this:
-const defaultPublicKeyPEM = `-----BEGIN PUBLIC KEY-----
-MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtVedzwPq7OIl84xx9ruV
-TAkv+sUPUYeQJ3PtFOJkBSrMyGPErVxjXQQ6nvb+OevQ2t7EhimyQ3bnP7PdeAU2
-mWQX6V8LfhJj0ox8Envtw9DF7nEED5aLwnimTjox906j7itXO2xDdJCRuAfpar3u
-Tj3d0EAKWFXTBHrorKI0pHCg1opIRsqNjpVnetZn1SweCtArE7YymNRQmoi8XWzj
-yCt41fGFoFcmVeE87hiq41NJkE0iMfrmf6QqE91Fp1BSSTD75KEbKPXepS/jl3nV
-VFe4tWrHypcT+Uk7I2UBqHnR+AnODVrSxZMzoVnXoYbhDAdReTQ81MrSQ+LW7yZV
-rTxa5uYVPIRB6l58dpBEhIGcvEz376fvEwdhEqw9iXm7FchbqX3FQpwDVKvguj+w
-jIaV60/hyBaRPO2oD9IhByvL3F+Gq+iwQRXbEgvI8QvkJ1w/WcelytljcwUoYbC5
-7VS7EvnoNvMQT+r5RJfoPVPbwsCOFAQCVnzyOPAMZyUn69ycK+rONvrVxkM+c8Q2
-8w7do2MDeRWJRf4Va0XceXsN+YcK7g9bqBWrBYJIWzeRiAQ3R6kyaxxbdEhyY3Hl
-OlY876IbVmwlWAQ82l9r7ECjBL2nGMjDFm5Lv8TXKC5NHWHwY1b2vfvl6cyGtG1I
-OTJj8TMRI6y3Omop3kIfpgUCAwEAAQ==
------END PUBLIC KEY-----`;
-
-/** Import a PEM encoded RSA public key, to use for RSA-OAEP
- encryption.  Takes a string containing the PEM encoded key, and
- returns a Promise that will resolve to a CryptoKey representing
- the public key.
-
- @param {PEM} RSA public key, string, PEM format
- @return {cryptoKey} RSA-OAEP key
- */
-function importPublicKey(pem) {
-  if (!pem)
-    pem = defaultPublicKeyPEM;
-  // fetch the part of the PEM string between header and footer
-  const pemHeader = '-----BEGIN PUBLIC KEY-----';
-  const pemFooter = '-----END PUBLIC KEY-----';
-  const start = pem.indexOf(pemHeader);
-  const end = pem.indexOf(pemFooter);
-  if ((start < 0) || (end < 0))
-    _sb_exception('importPublicKey()', 'fail to find BEGIN and/or END string in RSA (PEM) key');
-  const pemContents = pem.slice(start + pemHeader.length, end);
-  // const pemContents = pem.substring(pemHeader.length, pem.length - pemFooter.length);
-  const binaryDer = base64ToArrayBuffer(pemContents);
-  return _crypto.subtle.importKey('spki', binaryDer, {name: 'RSA-OAEP', hash: 'SHA-256'}, true, ['encrypt']);
-}
-
-/** Returns random number
- @return {int} integer 0..255
- */
-function simpleRand256() {
-  return _crypto.getRandomValues(new Uint8Array(1))[0];
-}
-
-
-const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
-
-/** Returns a random string in requested encoding
- @param {n} number of characters
- @param {code} encoding, supported types: 'base32mi'
- @return {string} random string
-
- 'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
- */
-function simpleRandomString(n, code) {
-  if (code == 'base32mi') {
-    // yeah of course we need to add base64 etc
-    const z = _crypto.getRandomValues(new Uint8Array(n));
-    let r = '';
-    for (let i = 0; i < n; i++)
-      r += base32mi[z[i] & 31];
-    return r;
-  }
-  _sb_exception('simpleRandomString', 'code ' + code + ' not supported');
-}
-
-/** Disambiguates strings that are known to be 'base32mi' type
- @param {s} string
- @return {string} cleaned up string
-
- 'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
-
- This is the base32mi disambiguation table:
-
- [OoQD] -> '0'
- [lIiJ] -> '1'
- [Zz] -> '2'
- [A] -> '4'
- [Ss] -> '5'
- [G] -> '6'
- [t] -> '7'
- [B] -> '8'
- [gq] -> '9'
- [C] -> 'c'
- [Y] -> 'y'
- [KxX] -> 'k'
- [M] -> 'm'
- [n] -> 'N'
- [P] -> 'p'
- [uvV] -> 'U'
- [w] -> 'W'
-
- Another way to think of it is that this, becomes this ('.' means no change):
-
- 0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
- ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
-
- */
-function cleanBase32mi(s) {
-  // this of course is not the most efficient
-  return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
-}
-
-
-/** Takes an arbitrary dict object, a public key in PEM
- format, and a callback function: generates a random AES key,
- wraps that in (RSA) key, and when all done will call the
- callback function with the results
-
- @param {dict} dictionary (payload)
- @param {publicKeyPEM} public key (PEM format)
- @param {callback} callback function, called with results
- */
-function packageEncryptDict(dict, publicKeyPEM, callback) {
-  const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
-  const aesAlgorithmKeyGen = {name: 'AES-GCM', length: 256};
-  const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: _crypto.getRandomValues(new Uint8Array(16))};
-  if (!publicKeyPEM)
-    publicKeyPEM = defaultPublicKeyPEM;
-  // Create a key generator to produce a one-time-use AES key to encrypt some data
-  _crypto.subtle.generateKey(aesAlgorithmKeyGen, true, ['encrypt']).then(
-    (aesKey) => {
-      // we are exporting the symmetric AES key so we can encrypt it using pub key
-      _crypto.subtle.exportKey('raw', aesKey).then((theKey) => {
-        // console.log('raw key is:');
-        // console.log(theKey);
-        // console.log('arrayBufferToBase64 of raw AES key is:');
-        // console.log(arrayBufferToBase64(theKey));
-        // console.log('raw AES key itself: ');
-        // console.log(theKey);
-        const rsaAlgorithmEncrypt = {name: 'RSA-OAEP'};
-        importPublicKey(publicKeyPEM).then((publicKey) => {
-          return _crypto.subtle.encrypt(rsaAlgorithmEncrypt, publicKey, theKey);
-        }).then(
-          (buf) => {
-            const encryptedAesKey = arrayBufferToBase64(buf);
-            // console.log('rsa ciphertext of our aes key in base 64 encoding is: ');
-            // console.log(encryptedAesKey);
-            return encryptedAesKey;
-          }).then(
-          (encAesKey) => {
-            // console.log('IV is:');
-            // console.log(arrayBufferToBase64(aesAlgorithmEncrypt.iv));
-            return Promise.all([_crypto.subtle.encrypt(aesAlgorithmEncrypt, aesKey, clearDataArrayBufferView), encAesKey]);
-          }).then(
-          (arr) => {
-            // arr[0] is the encrypted dict in raw format, arr[1] is the aes key encrypted with rsa public key
-            const encryptedData = arrayBufferToBase64(arr[0]);
-            // console.log('this is the encryptedApplication, or arrayBufferToBase64(arr[0])');
-            // console.log(arr[0]);
-            // console.log(encryptedData);
-            const postableEncryptedAesKey = arr[1];
-            // console.log(postableEncryptedAesKey);
-            const theContent = encodeURIComponent(encryptedData);
-            const data = {
-              enc_aes_key: encodeURIComponent(postableEncryptedAesKey),
-              iv: encodeURIComponent(arrayBufferToBase64(aesAlgorithmEncrypt.iv)),
-              content: theContent
-            };
-            if (callback) {
-              callback(data);
-            } else {
-              console.log('(No Callback) Resulting data:');
-              console.log(data);
-            }
-          });
-      });
-    }
-  );
-} // packageEncrypt()
-
-function partition(str, n) {
-  const returnArr = [];
-  let i, l;
-  for (i = 0, l = str.length; i < l; i += n) {
-    returnArr.push(str.substr(i, n));
-  }
-  return returnArr;
-}
-
 function extractPayloadV1(payload) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
@@ -526,25 +289,18 @@ function extractPayload(payload) {
   }
 }
 
-function encodeB64Url(input) {
-  return input.replaceAll('+', '-').replaceAll('/', '_');
-}
-
-function decodeB64Url(input) {
-  input = input.replaceAll('-', '+').replaceAll('_', '/');
-
-  // Pad out with standard base64 required padding characters
-  const pad = input.length % 4;
-  if (pad) {
-    if (pad === 1) {
-      throw new Error('InvalidLengthError: Input base64url string is the wrong length to determine padding');
-    }
-    input += new Array(5 - pad).join('=');
+class EventEmitter extends EventTarget {
+  on(type, callback) {
+    this.addEventListener(
+      type,
+      callback
+    );
   }
 
-  return input;
+  emit(type, data) {
+    new CustomEvent(type, data);
+  }
 }
-
 
 // A class that contains all the SB specific crypto functions
 class Crypto {
@@ -692,8 +448,8 @@ class Crypto {
           reject(e);
         }
         resolve((outputType === 'string') ? {
-          content: encodeURIComponent(utils.arrayBufferToBase64(encrypted)),
-          iv: encodeURIComponent(utils.arrayBufferToBase64(iv))
+          content: encodeURIComponent(arrayBufferToBase64(encrypted)),
+          iv: encodeURIComponent(arrayBufferToBase64(iv))
         } : {content: encrypted, iv: iv});
       } catch (e) {
         console.log(e);
@@ -705,8 +461,8 @@ class Crypto {
   decrypt(secretKey, contents, outputType = 'string') {
     return new Promise(async (resolve, reject) => {
       try {
-        const ciphertext = typeof contents.content === 'string' ? utils.base64ToArrayBuffer(decodeURIComponent(contents.content)) : contents.content;
-        const iv = typeof contents.iv === 'string' ? utils.base64ToArrayBuffer(decodeURIComponent(contents.iv)) : contents.iv;
+        const ciphertext = typeof contents.content === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.content)) : contents.content;
+        const iv = typeof contents.iv === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.iv)) : contents.iv;
         const decrypted = await _crypto.subtle.decrypt(
           {
             name: 'AES-GCM',
@@ -737,7 +493,7 @@ class Crypto {
             secretKey,
             encoded
           );
-          resolve(encodeURIComponent(utils.arrayBufferToBase64(sign)));
+          resolve(encodeURIComponent(arrayBufferToBase64(sign)));
         } catch (error) {
           reject(error);
         }
@@ -750,7 +506,7 @@ class Crypto {
   verify(secretKey, sign, contents) {
     return new Promise(async (resolve, reject) => {
       try {
-        const _sign = utils.base64ToArrayBuffer(decodeURIComponent(sign));
+        const _sign = base64ToArrayBuffer(decodeURIComponent(sign));
         const encoder = new TextEncoder();
         const encoded = encoder.encode(contents);
         try {
@@ -830,6 +586,167 @@ class Identity {
 
   get _id() {
     return JSON.stringify(this.exportable_pubKey);
+  }
+}
+
+// Takes a message object and turns it into a payload to be used by SB protocol
+class Payload {
+  async wrap(contents, key) {
+    try {
+      return {encrypted_contents: await SB_Crypto.encrypt(JSON.stringify(contents), key, 'string')};
+    } catch (e) {
+      console.error(e);
+      return {error: 'Unable to encrypt payload.'};
+    }
+  }
+
+  async unwrap(payload, key) {
+    try {
+      const msg = await SB_Crypto.decrypt(key, payload.encrypted_contents);
+      if (msg.error) {
+        return {error: msg.error};
+      }
+      return msg;
+    } catch (e) {
+      return {error: e.message};
+    }
+  }
+}
+
+
+// Protocol code that we wrap our WebSocket in
+// I will be updating this to send messages and remove the wait to send messages only when ack received
+// The benefit is reduced latency in communication protocol
+class WS_Protocol {
+  currentWebSocket;
+  _id;
+  options = {
+    url: '',
+    onOpen: null,
+    onMessage: null,
+    onClose: null,
+    onError: null,
+    timeout: 30000
+  };
+
+
+  constructor(options) {
+    if (!options.url) {
+      throw new Error('URL must be set');
+    }
+    this.options = Object.assign(this.options, options);
+    this.join();
+  }
+
+  get options() {
+    return this.options;
+  }
+
+  join() {
+    return new Promise((resolve, reject) => {
+      try {
+        this.currentWebSocket = new WebSocket(this.options.url);
+        this.error();
+        this.close();
+        this.open();
+        this.message();
+        resolve();
+      } catch (e) {
+        console.error(e);
+        reject(e);
+      }
+    });
+  }
+
+  send = (message) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (this.currentWebSocket.readyState === 1) {
+          const hash = await _crypto.subtle
+            .digest('SHA-256', new TextEncoder().encode(message));
+          const ackPayload = {
+            timestamp: Date.now(),
+            type: 'ack',
+            _id: arrayBufferToBase64(hash)
+          };
+          this.currentWebSocket.send(JSON.stringify(ackPayload));
+
+          const ackResponse = () => {
+            this.currentWebSocket.send(message);
+            clearTimeout(timeout);
+            window.removeListener('ws_ack_' + ackPayload._id, ackResponse);
+            resolve();
+          };
+
+          window.on('ws_ack_' + ackPayload._id, ackResponse);
+          const timeout = setTimeout(() => {
+            const error = `Websocket request timed out after ${this.options.timeout}ms`;
+            console.error(error);
+            window.removeListener('ws_ack_' + ackPayload._id, ackResponse);
+            reject(new Error(error));
+          }, this.options.timeout);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  };
+
+  async error() {
+    this.currentWebSocket.addEventListener('error', (event) => {
+      console.log('WebSocket error, reconnecting:', event);
+      if (typeof this.options.onError === 'function') {
+        this.options.onError(event);
+      }
+    });
+  }
+
+  async close() {
+    this.currentWebSocket.addEventListener('close', (event) => {
+      console.info('Websocket closed', event);
+      if (typeof this.options.onClose === 'function') {
+        this.options.onClose(event);
+      }
+    });
+  }
+
+  async message() {
+    this.currentWebSocket.addEventListener('message', async (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.ack) {
+        window.emit('ws_ack_' + data._id);
+        return;
+      }
+      if (data.nack) {
+        console.log('Nack received');
+        this.close();
+        return;
+      }
+      if (typeof this.options.onMessage === 'function') {
+        this.options.onMessage(event);
+      }
+    });
+  }
+
+  get readyState() {
+    return this.currentWebSocket.readyState;
+  }
+
+  async open() {
+    this.currentWebSocket.addEventListener('open', async (event) => {
+      if (this.queue.length > 0) {
+        for (const i in this.queue) {
+          if (this.queue[i]) {
+            this.send(JSON.stringify(this.queue[i]));
+          }
+        }
+      }
+      this.queue = [];
+      if (typeof this.options.onOpen === 'function') {
+        this.options.onOpen(event);
+      }
+    });
   }
 }
 
@@ -938,6 +855,39 @@ class Channel {
       this.verifiedGuest = isVerifiedGuest;
     });
   }
+
+  async unwrapMessages(new_messages) {
+    const unwrapped_messages = {};
+    for (const id in new_messages) {
+      if (new_messages.hasOwnProperty(id) && new_messages[id].hasOwnProperty('encrypted_contents')) {
+        if (new_messages[id].hasOwnProperty('encrypted_contents')) {
+          try {
+            const decryption_key = this.state.keys.encryptionKey;
+            let msg = await this.decrypt(decryption_key, new_messages[id].encrypted_contents);
+            if (msg.error) {
+              msg = await this.decrypt(this.state.keys.locked_key, new_messages[id].encrypted_contents);
+            }
+            console.log(msg);
+            const _json_msg = JSON.parse(msg.plaintext);
+            console.log(_json_msg);
+            if (!_json_msg.hasOwnProperty('control')) {
+              unwrapped_messages[id] = _json_msg;
+            } else {
+              // console.log(_json_msg);
+              this.setState({controlMessages: [...this.state.controlMessages, _json_msg]});
+            }
+          } catch (e) {
+            console.warn(e);
+            // Skip the message if decryption fails - its probably due to the user not having <roomId>_lockedKey.
+          }
+        } else {
+          unwrapped_messages[id] = new_messages[id];
+        }
+        localStorage.setItem(this.roomId + '_lastSeenMessage', id.slice(this.roomId.length));
+      }
+    }
+    return unwrapped_messages;
+  }
 }
 
 // A SB Socket
@@ -949,11 +899,11 @@ class ChannelSocket {
   init;
   #keys;
   #queue = Queue;
-  #payload = ChannelPayload;
+  #payload = Payload;
 
   constructor(crypto, queue, wsUrl) {
     this.#queue = queue;
-    this.#payload = new ChannelPayload();
+    this.#payload = new Payload();
     this.url = wsUrl;
     return this;
   }
@@ -963,27 +913,26 @@ class ChannelSocket {
   }
 
   open(socketId, user) {
-    console.log(socketId, user);
-    const socketEvents = new MessageBus();
+    const socketEvents = new EventEmitter();
     const options = {
       url: this.url + socketId + '/websocket',
       onOpen: async (event) => {
         this.init = {name: JSON.stringify(user.exportable_pubKey)};
         await socket.send(JSON.stringify(this.init));
-        socketEvents.publish('open', event);
+        socketEvents.emit('open', event);
       },
       onMessage: (event) => {
-        socketEvents.publish('message', event);
+        socketEvents.emit('message', event);
       },
       onClose: (event) => {
-        socketEvents.publish('close', event);
+        socketEvents.emit('close', event);
       },
       onError: (event) => {
-        socketEvents.publish('error', event);
+        socketEvents.emit('error', event);
       },
       timeout: 500
     };
-    const socket = new ManagedWS(options);
+    const socket = new WS_Protocol(options);
     this.events = socketEvents;
     this._id = socketId;
     this.connection = socket;
@@ -1016,7 +965,7 @@ class StorageApi {
   }
 
   async #getFileKey(fileHash, _salt) {
-    const keyMaterial = await SB_Crypto.importKey('raw', utils.base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+    const keyMaterial = await SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
 
     // TODO - Support deriving from PBKDF2 in deriveKey function
     const key = await window.crypto.subtle.deriveKey(
@@ -1111,10 +1060,90 @@ class StorageApi {
     });
   }
 
-  fetchData() {
-
+  storeImage(image, image_id, keyData, type) {
+    return new Promise(async (resolve, reject) => {
+      const storeReqResp = await this.storeRequest(image_id);
+      const encrypt_data = extractPayload(storeReqResp);
+      const key = await this.#getFileKey(keyData, encrypt_data.salt);
+      const data = await SB_Crypto.encrypt(image, key, 'arrayBuffer', encrypt_data.iv);
+      const storageTokenReq = await this.storage;
+      if (storageTokenReq.hasOwnProperty('error')) {
+        return {error: storageTokenReq.error};
+      }
+      // storageToken = new TextEncoder().encode(storageTokenReq.token);
+      const storageToken = JSON.stringify(storageTokenReq);
+      const resp = await fetch(STORAGE_SERVER + '/storeData?type=' + type + '&key=' + encodeURIComponent(image_id),
+        {
+          method: 'POST',
+          body: assemblePayload({
+            iv: encrypt_data.iv,
+            salt: encrypt_data.salt,
+            image: data.content,
+            storageToken: (new TextEncoder()).encode(storageToken),
+            vid: window.crypto.getRandomValues(new Uint8Array(48))
+          })
+        });
+      const resp_json = await resp.json();
+      // console.log("Response for " + type + ": ", resp_json)
+      if (resp_json.hasOwnProperty('error')) {
+        // TODO - why can't we throw exceptions?
+        // Promise.reject(new Error('Server error on storing image (' + resp_json.error + ')'));
+        return {error: 'Error: storeImage() failed (' + resp_json.error + ')'};
+      }
+      return {verificationToken: resp_json.verification_token, id: resp_json.image_id, type: type};
+    });
   }
 
+  fetchData(msgId, verificationToken) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.server + '/fetchData?id=' + encodeURIComponent(msgId) + '&verification_token=' + verificationToken, {
+        method: 'GET'
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.arrayBuffer();
+        })
+        .then((data) => {
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
+  }
+
+  #unpadData(data_buffer) {
+    // console.log(data_buffer, typeof data_buffer)
+    const _size = new Uint32Array(data_buffer.slice(-4))[0];
+    return data_buffer.slice(0, _size);
+  }
+
+  async retrieveData(msgId, messages, controlMessages) {
+    const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
+    const image_id = imageMetaData.previewId;
+    const control_msg = controlMessages.find((msg) => msg.hasOwnProperty('id') && msg.id.startsWith(image_id));
+    if (!control_msg) {
+      return {'error': 'Failed to fetch data - missing control message for that image'};
+    }
+    const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
+    const data = extractPayload(imageFetch);
+    const iv = data.iv;
+    const salt = data.salt;
+    const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
+    const encrypted_image = data.image;
+    const padded_img = await SB_Crypto.decrypt(image_key, {content: encrypted_image, iv: iv}, 'arrayBuffer');
+    const img = this.#unpadData(padded_img.plaintext);
+    //console.log(img)
+    //console.log("data:image/jpeg;base64,"+this.arrayBufferToBase64(img.plaintext))
+    if (img.error) {
+      console.log('(Image error: ' + img.error + ')');
+      throw new Error('Failed to fetch data - authentication or formatting error');
+    }
+    return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
+  }
+
+  /* Unused Currently
   migrateStorage() {
 
   }
@@ -1122,74 +1151,219 @@ class StorageApi {
   fetchDataMigration() {
 
   }
+   */
 }
 
 class ChannelApi {
   channelId;
   server;
   #identity;
+  #channel;
+  #channelApi;
+  #channelServer;
+  #payload;
 
-  constructor(server, channelID, identity) {
-    this.channelId = channelID;
+  constructor(server, channel, identity) {
+    this.channelId = channel._id;
     this.server = server;
+    this.#channel = channel;
+    this.#payload = new Payload();
+    this.#channelApi = 'https://' + server + '/api/';
+    this.#channelServer = 'https://' + server + '/api/room/';
     this.#identity = identity;
   }
 
-  room() {
-
+  getLastMessageTimes(_rooms) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelApi + '/getLastMessageTimes', {
+        method: 'POST',
+        body: JSON.stringify(Object.keys(_rooms))
+      }).then((response) => {
+        if (!response.ok) {
+          reject(new Error('Network response was not OK'));
+        }
+        return response.json();
+      }).then((message_times) => {
+        Object.keys(_rooms).forEach((room) => {
+          _rooms[room]['lastMessageTime'] = message_times[room];
+        });
+        resolve(_rooms);
+      });
+    });
   }
 
-  notifications() {
-
+  getOldMessages(currentMessagesLength) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelServer + this.channelId + +'/oldMessages?currentMessagesLength=' + currentMessagesLength, {
+        method: 'GET',
+      }).then((response) => {
+        if (!response.ok) {
+          reject(new Error('Network response was not OK'));
+        }
+        return response.json();
+      }).then(async (_encrypted_messages) => {
+        resolve(_encrypted_messages);
+      });
+    });
   }
 
-  getLastMessageTimes() {
-
-  }
-
-  oldMessages() {
-
-  }
-
-  updateChannelCapacity() {
-
+  updateChannelCapacity(roomCapacity) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelServer + this.channelId + '/updateRoomCapacity?capacity=' + roomCapacity, {
+        method: 'GET',
+        credentials: 'include'
+      }).then((response) => {
+        if (!response.ok) {
+          reject(new Error('Network response was not OK'));
+        }
+        return response.json();
+      }).then(async (data) => {
+        resolve(data);
+      });
+    });
   }
 
   getChannelCapacity() {
-
-  }
-
-  getPubKeys() {
-
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelServer + this.channelId + '/getRoomCapacity', {
+        method: 'GET',
+        credentials: 'include'
+      }).then((response) => {
+        if (!response.ok) {
+          reject(new Error('Network response was not OK'));
+        }
+        return response.json();
+      }).then(async (data) => {
+        resolve(data.capacity);
+      });
+    });
   }
 
   getJoinRequests() {
-
+    return new Promise(async (resolve, reject) => {
+      fetch(this.server + this.channelId + '/getJoinRequests', {
+        method: 'GET',
+        credentials: 'include'
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then(async (data) => {
+          if (data.error) {
+            reject(new Error(data.error));
+          }
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
   lockRoom() {
-
+    return new Promise(async (resolve, reject) => {
+      if (this.#channel.keys.locked_key == null && this.#channel.channel_admin) {
+        const _locked_key = await window.crypto.subtle.generateKey({
+          name: 'AES-GCM',
+          length: 256
+        }, true, ['encrypt', 'decrypt']);
+        const _exportable_locked_key = await window.crypto.subtle.exportKey('jwk', _locked_key);
+        fetch(this.server + this.channelId + '/lockRoom', {
+          method: 'GET',
+          credentials: 'include'
+        })
+          .then((response) => {
+            if (!response.ok) {
+              reject(new Error('Network response was not OK'));
+            }
+            return response.json();
+          })
+          .then(async (data) => {
+            if (data.locked) {
+              await this.acceptVisitor(JSON.stringify(this.#identity.exportable_pubKey));
+            }
+            resolve({locked: data.locked, lockedKey: _exportable_locked_key});
+          }).catch((error) => {
+          reject(error);
+        });
+      }
+    });
   }
 
-  acceptVisitor() {
-
+  acceptVisitor(pubKey) {
+    return new Promise(async (resolve, reject) => {
+      const shared_key = await SB_Crypto.deriveKey(this.#identity.keys.privateKey, await SB_Crypto.importKey('jwk', JSON.parse(pubKey), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
+      const _encrypted_locked_key = await SB_Crypto.encrypt(JSON.stringify(this.#channel.keys.exportable_locked_key), shared_key, 'string');
+      fetch(this.server + this.channelId + '/acceptVisitor', {
+        method: 'POST',
+        body: JSON.stringify({pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key)}),
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data) => {
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
-  roomLocked() {
-
+  isChannelLocked() {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.#channelServer + this.channelId + '/roomLocked', {
+        method: 'GET',
+        credentials: 'include'
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data) => {
+          resolve(data.locked);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
-  ownerUnread() {
-
-  }
-
-  motd() {
-
+  setMOTD(motd) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.server + this.channelId + '/motd', {
+        method: 'POST',
+        body: JSON.stringify({motd: motd}),
+        headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data) => {
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
   ownerKeyRotation() {
     return new Promise(async (resolve, reject) => {
-      fetch(this.server + this.channelId + '/ownerKeyRotation', {
+      fetch(this.#channelServer + this.channelId + '/ownerKeyRotation', {
         method: 'GET',
         credentials: 'include',
         headers: {
@@ -1212,11 +1386,9 @@ class ChannelApi {
 
   getAdminData() {
     return new Promise(async (resolve, reject) => {
-      if (this.state.room_owner) {
+      if (this.#channel.channel_owner) {
         const token_data = new Date().getTime().toString();
         const token_sign = await SB_Crypto.sign(this.#identity.personal_signKey, token_data);
-        request.headers = {authorization: token_data + '.' + token_sign};
-
         fetch(this.server + this.channelId + '/getAdminData', {
           method: 'GET',
           credentials: 'include',
@@ -1232,6 +1404,9 @@ class ChannelApi {
             return response.json();
           })
           .then((data) => {
+            if (data.error) {
+              reject(new Error(data.error));
+            }
             resolve(data);
           }).catch((error) => {
           reject(error);
@@ -1240,10 +1415,6 @@ class ChannelApi {
         reject(new Error('Must be channel owner to get admin data'));
       }
     });
-  }
-
-  registerDevice() {
-
   }
 
   downloadData() {
@@ -1292,13 +1463,29 @@ class ChannelApi {
     });
   }
 
-  authorizeRoom() {
-
+  authorizeChannel(ownerPublicKey) {
+    return new Promise(async (resolve, reject) => {
+      fetch(this.server + this.channelId + '/authorizeRoom', {
+        method: 'POST',
+        body: {roomId: this.channelId, SERVER_SECRET: this.#channel.secret, ownerKey: ownerPublicKey}
+      })
+        .then((response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data) => {
+          resolve(data);
+        }).catch((error) => {
+        reject(error);
+      });
+    });
   }
 
   postPubKey(_exportable_pubKey) {
     return new Promise(async (resolve, reject) => {
-      fetch(this.server + this.channelId + '/postPubKey?type=guestKey', {
+      fetch(this.#channelServer + this.channelId + '/postPubKey?type=guestKey', {
         method: 'POST',
         body: JSON.stringify(_exportable_pubKey),
         headers: {
@@ -1341,6 +1528,27 @@ class ChannelApi {
       });
     });
   }
+
+  // unused
+  notifications() {
+
+  }
+
+  //unused
+  getPubKeys() {
+
+  }
+
+  // unused
+  ownerUnread() {
+
+  }
+
+
+  // unused
+  registerDevice() {
+
+  }
 }
 
 
@@ -1348,7 +1556,7 @@ class ChannelApi {
 class IndexedKV {
   indexedDB;
   db;
-  events = new MessageBus();
+  events = new EventEmitter();
   options = {
     db: 'MyDB',
     table: 'default',
@@ -1358,7 +1566,7 @@ class IndexedKV {
   constructor(options) {
     this.options = Object.assign(this.options, options);
     if (typeof this.options.onReady === 'function') {
-      this.events.subscribe(`ready`, (e) => {
+      this.events.on(`ready`, (e) => {
         this.options.onReady(e);
       });
     }
@@ -1377,7 +1585,7 @@ class IndexedKV {
 
     openReq.onsuccess = (event) => {
       this.db = event.target.result;
-      this.events.publish('ready');
+      this.events.emit('ready');
     };
 
     this.indexedDB.onerror = (event) => {
@@ -1388,7 +1596,7 @@ class IndexedKV {
       this.db = event.target.result;
       this.db.createObjectStore(this.options.table, {keyPath: 'key'});
       this.useDatabase();
-      this.events.publish('ready');
+      this.events.emit('ready');
     };
   }
 
@@ -1550,7 +1758,7 @@ class Queue {
   currentWS;
   onOffline;
   lastProcessed = Date.now();
-  events = new MessageBus();
+  events = new EventEmitter();
   options = {
     name: 'queue_default',
     processor: false
@@ -1609,7 +1817,7 @@ class Queue {
     }).catch(() => {
       console.log('Your client is offline, your message will be sent when you reconnect');
       if (typeof this.onOffline === 'function') {
-        this.events.publish('offline');
+        this.events.emit('offline');
         this.onOffline(message);
         this.setLastProcessed();
       }
@@ -1684,17 +1892,10 @@ class Queue {
 }
 
 class Snackabra {
-  SB_libraryVersion = SB_libraryVersion;
-  ab2str = ab2str;
-  str2ab = str2ab;
-  MessageBus = MessageBus;
-  base64ToArrayBuffer = base64ToArrayBuffer;
-  arrayBufferToBase64 = arrayBufferToBase64;
-  getRandomValues = getRandomValues;
   #channel = Channel;
-  #storage;
-  #identity;
-  #queue;
+  #storage = StorageApi;
+  #identity = Identity;
+  #queue = Queue;
   options = {
     channel_server: null,
     channel_ws: null,
@@ -1713,13 +1914,22 @@ class Snackabra {
   }
 
   connect({channel_server, channel_ws, storage_server}) {
-    this.options = Object.assign(this.options, {channel_server, channel_ws, storage_server});
-    this.#queue = new Queue({processor: true});
-    this.channel = {
-      api: new ChannelApi(this.options.channel_server),
-      socket: new ChannelSocket(this.options.channel_ws)
-    };
-    this.storage = new StorageApi(this.options.storage_server);
+    try {
+      if (!this.#identity) {
+        throw new Error('setIdentity must be called before connecting');
+      }
+      this.options = Object.assign(this.options, {channel_server, channel_ws, storage_server});
+      this.#queue = new Queue({processor: true});
+      this.channel = {
+        api: new ChannelApi(this.options.channel_server),
+        socket: new ChannelSocket(this.options.channel_ws)
+      };
+      this.storage = new StorageApi(this.options.storage_server);
+      return this;
+    } catch (e) {
+      console.error(e);
+      return false;
+    }
   }
 
   get channel() {
@@ -1741,4 +1951,4 @@ class Snackabra {
 
 window.Snackabra = new Snackabra();
 
-export { MessageBus, SB_libraryVersion, _appendBuffer, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, decodeB64Url, Snackabra as default, encodeB64Url, extractPayload, getRandomValues, importPublicKey, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };
+export { SB_libraryVersion, Snackabra, ab2str, arrayBufferToBase64, base64ToArrayBuffer, getRandomValues, str2ab };
