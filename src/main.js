@@ -10,7 +10,50 @@ export function SB_libraryVersion() {
     return 'This is the NODE.JS version of the library';
 }
 
-const events = require('events');
+/* SB simple events (mesage bus) class */
+class MessageBus {
+  constructor() {
+    this.args = args;
+    this.bus = {};
+  }
+
+  /* for possible future use with cleaner identifiers */
+  * #uniqueID() {
+    let i = 0;
+    while (true) {
+      i += 1;
+      yield i;
+    }
+  }
+
+  /* safely returns handler for any event */
+  #select(event) {
+    return this.bus[event] || (this.bus[event] = []);
+  }
+
+  /* 'event' is a string, special case '*' means everything */
+  subscribe(event, handler) {
+    select(event).push(handler);
+  }
+
+  unsubscribe(event, handler) {
+    let i = -1;
+    if (event in this.bus) {
+      if ((i = this.bus[event].findLastIndex((e) => e == handler)) != -1) {
+	this.bus[event].splice(i, 1);
+      }
+    }
+  }
+
+  publish(event, ...args) {
+    for (const handler of select('*')) {
+      handler(event, ...args);
+    }
+    for (const handler of select(event)) {
+      handler(...args);
+    }
+  }
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -810,7 +853,7 @@ class Identity {
 }
 
 // Takes a message object and turns it into a payload to be used by SB protocol
-class Payload {
+class Payload { // eslint-disable-line no-unused-vars
   async wrap(contents, key) {
     try {
       return {encrypted_contents: await SB_Crypto.encrypt(JSON.stringify(contents), key, 'string')};
@@ -837,10 +880,10 @@ class Payload {
 // Protocol code that we wrap our WebSocket in
 // I will be updating this to send messages and remove the wait to send messages only when ack received
 // The benefit is reduced latency in communication protocol
-class WS_Protocol {
+class WS_Protocol { // eslint-disable-line no-unused-vars
   currentWebSocket;
   _id;
-  events = new events.EventEmitter();
+  events = new MessageBus();
   options = {
     url: '',
     onOpen: null,
@@ -895,15 +938,15 @@ class WS_Protocol {
           const ackResponse = () => {
             this.currentWebSocket.send(message);
             clearTimeout(timeout);
-            this.events.removeListener('ws_ack_' + ackPayload._id, ackResponse);
+            this.events.unsubscribe('ws_ack_' + ackPayload._id, ackResponse);
             resolve();
           };
 
-          this.events.on('ws_ack_' + ackPayload._id, ackResponse);
+          this.events.subscribe('ws_ack_' + ackPayload._id, ackResponse);
           const timeout = setTimeout(() => {
             const error = `Websocket request timed out after ${this.options.timeout}ms`;
             console.error(error);
-            this.events.removeListener('ws_ack_' + ackPayload._id, ackResponse);
+            this.events.unsubscribe('ws_ack_' + ackPayload._id, ackResponse);
             reject(new Error(error));
           }, this.options.timeout);
         }
@@ -936,7 +979,7 @@ class WS_Protocol {
       const data = JSON.parse(event.data);
 
       if (data.ack) {
-        this.events.emit('ws_ack_' + data._id);
+        this.events.publish('ws_ack_' + data._id);
         return;
       }
       if (data.nack) {
@@ -1102,22 +1145,22 @@ class ChannelSocket {
 
   open(socketId, user) {
     console.log(socketId, user);
-    const socketEvents = new events.EventEmitter();
+    const socketEvents = new MessageBus();
     const options = {
       url: this.url + socketId + '/websocket',
       onOpen: async (event) => {
         this.init = {name: JSON.stringify(user.exportable_pubKey)};
         await socket.send(JSON.stringify(this.init));
-        socketEvents.emit('open', event);
+        socketEvents.publish('open', event);
       },
       onMessage: (event) => {
-        socketEvents.emit('message', event);
+        socketEvents.publish('message', event);
       },
       onClose: (event) => {
-        socketEvents.emit('close', event);
+        socketEvents.publish('close', event);
       },
       onError: (event) => {
-        socketEvents.emit('error', event);
+        socketEvents.publish('error', event);
       },
       timeout: 500
     };
@@ -1488,7 +1531,7 @@ class ChannelApi {
 class IndexedKV {
   indexedDB;
   db;
-  events = new events.EventEmitter();
+  events = new MessageBus();
   options = {
     db: 'MyDB',
     table: 'default',
@@ -1498,7 +1541,7 @@ class IndexedKV {
   constructor(options) {
     this.options = Object.assign(this.options, options);
     if (typeof this.options.onReady === 'function') {
-      this.events.on(`ready`, (e) => {
+      this.events.subscribe(`ready`, (e) => {
         this.options.onReady(e);
       });
     }
@@ -1517,7 +1560,7 @@ class IndexedKV {
 
     openReq.onsuccess = (event) => {
       this.db = event.target.result;
-      this.events.emit('ready');
+      this.events.publish('ready');
     };
 
     this.indexedDB.onerror = (event) => {
@@ -1528,7 +1571,7 @@ class IndexedKV {
       this.db = event.target.result;
       this.db.createObjectStore(this.options.table, {keyPath: 'key'});
       this.useDatabase();
-      this.events.emit('ready');
+      this.events.publish('ready');
     };
   }
 
@@ -1690,7 +1733,7 @@ class Queue {
   currentWS;
   onOffline;
   lastProcessed = Date.now();
-  events = new events.EventEmitter();
+  events = new MessageBus();
   options = {
     name: 'queue_default',
     processor: false
@@ -1749,7 +1792,7 @@ class Queue {
     }).catch(() => {
       console.log('Your client is offline, your message will be sent when you reconnect');
       if (typeof this.onOffline === 'function') {
-        this.events.emit('offline');
+        this.events.publish('offline');
         this.onOffline(message);
         this.setLastProcessed();
       }
