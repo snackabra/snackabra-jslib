@@ -5,8 +5,8 @@ export default {
   external: ['crypto'],
   plugins: [
     replace({
-      preventAssignment: true,
-      'process.browser': process.env.BROWSER === "true"
+      'preventAssignment': true,
+      'process.browser': process.env.BROWSER === 'true'
     })
   ]
 };
