@@ -27,20 +27,26 @@ class MessageBus {
     return this.bus[event] || (this.bus[event] = []);
   }
 
-  /* 'event' is a string, special case '*' means everything
-     (in which case the handler is also given the message) */
+  /* 'event' is a string, special case '*' means everything */
   subscribe(event, handler) {
     this.#select(event).push(handler);
   }
 
   unsubscribe(event, handler) {
     let i = -1;
-    if (this.bus[event]) {
+    if (event in this.bus) {
       if ((i = this.bus[event].findLastIndex((e) => e == handler)) != -1) {
-	this.bus[event].splice(i, 1);
+        this.bus[event].splice(i, 1);
       }
-    } else {
-      console.log(`fyi: asked to remove a handler but it's not there`);
+    }
+  }
+
+  publish(event, ...args) {
+    for (const handler of this.#select('*')) {
+      handler(event, ...args);
+    }
+    for (const handler of this.#select(event)) {
+      handler(...args);
     }
   }
 }
