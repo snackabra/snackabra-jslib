@@ -45,10 +45,9 @@ class MessageBus {
   }
 }
 
-const sleep = (ms) => {
+function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
-};
-
+}
 /**
  * @fileoverview Main file for snackabra javascript utilities.
  *               See https://snackabra.io for details.
@@ -319,16 +318,6 @@ function decodeB64Url(input) {
   return input;
 }
 
-class EventEmitter extends EventTarget {
-  on(type, callback) {
-    this.addEventListener(type, callback);
-  }
-
-  emit(type, data) {
-    new Event(type, data);
-  }
-}
-
 // A class that contains all the SB specific crypto functions
 class Crypto {
   extractPubKey(privateKey) {
@@ -568,7 +557,7 @@ class Identity {
 }
 
 // Takes a message object and turns it into a payload to be used by SB protocol
-class Payload {
+class Payload { // eslint-disable-line no-unused-vars
   async wrap(contents, key) {
     try {
       return {encrypted_contents: await SB_Crypto.encrypt(JSON.stringify(contents), key, 'string')};
@@ -1369,13 +1358,18 @@ class ChannelApi {
 class IndexedKV {
   indexedDB;
   db;
-  events = new EventEmitter();
+  events = new MessageBus();
   options = {
     db: 'MyDB', table: 'default', onReady: null
   };
 
   constructor(options) {
     this.options = Object.assign(this.options, options);
+    if (typeof this.options.onReady === 'function') {
+      this.events.subscribe(`ready`, (e) => {
+        this.options.onReady(e);
+      });
+    }
     {
       this.indexedDB = global.indexedDB;
     }
@@ -1389,7 +1383,7 @@ class IndexedKV {
 
     openReq.onsuccess = (event) => {
       this.db = event.target.result;
-      this.events.emit('ready');
+      this.events.publish('ready');
     };
 
     this.indexedDB.onerror = (event) => {
@@ -1400,7 +1394,7 @@ class IndexedKV {
       this.db = event.target.result;
       this.db.createObjectStore(this.options.table, {keyPath: 'key'});
       this.#useDatabase();
-      this.events.emit('ready');
+      this.events.publish('ready');
     };
   }
 
@@ -1562,7 +1556,7 @@ class Queue {
   currentWS;
   onOffline;
   lastProcessed = Date.now();
-  events = new EventEmitter();
+  events = new MessageBus();
   options = {
     name: 'queue_default', processor: false
   };
@@ -1619,7 +1613,7 @@ class Queue {
     }).catch(() => {
       console.log('Your client is offline, your message will be sent when you reconnect');
       if (typeof this.onOffline === 'function') {
-        this.events.emit('offline');
+        this.events.publish('offline');
         this.onOffline(message);
         this.setLastProcessed();
       }
@@ -1694,6 +1688,7 @@ class Queue {
 }
 
 class Snackabra {
+  MessageBus = MessageBus;
   #channel = Channel;
   #storage = StorageApi;
   #identity = Identity;
