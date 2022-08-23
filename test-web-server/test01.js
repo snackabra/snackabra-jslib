@@ -60,7 +60,7 @@ if (true)
 {
   let i = 0;
   let z = document.getElementById('test01a');
-  z.innerHTML += 'starting test ...';
+  z.innerHTML += 'starting test ...<br\>';
   for (const e of z1) {
     z.innerHTML += `String is '${e}'<br\>`;
     const buffer = str2ab(e);
@@ -72,7 +72,7 @@ if (true)
 if (true)
 {
   let z = document.getElementById('test01b');
-  z.innerHTML += 'starting test ...';
+  z.innerHTML += 'starting test ...<br\>';
   for (var i = 0; i < 20; i++) {
     let random_length = new Uint8Array(4);
     getRandomValues(random_length);
@@ -85,7 +85,7 @@ if (true)
 if (true)
 {
   let z = document.getElementById('test02');
-  z.innerHTML += 'starting test ...';
+  z.innerHTML += 'starting test ...<br\>';
   for (const s0 of z2) {
     let s1 = str2ab(s0);
     let s2 = ab2str(s1);
@@ -102,7 +102,7 @@ if (true)
 if (true)
 {
   let z = document.getElementById('test02b');
-  z.innerHTML += 'starting test ...';
+  z.innerHTML += 'starting test ...<br\>';
   for (var i = 0; i < 20; i++) {
     let random_length = new Uint8Array(4);
     getRandomValues(random_length);
@@ -127,7 +127,7 @@ if (true)
   let z = document.getElementById('test03');
   let b = new MessageBus();
   let called_1 = false; 
-  z.innerHTML += 'starting test ...';
+  z.innerHTML += 'starting test ...<br\>';
   console.log("inside testing messagebus");
   function hello_1() {
     z.innerHTML += `First handler properly called<br\>`;
