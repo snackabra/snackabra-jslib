@@ -130,16 +130,27 @@ if (true)
   z.innerHTML += 'starting test ...<br\>';
   console.log("inside testing messagebus");
   function hello_1() {
-    z.innerHTML += `First handler properly called<br\>`;
+    z.innerHTML += '... first handler<br\>';
     called_1 = true;
   }
   b.subscribe("1", hello_1);
+  b.subscribe("1", hello_1);
+  z.innerHTML += 'Should call first handler twice:<br\>';
   b.publish("1");
+  z.innerHTML += 'And now just once:<br\>';
+  b.unsubscribe("1", hello_1);
+  b.publish("1");
+  z.innerHTML += 'And now not at all:<br\>';
+  b.unsubscribe("1", hello_1);
+  b.publish("1");
+
   if (called_1) {
     test_pass ++;
   } else {
     test_fail ++;
   }
+  z.innerHTML += '... MessageBus tests done ...<br\>';
+
 }
 
 if (true)
