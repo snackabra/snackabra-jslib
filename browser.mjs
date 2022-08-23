@@ -2,14 +2,13 @@
 
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
 
-
 function SB_libraryVersion() {
   return 'This is the BROWSER version of the library';
 }
 
 /* SB simple events (mesage bus) class */
 class MessageBus {
-  constructor() {
+  constructor(args) {
     this.args = args;
     this.bus = {};
   }
@@ -30,7 +29,7 @@ class MessageBus {
 
   /* 'event' is a string, special case '*' means everything */
   subscribe(event, handler) {
-    select(event).push(handler);
+    this.#select(event).push(handler);
   }
 
   unsubscribe(event, handler) {
@@ -43,10 +42,10 @@ class MessageBus {
   }
 
   publish(event, ...args) {
-    for (const handler of select('*')) {
+    for (const handler of this.#select('*')) {
       handler(event, ...args);
     }
-    for (const handler of select(event)) {
+    for (const handler of this.#select(event)) {
       handler(...args);
     }
   }
@@ -1688,6 +1687,7 @@ class Snackabra {
   SB_libraryVersion = SB_libraryVersion;
   ab2str = ab2str;
   str2ab = str2ab;
+  MessageBus = MessageBus;
   base64ToArrayBuffer = base64ToArrayBuffer;
   arrayBufferToBase64 = arrayBufferToBase64;
   getRandomValues = getRandomValues;
@@ -1722,7 +1722,6 @@ class Snackabra {
     this.storage = new StorageApi(this.options.storage_server);
   }
 
-
   get channel() {
     return this.#channel;
   }
@@ -1742,4 +1741,4 @@ class Snackabra {
 
 window.Snackabra = new Snackabra();
 
-export { SB_libraryVersion, _appendBuffer, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, decodeB64Url, Snackabra as default, encodeB64Url, extractPayload, getRandomValues, importPublicKey, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };
+export { MessageBus, SB_libraryVersion, _appendBuffer, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, decodeB64Url, Snackabra as default, encodeB64Url, extractPayload, getRandomValues, importPublicKey, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };

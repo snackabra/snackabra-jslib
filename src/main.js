@@ -2,7 +2,6 @@
 
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
 
-
 export function SB_libraryVersion() {
   if (process.browser)
     return 'This is the BROWSER version of the library';
@@ -11,8 +10,8 @@ export function SB_libraryVersion() {
 }
 
 /* SB simple events (mesage bus) class */
-class MessageBus {
-  constructor() {
+export class MessageBus {
+  constructor(args) {
     this.args = args;
     this.bus = {};
   }
@@ -33,7 +32,7 @@ class MessageBus {
 
   /* 'event' is a string, special case '*' means everything */
   subscribe(event, handler) {
-    select(event).push(handler);
+    this.#select(event).push(handler);
   }
 
   unsubscribe(event, handler) {
@@ -46,10 +45,10 @@ class MessageBus {
   }
 
   publish(event, ...args) {
-    for (const handler of select('*')) {
+    for (const handler of this.#select('*')) {
       handler(event, ...args);
     }
-    for (const handler of select(event)) {
+    for (const handler of this.#select(event)) {
       handler(...args);
     }
   }
@@ -1870,6 +1869,7 @@ class Snackabra {
   SB_libraryVersion = SB_libraryVersion;
   ab2str = ab2str;
   str2ab = str2ab;
+  MessageBus = MessageBus;
   base64ToArrayBuffer = base64ToArrayBuffer;
   arrayBufferToBase64 = arrayBufferToBase64;
   getRandomValues = getRandomValues;
@@ -1903,7 +1903,6 @@ class Snackabra {
     };
     this.storage = new StorageApi(this.options.storage_server);
   }
-
 
   get channel() {
     return this.#channel;
