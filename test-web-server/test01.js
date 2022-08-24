@@ -4,7 +4,7 @@
 //  <script type="module" src="./test01.js"></script>
 
 // import {jest} from '@jest/globals';
-import {SB_libraryVersion, ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues, MessageBus} from './browser.mjs';
+import {SB_libraryVersion, ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues, MessageBus, Snackabra} from './browser.mjs';
 
 let z = document.getElementById("testResults");
 z.innerHTML += "Checking version of library: " + SB_libraryVersion() + "\n";
@@ -153,25 +153,61 @@ if (true)
 
 }
 
-z = {
-  "roomData": {
-    "bq9F_c75CtB7eeHl4cFp-PxTfKpOkX7bzOOkr2Cfo43Q1JyYPE-LfKYkWvi6UV7B": {
-      "key": "{\"crv\":\"P-384\",\"d\":\"TZ9VQH2Vzc2dI2hrrLosJmWCMiPiyd7Jjor9HdR0tEozXKfyxsVwQhWGeY74gVUW\",\"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",\"x\":\"E-FbwOsy2aMGDX-bi_F1dSLRyeSnpZPdOPQ_Lx04OZf-kLsINcq4s-wvcPiRtzJH\",\"y\":\"U79nO8A2ZR-9LBX2_bIVCUprlT5LjC4XA4dJt84t9EPp_bpQQEBtTqGrjJNJv2Co\"}",
-      "lastSeenMessage": "011000001011001101000010011111000111101100"
-    }
-  },
-  "contacts": {
-    "E-FbwOsy2aMGDX-bi_F1dSLRyeSnpZPdOPQ_Lx04OZf-kLsINcq4s-wvcPiRtzJH U79nO8A2ZR-9LBX2_bIVCUprlT5LjC4XA4dJt84t9EPp_bpQQEBtTqGrjJNJv2Co": "Me"
-  },
-  "roomMetadata": {
-    "bq9F_c75CtB7eeHl4cFp-PxTfKpOkX7bzOOkr2Cfo43Q1JyYPE-LfKYkWvi6UV7B": {
-      "name": "Room 1"
-    }
-  },
-  "pem": false
-}
 
-window.z = z;
+/* snackabra channel tests ... these correspond to snackabra.pages.dev public server */
+
+// const sb_config = {
+//   channel_server: 'http://r.somethingstuff.workers.dev',
+//   channel_ws: 'ws://r.somethingstuff.workers.dev',
+//   storage_server: 'http://s.somethingstuff.workers.dev'
+// };
+
+const sb_config = {
+  channel_server: 'http://r.snackabra.pages.dev',
+  channel_ws: 'ws://r.snackabra.pages.dev',
+  storage_server: 'http://s.snackabra.pages.dev'
+};
+
+
+/* so you can also reach this on:
+   https://snackabra.pages.dev/rooms/yzeQWYahP87ngAVbhdP7DxU3or0mOrOTLJ3HcQ9UQQzZgKMYq3zWr1Qk5bZTXpHl
+*/
+const channel_id = 'yzeQWYahP87ngAVbhdP7DxU3or0mOrOTLJ3HcQ9UQQzZgKMYq3zWr1Qk5bZTXpHl';
+
+/* this is one of Matt's keys */
+const key = {
+  key_ops: ['deriveKey'],
+  ext: true,
+  kty: 'EC',
+  x: '62RGlvpBrkrBTgscORtV5MmJqSS0N6aIELTLY1VdOEhrToUbnNPi2XbFucGhWey9',
+  y: '24kcejeniQMNGuYigc39fcsjzP6P9VqEYWieT6WYgSBlVsCR_DXTjlPRAQ4P8x1K',
+  crv: 'P-384',
+  d: '9sYVDOfUJ8YofRh4y_4dItXcXzTiiwYKI6pXU9thJyfMqMtaFhvUbCsHl14Wx37k'
+};
+
+
+if (true)
+{
+  let z = document.getElementById('test04');
+  z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
+  let SB = new Snackabra();
+  SB.setIdentity(key).then(() => {
+    z.innerHTML += '.. identity set ...<br\>';
+    let c = SB.connect(sb_config, channel_id);
+    z.innerHTML += '.. connected ...<br\>';
+    console.log(c);
+    try {
+      let z2 = c.channel.api.getOldMessages(10);
+      console.log("got channel response:");
+      console.log(z2);
+    } catch (e) {
+      console.log("ERROR in channel test:");
+      console.log(e);
+      test_fail ++;
+    }
+  });
+}
+      
 
 if (true)
 {

@@ -27,17 +27,20 @@ class MessageBus {
     return this.bus[event] || (this.bus[event] = []);
   }
 
-  /* 'event' is a string, special case '*' means everything */
+  /* 'event' is a string, special case '*' means everything
+     (in which case the handler is also given the message) */
   subscribe(event, handler) {
     this.#select(event).push(handler);
   }
 
   unsubscribe(event, handler) {
     let i = -1;
-    if (event in this.bus) {
+    if (this.bus[event]) {
       if ((i = this.bus[event].findLastIndex((e) => e == handler)) != -1) {
-        this.bus[event].splice(i, 1);
+	this.bus[event].splice(i, 1);
       }
+    } else {
+      console.log(`fyi: asked to remove a handler but it's not there`);
     }
   }
 
@@ -586,6 +589,136 @@ class Payload { // eslint-disable-line no-unused-vars
   }
 }
 
+
+// Protocol code that we wrap our WebSocket in
+// I will be updating this to send messages and remove the wait to send messages only when ack received
+// The benefit is reduced latency in communication protocol
+class WS_Protocol { // eslint-disable-line no-unused-vars
+  currentWebSocket;
+  _id;
+  events = new MessageBus();
+  options = {
+    url: '', onOpen: null, onMessage: null, onClose: null, onError: null, timeout: 30000
+  };
+
+  constructor(options) {
+    if (!options.url) {
+      throw new Error('URL must be set');
+    }
+    this.options = Object.assign(this.options, options);
+    this.join();
+  }
+
+  get options() {
+    return this.options;
+  }
+
+  join() {
+    return new Promise((resolve, reject) => {
+      try {
+        this.currentWebSocket = new WebSocket(this.options.url);
+        this.error();
+        this.close();
+        this.open();
+        this.message();
+        resolve();
+      } catch (e) {
+        console.error(e);
+        reject(e);
+      }
+    });
+  }
+
+  send = (message) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (this.currentWebSocket.readyState === 1) {
+          const hash = await _crypto.subtle
+            .digest('SHA-256', new TextEncoder().encode(message));
+          const ackPayload = {
+            timestamp: Date.now(), type: 'ack', _id: arrayBufferToBase64(hash)
+          };
+          this.currentWebSocket.send(JSON.stringify(ackPayload));
+
+          const ackResponse = () => {
+            this.currentWebSocket.send(message);
+            clearTimeout(timeout);
+            this.events.unsubscribe('ws_ack_' + ackPayload._id, ackResponse);
+            resolve();
+          };
+
+          this.events.subscribe('ws_ack_' + ackPayload._id, ackResponse);
+          const timeout = setTimeout(() => {
+            const error = `Websocket request timed out after ${this.options.timeout}ms`;
+            console.error(error);
+            this.events.unsubscribe('ws_ack_' + ackPayload._id, ackResponse);
+            reject(new Error(error));
+          }, this.options.timeout);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    });
+  };
+
+  async error() {
+    this.currentWebSocket.addEventListener('error', (event) => {
+      console.log('WebSocket error, reconnecting:', event);
+      if (typeof this.options.onError === 'function') {
+        this.options.onError(event);
+      }
+    });
+  }
+
+  async close() {
+    this.currentWebSocket.addEventListener('close', (event) => {
+      console.info('Websocket closed', event);
+      if (typeof this.options.onClose === 'function') {
+        this.options.onClose(event);
+      }
+    });
+  }
+
+  async message() {
+    this.currentWebSocket.addEventListener('message', async (event) => {
+      const data = JSON.parse(event.data);
+
+      if (data.ack) {
+        this.events.publish('ws_ack_' + data._id);
+        return;
+      }
+      if (data.nack) {
+        console.log('Nack received');
+        this.close();
+        return;
+      }
+      if (typeof this.options.onMessage === 'function') {
+        this.options.onMessage(event);
+      }
+    });
+  }
+
+  get readyState() {
+    return this.currentWebSocket.readyState;
+  }
+
+  async open() {
+    this.currentWebSocket.addEventListener('open', async (event) => {
+      if (this.queue.length > 0) {
+        for (const i in this.queue) {
+          if (this.queue[i]) {
+            this.send(JSON.stringify(this.queue[i]));
+          }
+        }
+      }
+      this.queue = [];
+      if (typeof this.options.onOpen === 'function') {
+        this.options.onOpen(event);
+      }
+    });
+  }
+}
+
 class Channel {
   _id;
   url;
@@ -604,6 +737,7 @@ class Channel {
       this._id = channel_id;
     }
     this.#api = new ChannelApi(url, this, identity);
+    this.#socket = new ChannelSocket(url, this, identity);
   }
 
   get keys() {
@@ -725,6 +859,69 @@ class Channel {
       }
     }
     return unwrapped_messages;
+  }
+}
+
+// A SB Socket
+class ChannelSocket {
+  _id;
+  connection;
+  url;
+  events;
+  init;
+  #keys;
+  #queue = Queue;
+  #payload = Payload;
+  #channel;
+  #identity;
+
+  constructor(wsUrl, channel, identity) {
+    this.url = wsUrl;
+    this.#channel = channel;
+    this.#identity = identity;
+    return this;
+  }
+
+  setKeys(_keys) {
+    this.#keys = _keys;
+  }
+
+  open(socketId, user) {
+    console.log(socketId, user);
+    const socketEvents = new MessageBus();
+    const options = {
+      url: this.url + socketId + '/websocket', onOpen: async (event) => {
+        this.init = {name: JSON.stringify(user.exportable_pubKey)};
+        await socket.send(JSON.stringify(this.init));
+        socketEvents.publish('open', event);
+      },
+      onMessage: (event) => {
+        socketEvents.publish('message', event);
+      },
+      onClose: (event) => {
+        socketEvents.publish('close', event);
+      },
+      onError: (event) => {
+        socketEvents.publish('error', event);
+      },
+      timeout: 500
+    };
+    const socket = new WS_Protocol(options);
+    this.events = socketEvents;
+    this._id = socketId;
+    this.connection = socket;
+  }
+
+  async send(message, wrap = false) {
+    let payload = message;
+    try {
+      if (wrap) {
+        payload = await this.#payload.wrap(message, this.#keys.encryptionKey);
+      }
+      this.#queue.add({ws: {_id: this._id, url: this.url, init: this.init}, message: payload}, 'wsCallback');
+    } catch (e) {
+      console.error(e);
+    }
   }
 }
 

@@ -89,7 +89,6 @@ describe('Top level functions', () => {
     }
   });
 
-
   test('some yucky strings', () => {
     for (const e of z) {
       let s0 = e;

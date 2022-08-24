@@ -46,6 +46,15 @@ export class MessageBus {
       console.log(`fyi: asked to remove a handler but it's not there`);
     }
   }
+
+  publish(event, ...args) {
+    for (const handler of this.#select('*')) {
+      handler(event, ...args);
+    }
+    for (const handler of this.#select(event)) {
+      handler(...args);
+    }
+  }
 }
 
 function sleep(ms) {
