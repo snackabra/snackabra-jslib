@@ -159,6 +159,33 @@ describe('Snackabra Class --> identity', () => {
 
 });
 
+/* psm: added this stuff here, testing fetching messages */
+describe('Snackabra Class --> get messages', () => {
+  let SB;
+  beforeAll(() => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        SB = new Snackabra();
+        await SB.setIdentity(key);
+        SB.connect(sb_config);
+        resolve(SB);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  });
+
+  test('Fetch messages', async () => {
+    console.log("... testing fetch messages ...");
+    console.log(SB.channel.keys);
+    console.log(JSON.stringify(SB.channel.api));
+    let z = SB.channel.api.getOldMessages(10);
+    console.log("Fetching old messages:");
+    console.log(z);
+  });
+});
+    
+
 describe('Snackabra Class --> channel', () => {
   let SB;
   beforeAll(() => {
