@@ -126,7 +126,7 @@ if (true)
 {
   let z = document.getElementById('test03');
   let b = new MessageBus();
-  let called_1 = false; 
+  let called_1 = false;
   z.innerHTML += 'starting test ...<br\>';
   console.log("inside testing messagebus");
   function hello_1() {
@@ -156,16 +156,10 @@ if (true)
 
 /* snackabra channel tests ... these correspond to snackabra.pages.dev public server */
 
-// const sb_config = {
-//   channel_server: 'http://r.somethingstuff.workers.dev',
-//   channel_ws: 'ws://r.somethingstuff.workers.dev',
-//   storage_server: 'http://s.somethingstuff.workers.dev'
-// };
-
 const sb_config = {
-  channel_server: 'https://r.snackabra.pages.dev',
-  channel_ws: 'wss://r.snackabra.pages.dev',
-  storage_server: 'https://s.snackabra.pages.dev'
+  channel_server: 'https://r.somethingstuff.workers.dev',
+  channel_ws: 'wss://r.somethingstuff.workers.dev',
+  storage_server: 'https://s.somethingstuff.workers.dev'
 };
 
 
@@ -207,7 +201,7 @@ if (true)
     }
   });
 }
-      
+
 
 if (true)
 {
