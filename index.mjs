@@ -37,7 +37,7 @@ class MessageBus {
     let i = -1;
     if (this.bus[event]) {
       if ((i = this.bus[event].findLastIndex((e) => e == handler)) != -1) {
-	this.bus[event].splice(i, 1);
+        this.bus[event].splice(i, 1);
       }
     } else {
       console.log(`fyi: asked to remove a handler but it's not there`);
@@ -1201,7 +1201,7 @@ class ChannelApi {
 
   getOldMessages(currentMessagesLength) {
     return new Promise(async (resolve, reject) => {
-      fetch(this.#channelServer + this.#channel._id + +'/oldMessages?currentMessagesLength=' + currentMessagesLength, {
+      fetch(this.#channelServer + this.#channel._id + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
         method: 'GET',
       }).then((response) => {
         if (!response.ok) {
