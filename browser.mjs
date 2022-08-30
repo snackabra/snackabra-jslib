@@ -40,7 +40,7 @@ class MessageBus {
         this.bus[event].splice(i, 1);
       }
     } else {
-      console.info(`fyi: asked to remove a handler but it's not there`);
+      console.log(`fyi: asked to remove a handler but it's not there`);
     }
   }
 
@@ -89,7 +89,7 @@ function sleep(ms) {
 
 function _sb_exception(loc, msg) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
-  console.error(m);
+  console.log(m);
   throw new Error(m);
 }
 
@@ -166,7 +166,7 @@ function _appendBuffer(buffer1, buffer2) {
     tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
     return tmp.buffer;
   } catch (e) {
-    console.error(e);
+    console.log(e);
     return {};
   }
 }
@@ -249,7 +249,7 @@ function extractPayloadV1(payload) {
     }
     return data;
   } catch (e) {
-    console.error(e);
+    console.log(e);
     return {};
   }
 }
@@ -278,7 +278,7 @@ function assemblePayload(data) {
     }
     return payload;
   } catch (e) {
-    console.error(e);
+    console.log(e);
     return {};
   }
 }
@@ -287,15 +287,15 @@ function extractPayload(payload) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
-    console.info('METADATASIZE: ', metadataSize);
-    console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
+    console.log('METADATASIZE: ', metadataSize);
+    console.log('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
     const _metadata = JSON.parse(decoder.decode(payload.slice(4, 4 + metadataSize)));
-    console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
+    console.log('METADATA EXTRACTED', JSON.stringify(_metadata));
     const startIndex = 4 + metadataSize;
     if (!_metadata.hasOwnProperty('version')) {
       _metadata['version'] = '001';
     }
-    console.info(_metadata['version']);
+    console.log(_metadata['version']);
     switch (_metadata['version']) {
       case '001':
         return extractPayloadV1(payload);
@@ -305,7 +305,7 @@ function extractPayload(payload) {
           const _index = i.toString();
           if (_metadata.hasOwnProperty(_index)) {
             const propertyStartIndex = _metadata[_index]['start'];
-            console.info(propertyStartIndex);
+            console.log(propertyStartIndex);
             const size = _metadata[_index]['size'];
             data[_metadata[_index]['name']] = payload.slice(startIndex + propertyStartIndex, startIndex + propertyStartIndex + size);
           }
@@ -315,6 +315,7 @@ function extractPayload(payload) {
         throw new Error('Unsupported payload version (' + _metadata['version'] + ') - fatal');
     }
   } catch (e) {
+    // console.log("HIGH LEVEL ERROR", e.message);
     throw new Error('extractPayload() exception (' + e.message + ')');
   }
 }
@@ -619,6 +620,8 @@ class Payload { // eslint-disable-line no-unused-vars
     return new Promise(async (resolve, reject) => {
       try {
         const msg = {encrypted_contents: await SB_Crypto.encrypt(JSON.stringify(contents), key, 'string')};
+        console.log(msg);
+        resolve(JSON.stringify(msg));
       } catch (e) {
         console.error(e);
         reject(new Error('Unable to encrypt payload.'));
@@ -702,6 +705,7 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
           }, this.options.timeout);
 
           const ackResponse = () => {
+            console.log('ACK!!!!');
             clearTimeout(timeout);
             this.events.unsubscribe('ws_ack_' + ackPayload._id, ackResponse);
             resolve();
@@ -741,7 +745,7 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
         return;
       }
       if (data.nack) {
-        console.error('Nack received');
+        console.log('Nack received');
         this.close();
         return;
       }
@@ -806,12 +810,15 @@ class Channel {
 
   digest = async (message) => {
     if (message?.ready) {
+      console.log('here1');
       await this.loadKeys(message.keys);
+      console.log('here2');
       this.socket.isReady();
     }
   };
 
   loadKeys = (keys) => {
+    console.log(keys);
     return new Promise(async (resolve, reject) => {
       if (keys.ownerKey === null) {
         reject(new Error('Channel does not exist'));
@@ -833,9 +840,11 @@ class Channel {
       let isVerifiedGuest = false;
       const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
       if (_owner_pubKey.error) {
-        console.error(_owner_pubKey.error);
+        console.log(_owner_pubKey.error);
       }
+      console.log(_exportable_pubKey, _exportable_owner_pubKey);
       const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
+      console.log(isOwner);
       let isAdmin;
       {
         isAdmin = (document.cookie.split('; ').find((row) => row.startsWith('token_' + this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
@@ -903,10 +912,13 @@ class Channel {
             if (msg.error) {
               msg = await this.decrypt(this.keys.locked_key, new_messages[id].encrypted_contents);
             }
+            console.log(msg);
             const _json_msg = JSON.parse(msg.plaintext);
+            console.log(_json_msg);
             if (!_json_msg.hasOwnProperty('control')) {
               unwrapped_messages[id] = _json_msg;
             } else {
+              // console.log(_json_msg);
               //this.setState({controlMessages: [...this.state.controlMessages, _json_msg]});
             }
           } catch (e) {
@@ -956,7 +968,7 @@ class ChannelSocket {
     const options = {
       url: this.url + '/api/room/' + this.channelId + '/websocket',
       onOpen: async (event) => {
-        console.info('websocket opened');
+        console.log('websocket opened');
         this.init = {name: JSON.stringify(this.#identity.exportable_pubKey)};
         await this.socket.send(JSON.stringify(this.init));
         if (typeof this.onOpen === 'function') {
@@ -1139,6 +1151,7 @@ class StorageApi {
         })
       });
       const resp_json = await resp.json();
+      // console.log("Response for " + type + ": ", resp_json)
       if (resp_json.hasOwnProperty('error')) {
         // TODO - why can't we throw exceptions?
         // Promise.reject(new Error('Server error on storing image (' + resp_json.error + ')'));
@@ -1168,6 +1181,7 @@ class StorageApi {
   }
 
   #unpadData(data_buffer) {
+    // console.log(data_buffer, typeof data_buffer)
     const _size = new Uint32Array(data_buffer.slice(-4))[0];
     return data_buffer.slice(0, _size);
   }
@@ -1187,8 +1201,10 @@ class StorageApi {
     const encrypted_image = data.image;
     const padded_img = await SB_Crypto.decrypt(image_key, {content: encrypted_image, iv: iv}, 'arrayBuffer');
     const img = this.#unpadData(padded_img.plaintext);
+    //console.log(img)
+    //console.log("data:image/jpeg;base64,"+this.arrayBufferToBase64(img.plaintext))
     if (img.error) {
-      console.error('(Image error: ' + img.error + ')');
+      console.log('(Image error: ' + img.error + ')');
       throw new Error('Failed to fetch data - authentication or formatting error');
     }
     return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
@@ -1256,6 +1272,7 @@ class ChannelApi {
             encryptionKey: channelData.encryptionKey,
             signKey: channelData.signKey
           };
+          console.log(keys);
           this.#channel._id = channelId;
           localStorage.setItem(this.#channel._id, JSON.stringify(exportable_privateKey));
           resolve(channelId);
@@ -1701,7 +1718,7 @@ class IndexedKV {
     }
     {
       if (!window.indexedDB) {
-        console.error('Your browser doesn\'t support a stable version of IndexedDB.');
+        console.log('Your browser doesn\'t support a stable version of IndexedDB.');
         return;
       }
       this.indexedDB = window.indexedDB;
@@ -1758,7 +1775,7 @@ class IndexedKV {
   #useDatabase() {
     this.db.onversionchange = (event) => {
       this.db.close();
-      console.info('A new version of this page is ready. Please reload or close this tab!');
+      console.log('A new version of this page is ready. Please reload or close this tab!');
     };
   };
 
@@ -1941,7 +1958,7 @@ class Queue {
       await this.remove(_id);
       this.setLastProcessed();
     }).catch(() => {
-      console.info('Your client is offline, your message will be sent when you reconnect');
+      console.log('Your client is offline, your message will be sent when you reconnect');
       if (typeof this.onOffline === 'function') {
         this.events.publish('offline');
         this.onOffline(message);
