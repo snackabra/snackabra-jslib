@@ -3,3 +3,4 @@ aside.*
 node_modules
 coverage/
 dist/
+/FileSystemDB/

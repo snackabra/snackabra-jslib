@@ -6,12 +6,10 @@
 // 2022-02-28: 100%
 
 // nota bene ... pretty basic testing, not very sophisticated yet
-import 'fake-indexeddb/auto';
 import fetch from 'node-fetch';
 
-global.indexedDB = indexedDB;
 // Shouldn't have to do with --experimental-fetch flag but it isn't working?
-global.fetch = fetch
+global.fetch = fetch;
 
 import {
   SB_libraryVersion,
@@ -118,7 +116,7 @@ const sb_config = {
   storage_server: 'http://s.somethingstuff.workers.dev'
 };
 
-const channel_id = 'yzeQWYahP87ngAVbhdP7DxU3or0mOrOTLJ3HcQ9UQQzZgKMYq3zWr1Qk5bZTXpHl';
+const channel_id = 'Qs784CLbB8RF6O3sCOJQfUccRMOhcTBJFzkD--l7Ec10gMlMoiqLg8CrYCYDKXjL';
 
 const key = {
   key_ops: ['deriveKey'],
@@ -176,45 +174,76 @@ describe('Snackabra Class --> get messages', () => {
   });
 
   test('Fetch messages', async () => {
-    console.log("... testing fetch messages ...");
-    console.log(SB.channel.keys);
-    console.log(JSON.stringify(SB.channel.api));
-    let z = SB.channel.api.getOldMessages(10);
-    console.log("Fetching old messages:");
-    console.log(z);
+    //console.log('... testing fetch messages ...');
+    //console.log(SB.channel.keys);
+    //console.log(JSON.stringify(SB.channel.api));
+    //let z = await SB.channel.api.getOldMessages(10);
+    //console.log('Fetching old messages:');
+    //console.log(z);
   });
 });
-    
 
-describe('Snackabra Class --> channel', () => {
+
+describe('Snackabra Class > ChannelAPI', () => {
   let SB;
-  beforeAll(() => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        SB = new Snackabra();
-        await SB.setIdentity(key);
-        SB.connect(sb_config);
-        resolve(SB);
-      } catch (e) {
-        reject(e);
-      }
-    });
+  beforeAll(async () => {
+    SB = new Snackabra();
+    await SB.setIdentity(key);
+    SB.connect(sb_config, channel_id);
+    SB.onMessage = (event) => {
+      console.log(event);
+    };
+    return SB;
   });
 
-  test('Create a channel', async () => {
-    console.log(SB.channel.keys);
-    console.log(JSON.stringify(SB.channel.api));
+  test('Create', async () => {
     const channel = await SB.channel.api.create('password');
-    console.log(channel)
-    expect(channel).objectContaining({
-      channelId: expect.any(String),
-      exportable_privateKey: expect.any(String),
-      ownerKey: expect.any(String),
-      encryptionKey: expect.any(String),
-      signKey: expect.any(String),
-    });
+    //console.log(channel)
+    //SB.connect(sb_config, channel);
+    expect(typeof channel).toBe('string');
   });
 
+  test('getLastMessageTimes', async () => {
+    const res = await SB.channel.api.getLastMessageTimes();
+    expect(typeof res).toBe('string');
+  });
+
+  test('getOldMessages', async () => {
+    const res = await SB.channel.api.getOldMessages(10);
+    expect(typeof res).toBe('object');
+  });
+
+  test('updateCapacity', async () => {
+    const res = await SB.channel.api.updateCapacity(21);
+    expect(res.capacity).toBe('21');
+  });
+
+  test('getCapacity', async () => {
+    const capacity = await SB.channel.api.getCapacity();
+    expect(capacity).toBe('21');
+  });
+
+  test('getJoinRequests', async () => {
+    const joins = await SB.channel.api.getJoinRequests();
+    expect(joins.join_requests).toStrictEqual([]);
+  });
+
+  test('isLocked', async () => {
+    const locked = await SB.channel.api.isLocked();
+    expect(locked).toStrictEqual(false);
+  });
+
+  test('setMOTD', async () => {
+    const motd = await SB.channel.api.setMOTD('WOOOOOOT');
+    console.log(motd);
+    expect(motd).toStrictEqual({'motd': 'WOOOOOOT'});
+  });
+
+  test('getAdminData', async () => {
+    const adminData = await SB.channel.api.getAdminData();
+    console.log(adminData);
+    expect(adminData).toStrictEqual({'motd': 'WOOOOOOT'});
+  });
 
 });
 

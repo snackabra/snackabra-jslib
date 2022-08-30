@@ -184,17 +184,19 @@ if (true)
 {
   let z = document.getElementById('test04');
   z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
-  let SB = new Snackabra();
+  let SB = new Snackabra(sb_config);
   SB.setIdentity(key).then(async () => {
     z.innerHTML += '.. identity set ...<br\>';
-    let c = SB.connect(sb_config, channel_id);
+    let c = SB.connect(channel_id);
     z.innerHTML += '.. connected ...<br\>';
     console.log(c);
     try {
       // All methods are promises we need to await or use .then().catch()
-      let z2 = await c.channel.api.getOldMessages(10);
-      console.log("got channel response:");
-      console.log(z2);
+      c.channel.api.getOldMessages(10).then(()=>{
+        c.channel.socket.send('hello!');
+        console.log("got channel response:");
+        console.log(z2);
+      });
     } catch (e) {
       console.log("ERROR in channel test:");
       console.log(e);
