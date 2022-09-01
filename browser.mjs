@@ -897,36 +897,6 @@ class Channel {
       resolve(true);
     });
   };
-
-  async unwrapMessages(new_messages) {
-    const unwrapped_messages = {};
-    for (const id in new_messages) {
-      if (new_messages.hasOwnProperty(id) && new_messages[id].hasOwnProperty('encrypted_contents')) {
-        if (new_messages[id].hasOwnProperty('encrypted_contents')) {
-          try {
-            const decryption_key = this.keys.encryptionKey;
-            let msg = await this.decrypt(decryption_key, new_messages[id].encrypted_contents);
-            if (msg.error) {
-              msg = await this.decrypt(this.keys.locked_key, new_messages[id].encrypted_contents);
-            }
-            const _json_msg = JSON.parse(msg.plaintext);
-            if (!_json_msg.hasOwnProperty('control')) {
-              unwrapped_messages[id] = _json_msg;
-            } else {
-              //this.setState({controlMessages: [...this.state.controlMessages, _json_msg]});
-            }
-          } catch (e) {
-            console.warn(e);
-            // Skip the message if decryption fails - its probably due to the user not having <roomId>_lockedKey.
-          }
-        } else {
-          unwrapped_messages[id] = new_messages[id];
-        }
-        localStorage.setItem(this._id + '_lastSeenMessage', id.slice(this._id.length));
-      }
-    }
-    return unwrapped_messages;
-  }
 }
 
 // A SB Socket
@@ -945,6 +915,7 @@ class ChannelSocket {
   onClose;
   onError;
   onMessage;
+  onSystemInfo;
 
   constructor(wsUrl, channel, identity) {
     this.channelId = channel._id;
@@ -974,10 +945,18 @@ class ChannelSocket {
         if (event?.ready) {
           if (typeof this.onJoin === 'function') {
             this.onJoin(event);
+            if (typeof this.onSystemInfo === 'function') {
+              this.onSystemInfo(event);
+            }
+          }
+        } else if (event?.system) {
+          if (typeof this.onSystemInfo === 'function') {
+            this.onSystemInfo(event);
           }
         } else {
+          this.recieve(event);
           if (typeof this.onMessage === 'function') {
-            this.onMessage(event);
+            this.onMessage(this.recieve(event));
           }
         }
       },
@@ -1031,6 +1010,25 @@ class ChannelSocket {
       console.error(e);
     }
      */
+  }
+
+  async recieve(message) {
+    console.log('Received: ', message);
+    const id = Object.keys(message)[0];
+    let unwrapped;
+    console.log(message[id].hasOwnProperty('encrypted_contents'));
+    if (message[id].hasOwnProperty('encrypted_contents')) {
+      try {
+        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents);
+      } catch (e) {
+        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents);
+      }
+    } else {
+      unwrapped = message[id];
+    }
+    localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
+    console.log(unwrapped);
+    return unwrapped;
   }
 }
 

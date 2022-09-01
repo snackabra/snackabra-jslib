@@ -809,6 +809,37 @@ class SBMessage {
   }
 }
 
+class SBFile {
+  encrypted = false;
+  contents;
+  sender_pubKey;
+  sign;
+  image = '';
+  image_sign;
+  imageMetaData;
+  imageMetadata_sign;
+
+  // File is an array buffer
+  constructor(file, signKey, key) {
+    return new Promise(async (resolve) => {
+      // eslint-disable-next-line prefer-const
+      let imgId = '', previewId = '', imgKey = '', previewKey = '', fullStorePromise = '', previewStorePromise = '';
+      this.contents = contents;
+      this.sender_pubKey = key;
+      this.sign = await SB_Crypto.sign(signKey, contents);
+      this.image_sign = await SB_Crypto.sign(signKey, null);
+      this.imageMetaData = JSON.stringify({
+        imageId: imgId,
+        previewId: previewId,
+        imageKey: imgKey,
+        previewKey: previewKey
+      });
+      this.imageMetadata_sign = await SB_Crypto.sign(signKey, this.imageMetaData);
+      resolve(this);
+    });
+  }
+}
+
 // Takes a message object and turns it into a payload to be used by SB protocol
 class Payload { // eslint-disable-line no-unused-vars
   wrap(contents, key) {
@@ -1093,36 +1124,6 @@ class Channel {
       resolve(true);
     });
   };
-
-  async unwrapMessages(new_messages) {
-    const unwrapped_messages = {};
-    for (const id in new_messages) {
-      if (new_messages.hasOwnProperty(id) && new_messages[id].hasOwnProperty('encrypted_contents')) {
-        if (new_messages[id].hasOwnProperty('encrypted_contents')) {
-          try {
-            const decryption_key = this.keys.encryptionKey;
-            let msg = await this.decrypt(decryption_key, new_messages[id].encrypted_contents);
-            if (msg.error) {
-              msg = await this.decrypt(this.keys.locked_key, new_messages[id].encrypted_contents);
-            }
-            const _json_msg = JSON.parse(msg.plaintext);
-            if (!_json_msg.hasOwnProperty('control')) {
-              unwrapped_messages[id] = _json_msg;
-            } else {
-              //this.setState({controlMessages: [...this.state.controlMessages, _json_msg]});
-            }
-          } catch (e) {
-            console.warn(e);
-            // Skip the message if decryption fails - its probably due to the user not having <roomId>_lockedKey.
-          }
-        } else {
-          unwrapped_messages[id] = new_messages[id];
-        }
-        localStorage.setItem(this._id + '_lastSeenMessage', id.slice(this._id.length));
-      }
-    }
-    return unwrapped_messages;
-  }
 }
 
 // A SB Socket
@@ -1141,6 +1142,7 @@ class ChannelSocket {
   onClose;
   onError;
   onMessage;
+  onSystemInfo;
 
   constructor(wsUrl, channel, identity) {
     this.channelId = channel._id;
@@ -1170,10 +1172,18 @@ class ChannelSocket {
         if (event?.ready) {
           if (typeof this.onJoin === 'function') {
             this.onJoin(event);
+            if (typeof this.onSystemInfo === 'function') {
+              this.onSystemInfo(event);
+            }
+          }
+        } else if (event?.system) {
+          if (typeof this.onSystemInfo === 'function') {
+            this.onSystemInfo(event);
           }
         } else {
+          this.recieve(event);
           if (typeof this.onMessage === 'function') {
-            this.onMessage(event);
+            this.onMessage(this.recieve(event));
           }
         }
       },
@@ -1215,18 +1225,25 @@ class ChannelSocket {
     } else {
       this.#queue.push(message);
     }
+  }
 
-    /*
-    let payload = message;
-    try {
-      if (wrap) {
-        payload = await this.#payload.wrap(message, this.#keys.encryptionKey);
+  async recieve(message) {
+    console.log('Received: ', message);
+    const id = Object.keys(message)[0];
+    let unwrapped;
+    console.log(message[id].hasOwnProperty('encrypted_contents'));
+    if (message[id].hasOwnProperty('encrypted_contents')) {
+      try {
+        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents);
+      } catch (e) {
+        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents);
       }
-      this.#queue.add({ws: {_id: this._id, url: this.url, init: this.init}, message: payload}, 'wsCallback');
-    } catch (e) {
-      console.error(e);
+    } else {
+      unwrapped = message[id];
     }
-     */
+    localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
+    console.log(unwrapped);
+    return unwrapped;
   }
 }
 
@@ -1241,7 +1258,7 @@ class StorageApi {
     if (file instanceof SBFile) {
 
     } else {
-      throw new Error('Only instance of SBFile accepted');
+      throw new Error('Must be an instance of SBFile accepted');
     }
   }
 
