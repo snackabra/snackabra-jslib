@@ -1231,10 +1231,9 @@ class ChannelSocket {
   }
 
   async recieve(message) {
-    console.log('Received: ', message);
+    console.info('Received: ', message);
     const id = Object.keys(message)[0];
     let unwrapped;
-    console.log(message[id].hasOwnProperty('encrypted_contents'));
     if (message[id].hasOwnProperty('encrypted_contents')) {
       try {
         unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents);
@@ -1245,7 +1244,6 @@ class ChannelSocket {
       unwrapped = message[id];
     }
     localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
-    console.log(unwrapped);
     return unwrapped;
   }
 }
@@ -2244,6 +2242,17 @@ class Snackabra {
     return new Promise(async (resolve, reject) => {
       try {
         this.#identity = await new Identity(keys);
+        resolve(this.#identity);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  createIdentity() {
+    return new Promise(async (resolve, reject) => {
+      try {
+        this.#identity = await new Identity();
         resolve(this.#identity);
       } catch (e) {
         reject(e);
