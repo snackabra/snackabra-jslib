@@ -1,49 +1,51 @@
 <!DOCTYPE HTML>
 <html lang="en">
-  <head>
+<head>
     <meta http-equiv="content-type" content="text/html;charset=utf-8">
     <title>Testing Snackabra Cryptolibrary</title>
-    <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1.0"/>
-  </head>
-  <body>
+    <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1.0" />
+</head>
+<body>
 
-    <p>Note: if you want to test SB functions at the console command line, try:<br/><br/>
-      <tt>  let sb = await import('./browser.mjs');</tt><br/>
-      <tt>  sb.SB_libraryVersion();</tt><br/>
-    </p>
+<p>Note: if you want to test SB functions at the console command line, try:<br /><br />
+    <tt> let sb = await import('./browser.mjs');</tt><br />
+    <tt> sb.SB_libraryVersion();</tt><br />
+</p>
 
-    <h1 id="results">Results: ...</h1>
+<h1 id="results">Results: ...</h1>
 
-    <p>(Above should be filled with a string showing pass and fail count upon completion.
-      For any failed tests, check browser console for possible more information.)</p>
-    
-    <h2>Module Load Test</h2>
+<p>(Above should be filled with a string showing pass and fail count upon completion.
+    For any failed tests, check browser console for possible more information.)</p>
 
-    <p id="testResults">Testing module load - next line should say 'hello world':<br/><br/></p>
+<h2>Module Load Test</h2>
 
-    <h2>base64 conversion tests ('test01a' set)</h2>
-    
-    <p id="test01a">Testing with some simple strings:<br/><br/></p>
+<p id="testResults">Testing module load - next line should say 'hello world':<br /><br /></p>
 
-    <h2>base64 conversion tests ('test01b' set)</h2>
-    
-    <p id="test01b">Testing random Uint8Array conversion to base64 and back:<br/><br/></p>
-    
-    <h2>strings and buffers ('test02' set)</h2>
+<h2>base64 conversion tests ('test01a' set)</h2>
 
-    <p id="test02">Testing various strings back and forth:<br/><br/></p>
+<p id="test01a">Testing with some simple strings:<br /><br /></p>
 
-    <p id="test02b">Testing random binary strings back and forth:<br/><br/></p>
+<h2>base64 conversion tests ('test01b' set)</h2>
 
-    <h2>MessageBus class test ('test03' set)</h2>
+<p id="test01b">Testing random Uint8Array conversion to base64 and back:<br /><br /></p>
 
-    <p id="test03">Testing MessageBus class:<br/><br/></p>
+<h2>strings and buffers ('test02' set)</h2>
 
-    <h2>Channel Tests ('test04' set)</h2>
+<p id="test02">Testing various strings back and forth:<br /><br /></p>
 
-    <p id="test04">Testing MessageBus class:<br/><br/></p>
+<p id="test02b">Testing random binary strings back and forth:<br /><br /></p>
 
-    <script type="module" src="./test01.js"></script>
+<h2>MessageBus class test ('test03' set)</h2>
 
-  </body>
+<p id="test03">Testing MessageBus class:<br /><br /></p>
+
+<h2>Channel Tests ('test04' set)</h2>
+
+<p id="test04">Testing MessageBus class:<br /><br /></p>
+
+<img id="snackabra-img" width="300" src="https://snackabra.io/_images/snackabra.svg">
+
+<script type="module" src="./test01.js"></script>
+
+</body>
 </html>

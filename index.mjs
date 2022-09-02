@@ -585,6 +585,7 @@ class SBMessage {
   contents;
   sender_pubKey;
   sign;
+  metaData; //For future use
   image = '';
   image_sign;
   imageMetaData;
@@ -610,10 +611,225 @@ class SBMessage {
   }
 }
 
+class SBFile {
+  encrypted = false;
+  contents;
+  sender_pubKey;
+  sign;
+  data = {
+    previewImage: '',
+    fullImage: ''
+  };
+  metaData; //For future use
+  image = '';
+  image_sign;
+  imageMetaData;
+  imageMetadata_sign;
+
+  // file is an instance of File
+  constructor(file, signKey, key) {
+    return new Promise(async (resolve, reject) => {
+      this.contents = '';
+      this.sender_pubKey = key;
+      this.sign = await SB_Crypto.sign(signKey, this.contents);
+      if (file.type.match(/^image/i)) {
+        this.#asImage(file, signKey).then(() => {
+          resolve(this);
+        });
+      } else {
+        reject(new Error('Unsupported file type: ' + file.type));
+      }
+    });
+  }
+
+  #asImage(image, signKey) {
+    return new Promise(async (resolve) => {
+      this.data.previewImage = this.#padImage(await (await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
+      const previewHash = await this.#generateImageHash(this.data.previewImage);
+      this.data.fullImage = image.size > 15728640 ? this.#padImage(await (await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(await image.arrayBuffer());
+      const fullHash = await this.#generateImageHash(this.data.fullImage);
+      this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
+      this.image_sign = await SB_Crypto.sign(signKey, null);
+      this.imageMetaData = JSON.stringify({
+        imageId: fullHash.id,
+        previewId: previewHash.id,
+        imageKey: fullHash.key,
+        previewKey: previewHash.key
+      });
+      this.imageMetadata_sign = await SB_Crypto.sign(signKey, this.imageMetaData);
+      resolve(this);
+    });
+  }
+
+  async #getFileData(file, outputType) {
+    try {
+      const reader = new FileReader();
+      if (file.size === 0) {
+        return null;
+      }
+      outputType === 'url' ? reader.readAsDataURL(file) : reader.readAsArrayBuffer(file);
+      return new Promise((resolve, reject) => {
+        reader.onloadend = (event) => {
+          const the_blob = reader.result;
+          resolve(the_blob);
+        };
+      });
+    } catch (e) {
+      console.log(e);
+      return null;
+    }
+  }
+
+  #padImage(image_buffer) {
+    let _sizes = [128, 256, 512, 1024, 2048, 4096]; // in KB
+    _sizes = _sizes.map((size) => size * 1024);
+    const image_size = image_buffer.byteLength;
+    // console.log('BEFORE PADDING: ', image_size)
+    let _target;
+    if (image_size < _sizes[_sizes.length - 1]) {
+      for (let i = 0; i < _sizes.length; i++) {
+        if (image_size + 21 < _sizes[i]) {
+          _target = _sizes[i];
+          break;
+        }
+      }
+    } else {
+      _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
+      if (image_size + 21 >= _target) {
+        _target += 1024;
+      }
+    }
+    const _padding_array = [128];
+    _target = _target - image_size - 21;
+    // We will finally convert to Uint32Array where each element is 4 bytes
+    // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
+    // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
+    for (let i = 0; i < _target; i++) {
+      _padding_array.push(0);
+    }
+    // _padding_array.push(image_size);
+    const _padding = new Uint8Array(_padding_array).buffer;
+    // console.log('Padding size: ', _padding.byteLength)
+    let final_data = _appendBuffer(image_buffer, _padding);
+    final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
+    // console.log('AFTER PADDING: ', final_data.byteLength)
+    return final_data;
+  }
+
+  async #restrictPhoto(photo, maxSize, imageType, qualityArgument) {
+    // imageType default should be 'image/jpeg'
+    // qualityArgument should be 0.92 for jpeg and 0.8 for png (MDN default)
+    maxSize = maxSize * 1024; // KB
+    // console.log(`Target size is ${maxSize} bytes`);
+    let _c = await this.#readPhoto(photo);
+    let _b1 = await new Promise((resolve) => {
+      _c.toBlob(resolve, imageType, qualityArgument);
+    });
+    // workingDots();
+    // console.log(`start canvas W ${_c.width} x H ${_c.height}`)
+    let _size = _b1.size;
+    if (_size <= maxSize) {
+      // console.log(`Starting size ${_size} is fine`);
+      return _b1;
+    }
+    // console.log(`Starting size ${_size} too large, start by reducing image size`);
+    // compression wasn't enough, so let's resize until we're getting close
+    let _old_size;
+    let _old_c;
+    while (_size > maxSize) {
+      _old_c = _c;
+      _c = this.#scaleCanvas(_c, .5);
+      _b1 = await new Promise((resolve) => {
+        _c.toBlob(resolve, imageType, qualityArgument);
+      });
+      _old_size = _size;
+      _size = _b1.size;
+      // workingDots();
+      // console.log(`... reduced to W ${_c.width} x H ${_c.height} (to size ${_size})`);
+    }
+
+    // we assume that within this width interval, storage is roughly prop to area,
+    // with a little tuning downwards
+    let _ratio = maxSize / _old_size;
+    let _maxIteration = 12; // to be safe
+    // console.log(`... stepping back up to W ${_old_c.width} x H ${_old_c.height} and will then try scale ${_ratio.toFixed(4)}`);
+    let _final_c;
+    do {
+      _final_c = this.#scaleCanvas(_old_c, Math.sqrt(_ratio) * 0.99); // we're targeting within 1%
+      _b1 = await new Promise((resolve) => {
+        _final_c.toBlob(resolve, imageType, qualityArgument);
+        // console.log(`(generating blob of requested type ${imageType})`);
+      });
+      // workingDots();
+      // console.log(`... fine-tuning to W ${_final_c.width} x H ${_final_c.height} (size ${_b1.size})`);
+      _ratio *= (maxSize / _b1.size);
+    } while (((_b1.size > maxSize) || ((Math.abs(_b1.size - maxSize) / maxSize) > 0.02)) && (--_maxIteration > 0));// it's ok within 2%
+
+    // workingDots();
+    // console.log(`... ok looks like we're good now ... final size is ${_b1.size} (which is ${((_b1.size * 100) / maxSize).toFixed(2)}% of cap)`);
+
+    // document.getElementById('the-original-image').width = _final_c.width;  // a bit of a hack
+    return _b1;
+  }
+
+  #scaleCanvas(canvas, scale) {
+    const scaledCanvas = document.createElement('canvas');
+    scaledCanvas.width = canvas.width * scale;
+    scaledCanvas.height = canvas.height * scale;
+    // console.log(`#### scaledCanvas target W ${scaledCanvas.width} x H ${scaledCanvas.height}`);
+    scaledCanvas
+      .getContext('2d')
+      .drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+    // console.log(`#### scaledCanvas actual W ${scaledCanvas.width} x H ${scaledCanvas.height}`);
+    return scaledCanvas;
+  }
+
+  async #generateImageHash(image) {
+    try {
+      const digest = await crypto.subtle.digest('SHA-512', image);
+      const _id = digest.slice(0, 32);
+      const _key = digest.slice(32);
+      return {
+        id: encodeURIComponent(arrayBufferToBase64(_id)),
+        key: encodeURIComponent(arrayBufferToBase64(_key))
+      };
+    } catch (e) {
+      console.log(e);
+      return {};
+    }
+  }
+
+  async #readPhoto(photo) {
+    const canvas = document.createElement('canvas');
+    const img = document.createElement('img');
+
+    // create img element from File object
+    img.src = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target.result);
+      reader.readAsDataURL(photo);
+    });
+    await new Promise((resolve) => {
+      img.onload = resolve;
+    });
+
+    // console.log("img object");
+    // console.log(img);
+    // console.log("canvas object");
+    // console.log(canvas);
+
+    // draw image in canvas element
+    canvas.width = img.width;
+    canvas.height = img.height;
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    return canvas;
+  }
+}
+
 // Takes a message object and turns it into a payload to be used by SB protocol
 class Payload { // eslint-disable-line no-unused-vars
   wrap(contents, key) {
-    //
+    console.log(contents, key);
     return new Promise(async (resolve, reject) => {
       try {
         const msg = {encrypted_contents: await SB_Crypto.encrypt(JSON.stringify(contents), key, 'string')};
@@ -639,7 +855,7 @@ class Payload { // eslint-disable-line no-unused-vars
 }
 
 
-// Protocol code that we wrap our WebSocket in
+// mtg: Protocol code that we wrap our WebSocket in
 // I will be updating this to send messages and remove the wait to send messages only when ack received
 // The benefit is reduced latency in communication protocol
 class WS_Protocol { // eslint-disable-line no-unused-vars
@@ -775,20 +991,36 @@ class Channel {
   #socket = ChannelSocket;
 
   constructor(https, wss, identity, channel_id = null) {
-    this.url = https;
-    this.wss = wss;
-    this.identity = identity;
-    if (channel_id) {
-      this._id = channel_id;
-    }
-    this.join(channel_id);
+    return new Promise((resolve) => {
+      this.url = https;
+      this.wss = wss;
+      this.identity = identity;
+      if (channel_id) {
+        this._id = channel_id;
+        this.join(channel_id).then(() => {
+          resolve(this);
+        });
+      }
+    });
   }
 
   join(channel_id) {
-    this._id = channel_id;
-    this.#api = new ChannelApi(this.url, this, this.identity);
-    this.#socket = new ChannelSocket(this.wss, this, this.identity);
-    this.#socket.onJoin = this.digest;
+    return new Promise((resolve) => {
+      if (channel_id === null) {
+        return;
+      }
+      this._id = channel_id;
+      this.#api = new ChannelApi(this.url, this, this.identity);
+      this.#socket = new ChannelSocket(this.wss, this, this.identity);
+      this.#socket.onJoin = async (message) => {
+        if (message?.ready) {
+          this.loadKeys(message.keys).then(() => {
+            this.socket.isReady();
+            resolve(this);
+          });
+        }
+      };
+    });
   }
 
   get keys() {
@@ -802,13 +1034,6 @@ class Channel {
   get socket() {
     return this.#socket;
   }
-
-  digest = async (message) => {
-    if (message?.ready) {
-      await this.loadKeys(message.keys);
-      this.socket.isReady();
-    }
-  };
 
   loadKeys = (keys) => {
     return new Promise(async (resolve, reject) => {
@@ -991,18 +1216,18 @@ class ChannelSocket {
     } else {
       this.#queue.push(message);
     }
+  }
 
-    /*
-    let payload = message;
-    try {
-      if (wrap) {
-        payload = await this.#payload.wrap(message, this.#keys.encryptionKey);
-      }
-      this.#queue.add({ws: {_id: this._id, url: this.url, init: this.init}, message: payload}, 'wsCallback');
-    } catch (e) {
-      console.error(e);
+  async sendSbObject(file) {
+    if (this.ready) {
+      const payload = await this.#payload.wrap(
+        file,
+        this.#channel.keys.encryptionKey
+      );
+      this.socket.send(payload);
+    } else {
+      this.#queue.push(message);
     }
-     */
   }
 
   async recieve(message) {
@@ -1027,14 +1252,29 @@ class ChannelSocket {
 
 class StorageApi {
   server;
+  #channel;
+  #identity;
 
-  constructor(server) {
-    this.server = server;
+  constructor(server, channel, identity) {
+    this.server = server + '/api/v1';
+    this.#channel = channel;
+    this.#identity = identity;
   }
 
-  saveFile(file) {
-    if (file instanceof SBFile) ; else {
-      throw new Error('Only instance of SBFile accepted');
+  async saveFile(file) {
+    if (file instanceof File) {
+      const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
+      const metaData = JSON.parse(sbFile.imageMetaData);
+      const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
+      const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
+      Promise.all([fullStorePromise, previewStorePromise]).then(async (results) => {
+        this.#channel.socket.sendSbObject(sbFile);
+        results.forEach(async (controlData) => {
+          this.#channel.socket.sendSbObject({...controlData, control: true});
+        });
+      });
+    } else {
+      throw new Error('Must be an instance of File accepted');
     }
   }
 
@@ -1043,50 +1283,23 @@ class StorageApi {
 
     // TODO - Support deriving from PBKDF2 in deriveKey function
     const key = await _crypto.subtle.deriveKey({
-      'name': 'PBKDF2', 'salt': _salt, 'iterations': 100000, // small is fine, we want it snappy
+      'name': 'PBKDF2',
+      'salt': _salt,
+      'iterations': 100000, // small is fine, we want it snappy
       'hash': 'SHA-256'
     }, keyMaterial, {'name': 'AES-GCM', 'length': 256}, true, ['encrypt', 'decrypt']);
     // return key;
     return key;
   }
 
-  saveImage(image, roomId,) {
-    return new Promise(async (resolve, reject) => {
-      const previewImage = padImage(await (await restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
-      const previewHash = await generateImageHash(previewImage);
-      const fullImage = image.size > 15728640 ? padImage(await (await restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : padImage(await image.arrayBuffer());
-      const fullHash = await generateImageHash(fullImage);
-      const previewStorePromise = storeImage(previewImage, previewHash.id, previewHash.key, 'p', roomId).then((_x) => {
-        if (_x.hasOwnProperty('error')) reject(new Error('Could not store preview: ' + _x['error']));
-      });
-      const fullStorePromise = storeImage(fullImage, fullHash.id, fullHash.key, 'f', roomId).then((_x) => {
-        if (_x.hasOwnProperty('error')) reject(new Error('Could not full image: ' + _x['error']));
-      });
-
-      // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
-      resolve({
-        full: fullHash.id,
-        preview: previewHash.id,
-        fullKey: fullHash.key,
-        previewKey: previewHash.key,
-        fullStorePromise: fullStorePromise,
-        previewStorePromise: previewStorePromise
-      });
-    });
-  }
-
   storeRequest(fileId) {
     return new Promise(async (resolve, reject) => {
-      fetch(this.server + '/storeRequest?name=' + fileId, {
-        method: 'GET', credentials: 'include', headers: {
-          'Content-Type': 'application/json'
-        }
-      })
+      fetch(this.server + '/storeRequest?name=' + fileId)
         .then((response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
-          return response.json();
+          return response.arrayBuffer();
         })
         .then((data) => {
           resolve(data);
@@ -1096,7 +1309,7 @@ class StorageApi {
     });
   }
 
-  storeData(type, fileId) {
+  storeData(type, fileId, encrypt_data, storageToken, data) {
     return new Promise(async (resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
         method: 'POST', body: assemblePayload({
@@ -1127,28 +1340,16 @@ class StorageApi {
       const encrypt_data = extractPayload(storeReqResp);
       const key = await this.#getFileKey(keyData, encrypt_data.salt);
       const data = await SB_Crypto.encrypt(image, key, 'arrayBuffer', encrypt_data.iv);
-      const storageTokenReq = await this.storage;
+      const storageTokenReq = await this.#channel.api.storageRequest(data.content.byteLength);
       if (storageTokenReq.hasOwnProperty('error')) {
         return {error: storageTokenReq.error};
       }
-      // storageToken = new TextEncoder().encode(storageTokenReq.token);
       const storageToken = JSON.stringify(storageTokenReq);
-      const resp = await fetch(STORAGE_SERVER + '/storeData?type=' + type + '&key=' + encodeURIComponent(image_id), {
-        method: 'POST', body: assemblePayload({
-          iv: encrypt_data.iv,
-          salt: encrypt_data.salt,
-          image: data.content,
-          storageToken: (new TextEncoder()).encode(storageToken),
-          vid: _crypto.getRandomValues(new Uint8Array(48))
-        })
-      });
-      const resp_json = await resp.json();
+      const resp_json = await this.storeData(type, image_id, encrypt_data, storageToken, data);
       if (resp_json.hasOwnProperty('error')) {
-        // TODO - why can't we throw exceptions?
-        // Promise.reject(new Error('Server error on storing image (' + resp_json.error + ')'));
-        return {error: 'Error: storeImage() failed (' + resp_json.error + ')'};
+        reject(new Error(resp_json.error));
       }
-      return {verificationToken: resp_json.verification_token, id: resp_json.image_id, type: type};
+      resolve({verificationToken: resp_json.verification_token, id: resp_json.image_id, type: type});
     });
   }
 
@@ -2051,13 +2252,19 @@ class Snackabra {
   }
 
   connect(channel_id) {
-    if (!this.#identity.exportable_pubKey) {
-      throw new Error('setIdentity must be called before connecting');
-    }
-    this.#queue = new Queue({processor: true});
-    this.#channel = new Channel(this.options.channel_server, this.options.channel_ws, this.#identity, channel_id);
-    // this.storage = new StorageApi(this.options.storage_server);
-    return this;
+    return new Promise(async (resolve, reject) => {
+      try {
+        if (!this.#identity.exportable_pubKey) {
+          reject(new Error('setIdentity must be called before connecting'));
+        }
+        this.#queue = new Queue({processor: true});
+        this.#channel = await new Channel(this.options.channel_server, this.options.channel_ws, this.#identity, channel_id);
+        this.#storage = new StorageApi(this.options.storage_server, this.#channel, this.#identity);
+        resolve(this);
+      } catch (e) {
+        reject(e);
+      }
+    });
   }
 
   get channel() {
@@ -2074,6 +2281,14 @@ class Snackabra {
 
   get identity() {
     return this.#identity;
+  }
+
+  sendMessage(message) {
+    this.channel.socket.send(message);
+  }
+
+  sendFile(file) {
+    this.storage.saveFile(file);
   }
 }
 
