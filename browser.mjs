@@ -1237,21 +1237,23 @@ class ChannelSocket {
     }
   }
 
-  async recieve(message) {
-    console.info('Received: ', message);
+  async receive(message) {
     const id = Object.keys(message)[0];
     let unwrapped;
     if (message[id].hasOwnProperty('encrypted_contents')) {
       try {
-        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents);
+        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
       } catch (e) {
-        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents);
+        console.warn(e);
+        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
       }
     } else {
-      unwrapped = message[id];
+      unwrapped = message;
     }
+    unwrapped = JSON.parse(unwrapped);
+    unwrapped._id = id;
     localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
-    return unwrapped;
+    return JSON.stringify(unwrapped);
   }
 }
 
@@ -1707,7 +1709,9 @@ class ChannelApi {
   postPubKey(_exportable_pubKey) {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/postPubKey?type=guestKey', {
-        method: 'POST', body: JSON.stringify(_exportable_pubKey), headers: {
+        method: 'POST',
+        body: JSON.stringify(_exportable_pubKey),
+        headers: {
           'Content-Type': 'application/json'
         }
       })
