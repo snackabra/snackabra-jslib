@@ -3,6 +3,10 @@
 // to use this, simply add module script import in html:
 //  <script type="module" src="./test01.js"></script>
 
+// these are the tests to carry out:
+
+const test_list = ['test01a', 'test01b', 'test02', 'test02b', 'test03', 'test04a', 'test04', 'test05' ];
+
 // import {jest} from '@jest/globals';
 import {
   SB_libraryVersion,
@@ -72,7 +76,7 @@ function test_with_array(test_dom, test_index, array) {
   }
 }
 
-if (true) {
+if (test_list.includes('test01a')) {
   let i = 0;
   const z = document.getElementById('test01a');
   z.innerHTML += 'starting test ...<br\>';
@@ -85,7 +89,7 @@ if (true) {
 }
 
 
-if (true) {
+if (test_list.includes('test01b')) {
   let i;
   const z = document.getElementById('test01b');
   z.innerHTML += 'starting test ...<br\>';
@@ -98,7 +102,7 @@ if (true) {
   }
 }
 
-if (true) {
+if (test_list.includes('test02')) {
   const z = document.getElementById('test02');
   z.innerHTML += 'starting test ...<br\>';
   for (const s0 of z2) {
@@ -114,7 +118,7 @@ if (true) {
   }
 }
 
-if (true) {
+if (test_list.includes('test02b')) {
   let i;
   const z = document.getElementById('test02b');
   z.innerHTML += 'starting test ...<br\>';
@@ -137,7 +141,7 @@ if (true) {
   }
 }
 
-if (true) {
+if (test_list.includes('test03')) {
   const z = document.getElementById('test03');
   const b = new MessageBus();
   let called_1 = false;
@@ -194,7 +198,7 @@ const key = {
   d: '9sYVDOfUJ8YofRh4y_4dItXcXzTiiwYKI6pXU9thJyfMqMtaFhvUbCsHl14Wx37k'
 };
 
-if (true) {
+if (test_list.includes('test04a')) {
   // Watch for incoming messages on the socket
   const SB = new Snackabra(sb_config);
   SB.setIdentity(key).then(async () => {
@@ -213,7 +217,8 @@ if (true) {
       }
       if (controlMessages.length === messages.length * 2 && controlMessages.length > 0) {
         const imageData = await c.storage.retrieveData(messages[0]._id, messages, controlMessages);
-        const img = document.getElementById('snackabra-img');
+        const img = document.getElementById('new-snackabra-img');
+	console.log(imageData);
         img.src = imageData.url;
       }
     };
@@ -221,7 +226,7 @@ if (true) {
 }
 
 
-if (true) {
+if (test_list.includes('test04')) {
   const z = document.getElementById('test04');
   z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
   const SB = new Snackabra(sb_config);
@@ -236,12 +241,13 @@ if (true) {
         c.sendMessage('hello!');
         console.log('got channel response:');
         console.log(z2);
-        const img = document.getElementById('snackabra-img');
+        const img = document.getElementById('original-snackabra-img');
 
         fetch(img.src)
           .then((res) => res.blob())
           .then((blob) => {
-            const file = new File([blob], 'dot.png', blob);
+            // const file = new File([blob], 'dot.png', blob);
+            const file = new File([blob], 'dot.svg', blob);
             console.log(file);
             c.sendFile(file);
           });
@@ -256,7 +262,7 @@ if (true) {
 
 
 // VOPRF testing ...
-if (true) {
+if (test_list.includes('test05')) {
   // kick-tire test from
   // https://github.com/cloudflare/voprf-ts
 
@@ -302,8 +308,6 @@ if (true) {
   console.log("Test 3 (same client secret as test 2) returns: ", arrayBufferToBase64(output3[0]));
 
 }
-
-
 
 
 
