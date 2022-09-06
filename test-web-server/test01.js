@@ -5,7 +5,8 @@
 
 // these are the tests to carry out:
 
-const test_list = ['test01a', 'test01b', 'test02', 'test02b', 'test03', 'test04a', 'test04', 'test05' ];
+// const test_list = ['test01a', 'test01b', 'test02', 'test02b', 'test03', 'test04a', 'test04', 'test05' ];
+const test_list = ['test05' ];
 
 // import {jest} from '@jest/globals';
 import {
