@@ -15,6 +15,12 @@ import {
   Snackabra
 } from './browser.mjs';
 
+import {
+  Oprf, VOPRFClient, VOPRFServer, generatePublicKey, randomPrivateKey
+  // '@cloudflare/voprf-ts';
+} from './voprf-src/index.js';
+
+
 const z = document.getElementById('testResults');
 // eslint-disable-next-line new-cap
 z.innerHTML += 'Checking version of library: ' + SB_libraryVersion() + '\n';
@@ -247,6 +253,58 @@ if (true) {
     }
   });
 }
+
+
+// VOPRF testing ...
+if (true) {
+  // kick-tire test from
+  // https://github.com/cloudflare/voprf-ts
+
+  console.log("inside VOPRF test ...");
+
+  // set up client and server with suite P384-SHA384.
+
+  // the OPRF server has a private key obviously
+  const suite = Oprf.Suite.P384_SHA384;
+  const privateKey = await randomPrivateKey(suite);
+  const server = new VOPRFServer(suite, privateKey);
+  console.log("Private key (48 bytes): ", arrayBufferToBase64(privateKey.buffer));
+
+  // the client gets the server's public key
+  const publicKey = generatePublicKey(suite, privateKey);
+  const client = new VOPRFClient(suite, publicKey);
+  console.log("Public key (49 bytes so b64 will be padded): ", arrayBufferToBase64(publicKey.buffer));
+  
+  // client generates input (it's secret)
+  const input = new TextEncoder().encode("This is the client's input");
+  console.log("Client input 1: ", arrayBufferToBase64(input));
+  const [finData, evalReq] = await client.blind([input]);
+
+  // server responds with evaluation
+  const evaluation = await server.evaluate(evalReq);
+
+  // client can pull out output and at same time verify (that the server used the correct private key)
+  const output = await client.finalize(finData, evaluation);
+  console.log("Test 1, returns: ", arrayBufferToBase64(output[0]));
+
+  // try with different client secret
+  const input2 = getRandomValues(new Uint8Array(48));
+  console.log("Client input2 : ", arrayBufferToBase64(input2));
+  const [finData2, evalReq2] = await client.blind([input2]);
+  const evaluation2 = await server.evaluate(evalReq2);
+  const output2 = await client.finalize(finData2, evaluation2);
+  console.log("Test 2, returns: ", arrayBufferToBase64(output2[0]));
+  
+  console.log("testing again with same client secret");
+  const [finData3, evalReq3] = await client.blind([input2]);
+  const evaluation3 = await server.evaluate(evalReq3);
+  const output3 = await client.finalize(finData3, evaluation3);
+  console.log("Test 3 (same client secret as test 2) returns: ", arrayBufferToBase64(output3[0]));
+
+}
+
+
+
 
 
 if (true) {
