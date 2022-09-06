@@ -78,8 +78,9 @@ if (true) {
   }
 }
 
-let i;
+
 if (true) {
+  let i;
   const z = document.getElementById('test01b');
   z.innerHTML += 'starting test ...<br\>';
   for (i = 0; i < 20; i++) {
@@ -108,6 +109,7 @@ if (true) {
 }
 
 if (true) {
+  let i;
   const z = document.getElementById('test02b');
   z.innerHTML += 'starting test ...<br\>';
   for (i = 0; i < 20; i++) {
@@ -185,6 +187,32 @@ const key = {
   crv: 'P-384',
   d: '9sYVDOfUJ8YofRh4y_4dItXcXzTiiwYKI6pXU9thJyfMqMtaFhvUbCsHl14Wx37k'
 };
+
+if (true) {
+  // Watch for incoming messages on the socket
+  const SB = new Snackabra(sb_config);
+  SB.setIdentity(key).then(async () => {
+    const c = await SB.connect(channel_id);
+    const messages = [];
+    const controlMessages = [];
+    c.channel.socket.onMessage = async (sb_message) => {
+      console.log('Message Received:\n ', sb_message);
+      const message = JSON.parse(sb_message);
+      if (message?.control) {
+        controlMessages.push(message);
+      } else {
+        if (message?.image !== '') {
+          messages.push(message);
+        }
+      }
+      if (controlMessages.length === messages.length * 2 && controlMessages.length > 0) {
+        const imageData = await c.storage.retrieveData(messages[0]._id, messages, controlMessages);
+        const img = document.getElementById('snackabra-img');
+        img.src = imageData.url;
+      }
+    };
+  });
+}
 
 
 if (true) {
