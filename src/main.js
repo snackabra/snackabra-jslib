@@ -1579,9 +1579,32 @@ class StorageApi {
   }
 
   async retrieveData(msgId, messages, controlMessages) {
-    const imageMetaData = JSON.parse(messages.find((msg) => msg._id === msgId).imageMetaData);
+    const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
     const image_id = imageMetaData.previewId;
     const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.hasOwnProperty('id') && ctrl_msg.id.startsWith(image_id));
+    if (!control_msg) {
+      return {'error': 'Failed to fetch data - missing control message for that image'};
+    }
+    const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
+    const data = extractPayload(imageFetch);
+    const iv = data.iv;
+    const salt = data.salt;
+    const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
+    const encrypted_image = data.image;
+    const padded_img = await SB_Crypto.decrypt(image_key, {content: encrypted_image, iv: iv}, 'arrayBuffer');
+    const img = this.#unpadData(padded_img);
+
+    if (img.error) {
+      console.error('(Image error: ' + img.error + ')');
+      throw new Error('Failed to fetch data - authentication or formatting error');
+    }
+    return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
+  }
+
+  async retrieveDataFromMessage(message, controlMessages) {
+    const imageMetaData = typeof message.imageMetaData === 'string' ? JSON.parse(message.imageMetaData) : message.imageMetaData;
+    const image_id = imageMetaData.previewId;
+    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.hasOwnProperty('id') && ctrl_msg.id === image_id);
     if (!control_msg) {
       return {'error': 'Failed to fetch data - missing control message for that image'};
     }
@@ -2693,5 +2716,13 @@ class Snackabra {
 }
 
 export {
-  Snackabra, SB_libraryVersion, ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues
+  Snackabra,
+  SBMessage,
+  SBFile,
+  SB_libraryVersion,
+  ab2str,
+  str2ab,
+  base64ToArrayBuffer,
+  arrayBufferToBase64,
+  getRandomValues
 };
