@@ -797,7 +797,7 @@ class SBMessage {
       this.contents = contents;
       this.sender_pubKey = key;
       this.sign = await SB_Crypto.sign(signKey, contents);
-      this.image_sign = await SB_Crypto.sign(signKey, null);
+      this.image_sign = await SB_Crypto.sign(signKey, this.image);
       this.imageMetaData = JSON.stringify({
         imageId: imgId,
         previewId: previewId,
@@ -848,7 +848,7 @@ class SBFile {
       this.data.fullImage = image.size > 15728640 ? this.#padImage(await (await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(await image.arrayBuffer());
       const fullHash = await this.#generateImageHash(this.data.fullImage);
       this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
-      this.image_sign = await SB_Crypto.sign(signKey, null);
+      this.image_sign = await SB_Crypto.sign(signKey, this.image);
       this.imageMetaData = JSON.stringify({
         imageId: fullHash.id,
         previewId: previewHash.id,
@@ -1184,6 +1184,7 @@ class Channel {
   owner;
   admin;
   verifiedGuest;
+  metaData = {};
   #keys;
   #api = ChannelApi;
   #socket = ChannelSocket;
@@ -1212,6 +1213,8 @@ class Channel {
       this.#socket = new ChannelSocket(this.wss, this, this.identity);
       this.#socket.onJoin = async (message) => {
         if (message?.ready) {
+          console.log(message);
+          this.metaData = message;
           this.loadKeys(message.keys).then(() => {
             this.socket.isReady();
             resolve(this);
@@ -1409,10 +1412,19 @@ class ChannelSocket {
 
   async send(message) {
     if (this.ready) {
-      const payload = await this.#payload.wrap(
-        await new SBMessage(message, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey),
-        this.#channel.keys.encryptionKey
-      );
+      let payload;
+
+      if (message instanceof SBMessage) {
+        payload = await this.#payload.wrap(
+          message,
+          this.#channel.keys.encryptionKey
+        );
+      } else {
+        payload = await this.#payload.wrap(
+          await new SBMessage(message, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey),
+          this.#channel.keys.encryptionKey
+        );
+      }
       this.socket.send(payload);
     } else {
       this.#queue.push(message);
@@ -1652,52 +1664,6 @@ class ChannelApi {
     this.#identity = identity;
   }
 
-  create(serverSecret) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const ownerKeyPair = await _crypto.subtle.generateKey({
-          name: 'ECDH', namedCurve: 'P-384'
-        }, true, ['deriveKey']);
-        const exportable_privateKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
-        const exportable_pubKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
-        const channelId = await this.#generateRoomId(exportable_pubKey.x, exportable_pubKey.y);
-        const encryptionKey = await _crypto.subtle.generateKey({
-          name: 'AES-GCM', length: 256
-        }, true, ['encrypt', 'decrypt']);
-        const exportable_encryptionKey = await _crypto.subtle.exportKey('jwk', encryptionKey);
-        const signKeyPair = await _crypto.subtle.generateKey({
-          name: 'ECDH', namedCurve: 'P-384'
-        }, true, ['deriveKey']);
-        const exportable_signKey = await _crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
-        const channelData = {
-          roomId: channelId,
-          ownerKey: JSON.stringify(exportable_pubKey),
-          encryptionKey: JSON.stringify(exportable_encryptionKey),
-          signKey: JSON.stringify(exportable_signKey),
-          SERVER_SECRET: serverSecret
-        };
-        this.#channel._id = channelId;
-
-        const data = new TextEncoder().encode(JSON.stringify(channelData));
-        const resp = await this.uploadChannel(data);
-        if (resp.hasOwnProperty('success')) {
-          const keys = {
-            ownerKey: channelData.ownerKey,
-            encryptionKey: channelData.encryptionKey,
-            signKey: channelData.signKey
-          };
-          this.#channel._id = channelId;
-          localStorage.setItem(this.#channel._id, JSON.stringify(exportable_privateKey));
-          resolve(channelId);
-        } else {
-          reject(new Error(JSON.stringify(resp)));
-        }
-      } catch (e) {
-        reject(e);
-      }
-    });
-  }
-
   getLastMessageTimes() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelApi + '/getLastMessageTimes', {
@@ -1808,6 +1774,7 @@ class ChannelApi {
   }
 
   setMOTD(motd) {
+    console.log(motd);
     return new Promise(async (resolve, reject) => {
       //if (this.#channel.owner) {
       fetch(this.#channelServer + this.#channel._id + '/motd', {
@@ -1827,7 +1794,7 @@ class ChannelApi {
         reject(error);
       });
       //} else {
-      //  reject(new Error('Must be channel owner to get admin data'));
+      //  reject(new Error('Must be chann el owner to get admin data'));
       //}
     });
   }
@@ -2061,20 +2028,6 @@ class ChannelApi {
   // unused
   registerDevice() {
 
-  }
-
-  #generateRoomId(x, y) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        const xBytes = base64ToArrayBuffer(decodeB64Url(x));
-        const yBytes = base64ToArrayBuffer(decodeB64Url(y));
-        const channelBytes = _appendBuffer(xBytes, yBytes);
-        const channelBytesHash = await _crypto.subtle.digest('SHA-384', channelBytes);
-        resolve(encodeB64Url(arrayBufferToBase64(channelBytesHash)));
-      } catch (e) {
-        reject(e);
-      }
-    });
   }
 }
 
@@ -2689,6 +2642,66 @@ class Snackabra {
       }
     });
   }
+
+  create(serverSecret) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const ownerKeyPair = await _crypto.subtle.generateKey({
+          name: 'ECDH',
+          namedCurve: 'P-384'
+        }, true, ['deriveKey']);
+        const exportable_privateKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
+        const exportable_pubKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
+        const channelId = await this.#generateRoomId(exportable_pubKey.x, exportable_pubKey.y);
+        const encryptionKey = await _crypto.subtle.generateKey({
+          name: 'AES-GCM',
+          length: 256
+        }, true, ['encrypt', 'decrypt']);
+        const exportable_encryptionKey = await _crypto.subtle.exportKey('jwk', encryptionKey);
+        const signKeyPair = await _crypto.subtle.generateKey({
+          name: 'ECDH', namedCurve: 'P-384'
+        }, true, ['deriveKey']);
+        const exportable_signKey = await _crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
+        const channelData = {
+          roomId: channelId,
+          ownerKey: JSON.stringify(exportable_pubKey),
+          encryptionKey: JSON.stringify(exportable_encryptionKey),
+          signKey: JSON.stringify(exportable_signKey),
+          SERVER_SECRET: serverSecret
+        };
+        const data = new TextEncoder().encode(JSON.stringify(channelData));
+        let resp = await fetch(this.options.channel_server + '/api/room/' + channelId + '/uploadRoom', {
+          method: 'POST',
+          body: data
+        });
+        resp = await resp.json();
+        if (resp.hasOwnProperty('success')) {
+          await this.connect(channelId);
+          localStorage.setItem(channelId, JSON.stringify(exportable_privateKey));
+          resolve(channelId);
+        } else {
+          reject(new Error(JSON.stringify(resp)));
+        }
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  #generateRoomId(x, y) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const xBytes = base64ToArrayBuffer(decodeB64Url(x));
+        const yBytes = base64ToArrayBuffer(decodeB64Url(y));
+        const channelBytes = _appendBuffer(xBytes, yBytes);
+        const channelBytesHash = await _crypto.subtle.digest('SHA-384', channelBytes);
+        resolve(encodeB64Url(arrayBufferToBase64(channelBytesHash)));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
 
   get channel() {
     return this.#channel;
