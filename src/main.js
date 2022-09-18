@@ -109,12 +109,13 @@ const _fromCC = String.fromCharCode.bind(String);
 
 const _U8Afrom = (it, fn = (x) => x) => new Uint8Array(Array.prototype.slice.call(it, 0).map(fn));
 
-/** Standardized 'btoa()'-like function, e.g., takes a binary string
- ('b') and returns a Base64 encoded version ('a' used to be short
- for 'ascii').
-
- @param {buffer} Uint8Array buffer
- @return {string} base64 string
+/**
+ * Standardized 'btoa()'-like function, e.g., takes a binary string
+ * ('b') and returns a Base64 encoded version ('a' used to be short
+ * for 'ascii').
+ *
+ * @param {buffer} Uint8Array buffer
+ * @return {string} base64 string
  */
 function arrayBufferToBase64(buffer) {
   const u8a = new Uint8Array(buffer);
@@ -150,11 +151,12 @@ const b64tab = ((a) => {
   return tab;
 })(b64chs);
 
-/** Standardized 'atob()' function, e.g. takes the a Base64 encoded
- input and decodes it. Note: always returns Uint8Array.
-
- @param {string} base64 string
- @return {Uint8Array} returns decoded result
+/**
+ * Standardized 'atob()' function, e.g. takes the a Base64 encoded
+ * input and decodes it. Note: always returns Uint8Array.
+ *
+ * @param {string} base64 string
+ * @return {Uint8Array} returns decoded result
  */
 function base64ToArrayBuffer(asc) {
   asc = asc.replace(/\s+/g, ''); // collapse any whitespace
@@ -211,8 +213,8 @@ function getRandomValues(buffer) {
 }
 
 /**
- Returns 'true' if (and only if) object is of type 'Uint8Array'.
- Works same on browsers and nodejs.
+ * Returns 'true' if (and only if) object is of type 'Uint8Array'.
+ * Works same on browsers and nodejs.
  */
 function _assertUint8Array(obj) {
   if (typeof obj === 'object') if (Object.prototype.toString.call(obj) === '[object Uint8Array]') return true;
@@ -222,8 +224,8 @@ function _assertUint8Array(obj) {
 const b64_regex = new RegExp('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$');
 
 /**
- Returns 'true' if (and only if) string is well-formed base64.
- Works same on browsers and nodejs.
+ * Returns 'true' if (and only if) string is well-formed base64.
+ * Works same on browsers and nodejs.
  */
 function _assertBase64(base64) {
   /* webpack 4 doesn't support optional chaining, requires webpack 5;
@@ -234,10 +236,12 @@ function _assertBase64(base64) {
   if (z) return (z[0] === base64); else return false;
 }
 
-/** Standardized 'str2ab()' function, string to array buffer.
- This assumes on byte per character.
- @param {string} string
- @return {Uint8Array} buffer
+/**
+ * Standardized 'str2ab()' function, string to array buffer.
+ * This assumes on byte per character.
+ *
+ * @param {string} string
+ * @return {Uint8Array} buffer
  */
 function str2ab(string) {
   const length = string.length;
@@ -246,10 +250,13 @@ function str2ab(string) {
   return buffer;
 }
 
-/** Standardized 'ab2str()' function, array buffer to string.
- This assumes one byte per character.
- @param {string} string
- @return {Uint8Array} buffer
+/**
+ * Standardized 'ab2str()' function, array buffer to string.
+ * This assumes one byte per character.
+ *
+ * @param {string} string
+ * @return {Uint8Array} buffer
+ *
  */
 function ab2str(buffer) {
   if (!_assertUint8Array(buffer)) _sb_exception('ab2str()', 'parameter is not a Uint8Array buffer'); // this will throw
@@ -282,13 +289,15 @@ OlY876IbVmwlWAQ82l9r7ECjBL2nGMjDFm5Lv8TXKC5NHWHwY1b2vfvl6cyGtG1I
 OTJj8TMRI6y3Omop3kIfpgUCAwEAAQ==
 -----END PUBLIC KEY-----`;
 
-/** Import a PEM encoded RSA public key, to use for RSA-OAEP
- encryption.  Takes a string containing the PEM encoded key, and
- returns a Promise that will resolve to a CryptoKey representing
- the public key.
-
- @param {PEM} RSA public key, string, PEM format
- @return {cryptoKey} RSA-OAEP key
+/**
+ * Import a PEM encoded RSA public key, to use for RSA-OAEP
+ * encryption.  Takes a string containing the PEM encoded key, and
+ * returns a Promise that will resolve to a CryptoKey representing
+ * the public key.
+ *
+ * @param {PEM} RSA public key, string, PEM format
+ * @return {cryptoKey} RSA-OAEP key
+ *
  */
 function importPublicKey(pem) {
   if (!pem) pem = defaultPublicKeyPEM;
@@ -304,8 +313,11 @@ function importPublicKey(pem) {
   return _crypto.subtle.importKey('spki', binaryDer, {name: 'RSA-OAEP', hash: 'SHA-256'}, true, ['encrypt']);
 }
 
-/** Returns random number
- @return {int} integer 0..255
+/**
+ * Returns random number
+ *
+ * @return {int} integer 0..255
+ *
  */
 function simpleRand256() {
   return _crypto.getRandomValues(new Uint8Array(1))[0];
@@ -314,12 +326,14 @@ function simpleRand256() {
 
 const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
 
-/** Returns a random string in requested encoding
- @param {n} number of characters
- @param {code} encoding, supported types: 'base32mi'
- @return {string} random string
-
- 'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
+/**
+ * Returns a random string in requested encoding
+ *
+ * @param {n} number of characters
+ * @param {code} encoding, supported types: 'base32mi'
+ * @return {string} random string
+ *
+ * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
  */
 function simpleRandomString(n, code) {
   if (code == 'base32mi') {
@@ -332,37 +346,38 @@ function simpleRandomString(n, code) {
   _sb_exception('simpleRandomString', 'code ' + code + ' not supported');
 }
 
-/** Disambiguates strings that are known to be 'base32mi' type
- @param {s} string
- @return {string} cleaned up string
-
- 'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
-
- This is the base32mi disambiguation table:
-
- [OoQD] -> '0'
- [lIiJ] -> '1'
- [Zz] -> '2'
- [A] -> '4'
- [Ss] -> '5'
- [G] -> '6'
- [t] -> '7'
- [B] -> '8'
- [gq] -> '9'
- [C] -> 'c'
- [Y] -> 'y'
- [KxX] -> 'k'
- [M] -> 'm'
- [n] -> 'N'
- [P] -> 'p'
- [uvV] -> 'U'
- [w] -> 'W'
-
- Another way to think of it is that this, becomes this ('.' means no change):
-
- 0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
- ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
-
+/**
+ * Disambiguates strings that are known to be 'base32mi' type
+ * 
+ * ::
+ *
+ *     'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
+ * 
+ * This is the base32mi disambiguation table ::
+ * 
+ *     [OoQD] -> '0'  
+ *     [lIiJ] -> '1'  
+ *     [Zz] -> '2'  
+ *     [A] -> '4'  
+ *     [Ss] -> '5'  
+ *     [G] -> '6'  
+ *     [t] -> '7'  
+ *     [B] -> '8'  
+ *     [gq] -> '9'  
+ *     [C] -> 'c'  
+ *     [Y] -> 'y'  
+ *     [KxX] -> 'k'  
+ *     [M] -> 'm'  
+ *     [n] -> 'N'  
+ *     [P] -> 'p'  
+ *     [uvV] -> 'U'  
+ *     [w] -> 'W'  
+ * 
+ * Another way to think of it is that this, becomes this ('.' means no change): ::
+ *
+ *     0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
+ *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
+ * 
  */
 function cleanBase32mi(s) {
   // this of course is not the most efficient
@@ -370,14 +385,16 @@ function cleanBase32mi(s) {
 }
 
 
-/** Takes an arbitrary dict object, a public key in PEM
- format, and a callback function: generates a random AES key,
- wraps that in (RSA) key, and when all done will call the
- callback function with the results
-
- @param {dict} dictionary (payload)
- @param {publicKeyPEM} public key (PEM format)
- @param {callback} callback function, called with results
+/**
+ * Takes an arbitrary dict object, a public key in PEM
+ * format, and a callback function: generates a random AES key,
+ * wraps that in (RSA) key, and when all done will call the
+ * callback function with the results
+ *
+ * @param {dict} dictionary (payload)
+ * @param {publicKeyPEM} public key (PEM format)
+ * @param {callback} callback function, called with results
+ *
  */
 function packageEncryptDict(dict, publicKeyPEM, callback) {
   const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
@@ -417,6 +434,9 @@ function packageEncryptDict(dict, publicKeyPEM, callback) {
   });
 } // packageEncrypt()
 
+/**
+ * Partition
+ */
 function partition(str, n) {
   const returnArr = [];
   let i, l;
@@ -540,8 +560,17 @@ class EventEmitter extends EventTarget {
   }
 }
 
-// A class that contains all the SB specific crypto functions
+/**
+ * Crypto is a class that contains all the SB specific crypto functions
+ * @class
+ * @constructor
+ * @public
+ */
 class Crypto {
+
+  /**
+   * Extracts (generates) public key from a private key.
+   */
   extractPubKey(privateKey) {
     try {
       const pubKey = {...privateKey};
@@ -558,6 +587,9 @@ class Crypto {
     }
   }
 
+  /**
+   * Generates standard ``ECDH`` keys using ``P-384``.
+   */
   generateKeys() {
     return new Promise(async (resolve, reject) => {
       try {
@@ -570,6 +602,10 @@ class Crypto {
     });
   }
 
+
+  /**
+   * Import keys
+   */
   importKey(format, key, type, extractable, keyUsages) {
     return new Promise(async (resolve, reject) => {
       const keyAlgorithms = {
@@ -589,6 +625,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Derive key.
+   */
   deriveKey(privateKey, publicKey, type, extractable, keyUsages) {
     return new Promise(async (resolve, reject) => {
       const keyAlgorithms = {
@@ -609,6 +648,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Get file key
+   */
   getFileKey(fileHash, _salt) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -628,6 +670,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Encrypt
+   */
   encrypt(contents, secret_key = null, outputType = 'string', _iv = null) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -661,6 +706,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Decrypt
+   */
   decrypt(secretKey, contents, outputType = 'string') {
     return new Promise(async (resolve, reject) => {
       try {
@@ -679,6 +727,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Sign
+   */
   sign(secretKey, contents) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -697,6 +748,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Verify
+   */
   verify(secretKey, sign, contents) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -715,6 +769,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Compare keys
+   */
   areKeysSame(key1, key2) {
     if (key1 != null && key2 != null && typeof key1 === 'object' && typeof key2 === 'object') {
       return key1['x'] === key2['x'] && key1['y'] === key2['y'];
