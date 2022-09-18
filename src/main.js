@@ -9,14 +9,18 @@ function SB_libraryVersion() {
     return 'This is the NODE.JS version of the library';
 }
 
-/* SB simple events (mesage bus) class */
+/**
+ * SB simple events (mesage bus) class
+ */
 export class MessageBus {
   constructor(args) {
     this.args = args;
     this.bus = {};
   }
 
-  /* for possible future use with cleaner identifiers */
+  /**
+   * For possible future use with cleaner identifiers
+   */
   * #uniqueID() {
     let i = 0;
     while (true) {
@@ -25,17 +29,24 @@ export class MessageBus {
     }
   }
 
-  /* safely returns handler for any event */
+  /**
+   * Safely returns handler for any event
+   */
   #select(event) {
     return this.bus[event] || (this.bus[event] = []);
   }
 
-  /* 'event' is a string, special case '*' means everything
-     (in which case the handler is also given the message) */
+  /**
+   * Subscribe. 'event' is a string, special case '*' means everything
+   *  (in which case the handler is also given the message)
+   */
   subscribe(event, handler) {
     this.#select(event).push(handler);
   }
 
+  /**
+   * Unsubscribe
+   */
   unsubscribe(event, handler) {
     let i = -1;
     if (this.bus[event]) {
@@ -47,6 +58,9 @@ export class MessageBus {
     }
   }
 
+  /**
+   * Publish
+   */
   publish(event, ...args) {
     for (const handler of this.#select('*')) {
       handler(event, ...args);
@@ -208,6 +222,9 @@ if (process.browser) {
   _ws = node_ws.default;
 }
 
+/** 
+ * Fills buffer with random data
+ */
 function getRandomValues(buffer) {
   return _crypto.getRandomValues(buffer);
 }
@@ -446,6 +463,9 @@ function partition(str, n) {
   return returnArr;
 }
 
+/**
+ * Extract payload
+ */
 function extractPayloadV1(payload) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
@@ -466,6 +486,9 @@ function extractPayloadV1(payload) {
   }
 }
 
+/**
+ * Assemble payload
+ */
 function assemblePayload(data) {
   try {
     const metadata = {};
@@ -495,6 +518,9 @@ function assemblePayload(data) {
   }
 }
 
+/**
+ * Extract payload (latest version)
+ */
 function extractPayload(payload) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
@@ -531,10 +557,16 @@ function extractPayload(payload) {
   }
 }
 
+/**
+ * Encode into b64 URL
+ */
 function encodeB64Url(input) {
   return input.replaceAll('+', '-').replaceAll('/', '_');
 }
 
+/**
+ * Decode b64 URL
+ */
 function decodeB64Url(input) {
   input = input.replaceAll('-', '+').replaceAll('_', '/');
 
@@ -782,7 +814,12 @@ class Crypto {
 
 const SB_Crypto = new Crypto();
 
-// Identity aka a key for use in SB
+/**
+ * Identity (key for use in SB)
+ * @class
+ * @constructor
+ * @public
+ */
 class Identity {
   exportable_pubKey;
   exportable_privateKey;
@@ -803,6 +840,9 @@ class Identity {
     });
   }
 
+  /**
+   * Mint keys
+   */
   #mintKeys() {
     return new Promise(async (resolve, reject) => {
       try {
@@ -817,6 +857,9 @@ class Identity {
     });
   }
 
+  /**
+   * Mount keys
+   */
   #mountKeys(key) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -836,6 +879,12 @@ class Identity {
 }
 
 
+/**
+ * SBMessage
+ * @class
+ * @constructor
+ * @public
+ */
 class SBMessage {
   encrypted = false;
   contents;
@@ -867,6 +916,12 @@ class SBMessage {
   }
 }
 
+/**
+ * SBFile
+ * @class
+ * @constructor
+ * @public
+ */
 class SBFile {
   encrypted = false;
   contents;
@@ -898,6 +953,9 @@ class SBFile {
     });
   }
 
+  /**
+   * asImage
+   */
   #asImage(image, signKey) {
     return new Promise(async (resolve) => {
       this.data.previewImage = this.#padImage(await (await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
@@ -917,6 +975,9 @@ class SBFile {
     });
   }
 
+  /**
+   * getFileData
+   */
   async #getFileData(file, outputType) {
     try {
       const reader = new FileReader();
@@ -936,6 +997,9 @@ class SBFile {
     }
   }
 
+  /**
+   * padImage
+   */
   #padImage(image_buffer) {
     let _sizes = [128, 256, 512, 1024, 2048, 4096]; // in KB
     _sizes = _sizes.map((size) => size * 1024);
@@ -972,6 +1036,9 @@ class SBFile {
     return final_data;
   }
 
+  /**
+   * restrictPhoto
+   */
   async #restrictPhoto(photo, maxSize, imageType, qualityArgument) {
     // imageType default should be 'image/jpeg'
     // qualityArgument should be 0.92 for jpeg and 0.8 for png (MDN default)
@@ -1028,6 +1095,9 @@ class SBFile {
     return _b1;
   }
 
+  /**
+   * scaleCanvas
+   */
   #scaleCanvas(canvas, scale) {
     const scaledCanvas = document.createElement('canvas');
     scaledCanvas.width = canvas.width * scale;
@@ -1040,6 +1110,9 @@ class SBFile {
     return scaledCanvas;
   }
 
+  /**
+   * generateImageHash
+   */
   async #generateImageHash(image) {
     try {
       const digest = await crypto.subtle.digest('SHA-512', image);
@@ -1055,6 +1128,9 @@ class SBFile {
     }
   }
 
+  /**
+   * readPhoto
+   */
   async #readPhoto(photo) {
     const canvas = document.createElement('canvas');
     const img = document.createElement('img');
@@ -1082,8 +1158,15 @@ class SBFile {
   }
 }
 
-// Takes a message object and turns it into a payload to be used by SB protocol
+/**
+ * Takes a message object and turns it into a payload to be
+ * used by SB protocol
+ */
 class Payload { // eslint-disable-line no-unused-vars
+
+  /**
+   * wrap
+   */
   wrap(contents, key) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -1096,6 +1179,9 @@ class Payload { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * unwrap
+   */
   async unwrap(payload, key) {
     try {
       const msg = await SB_Crypto.decrypt(key, payload.encrypted_contents);
@@ -1110,9 +1196,12 @@ class Payload { // eslint-disable-line no-unused-vars
 }
 
 
-// mtg: Protocol code that we wrap our WebSocket in
-// I will be updating this to send messages and remove the wait to send messages only when ack received
-// The benefit is reduced latency in communication protocol
+/**
+ * mtg: Protocol code that we wrap our WebSocket in
+ * I will be updating this to send messages and remove
+ * the wait to send messages only when ack received
+ * The benefit is reduced latency in communication protocol
+ */
 class WS_Protocol { // eslint-disable-line no-unused-vars
   currentWebSocket;
   _id;
@@ -1129,10 +1218,16 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     this.join();
   }
 
+  /**
+   * Get options
+   */
   get options() {
     return this.options;
   }
 
+  /**
+   * join
+   */
   join() {
     return new Promise((resolve, reject) => {
       try {
@@ -1149,6 +1244,9 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * close
+   */
   close() {
     this.currentWebSocket.close();
   }
@@ -1185,6 +1283,9 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   };
 
+  /**
+   * onError
+   */
   async onError() {
     this.currentWebSocket.addEventListener('error', (event) => {
       console.error('WebSocket error, reconnecting:', event);
@@ -1194,6 +1295,9 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * onClose
+   */
   async onClose() {
     this.currentWebSocket.addEventListener('close', (event) => {
       console.info('Websocket closed', event);
@@ -1203,6 +1307,9 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * onMessage
+   */
   async onMessage() {
     this.currentWebSocket.addEventListener('message', async (event) => {
       const data = JSON.parse(event.data);
@@ -1221,10 +1328,16 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * readyState
+   */
   get readyState() {
     return this.currentWebSocket.readyState;
   }
 
+  /**
+   * onOpen
+   */
   async onOpen() {
     this.currentWebSocket.addEventListener('open', async (event) => {
       if (typeof this.options.onOpen === 'function') {
@@ -1234,6 +1347,12 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
   }
 }
 
+/**
+ * Channel
+ * @class
+ * @constructor
+ * @public
+ */
 class Channel {
   _id;
   url;
@@ -1260,6 +1379,9 @@ class Channel {
     });
   }
 
+  /**
+   * Join channel
+   */
   join(channel_id) {
     return new Promise((resolve) => {
       if (channel_id === null) {
@@ -1281,14 +1403,23 @@ class Channel {
     });
   }
 
+  /**
+   * Return keys
+   */
   get keys() {
     return this.#keys;
   }
 
+  /**
+   * Return API
+   */
   get api() {
     return this.#api;
   }
 
+  /**
+   * Return socket
+   */
   get socket() {
     return this.#socket;
   }
@@ -1379,7 +1510,12 @@ class Channel {
   };
 }
 
-// A SB Socket
+/**
+ * Channel Socket
+ * @class
+ * @constructor
+ * @public
+ */
 class ChannelSocket {
   socket;
   url;
@@ -1406,10 +1542,16 @@ class ChannelSocket {
     this.open();
   }
 
+  /**
+   * setKeys
+   */
   setKeys(_keys) {
     this.#channel.loadKeys(_keys);
   }
 
+  /**
+   * open
+   */
   open() {
     const options = {
       url: this.url + '/api/room/' + this.channelId + '/websocket',
@@ -1453,10 +1595,16 @@ class ChannelSocket {
     this.socket = new WS_Protocol(options);
   }
 
+  /**
+   * close
+   */
   close() {
     this.socket.close();
   }
 
+  /**
+   * isReady
+   */
   isReady() {
     console.info('SB Socket ready');
     this.ready = true;
@@ -1467,6 +1615,9 @@ class ChannelSocket {
     }
   }
 
+  /**
+   * Send message on channel socket
+   */
   async send(message) {
     if (this.ready) {
       let payload;
@@ -1488,6 +1639,9 @@ class ChannelSocket {
     }
   }
 
+  /**
+   * Send SB object (file) on channel socket
+   */
   async sendSbObject(file) {
     if (this.ready) {
       const payload = await this.#payload.wrap(
@@ -1500,6 +1654,9 @@ class ChannelSocket {
     }
   }
 
+  /**
+   * Receive message on channel socket
+   */
   async receive(message) {
     const id = Object.keys(message)[0];
     let unwrapped;
@@ -1520,6 +1677,12 @@ class ChannelSocket {
   }
 }
 
+/**
+ * Storage API
+ * @class
+ * @constructor
+ * @public
+ */
 class StorageApi {
   server;
   #channel;
@@ -1531,6 +1694,9 @@ class StorageApi {
     this.#identity = identity;
   }
 
+  /**
+   * saveFile
+   */
   async saveFile(file) {
     if (file instanceof File) {
       const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
@@ -1548,6 +1714,9 @@ class StorageApi {
     }
   }
 
+  /**
+   * getFileKey
+   */
   async #getFileKey(fileHash, _salt) {
     const keyMaterial = await SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
 
@@ -1562,6 +1731,9 @@ class StorageApi {
     return key;
   }
 
+  /**
+   * storeRequest
+   */
   storeRequest(fileId) {
     return new Promise(async (resolve, reject) => {
       fetch(this.server + '/storeRequest?name=' + fileId)
@@ -1579,6 +1751,9 @@ class StorageApi {
     });
   }
 
+  /**
+   * storeData
+   */
   storeData(type, fileId, encrypt_data, storageToken, data) {
     return new Promise(async (resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
@@ -1604,6 +1779,9 @@ class StorageApi {
     });
   }
 
+  /**
+   * storeImage
+   */
   storeImage(image, image_id, keyData, type) {
     return new Promise(async (resolve, reject) => {
       const storeReqResp = await this.storeRequest(image_id);
@@ -1623,6 +1801,9 @@ class StorageApi {
     });
   }
 
+  /**
+   * fetchData
+   */
   fetchData(msgId, verificationToken) {
     return new Promise(async (resolve, reject) => {
       fetch(this.server + '/fetchData?id=' + encodeURIComponent(msgId) + '&verification_token=' + verificationToken, {
@@ -1642,11 +1823,17 @@ class StorageApi {
     });
   }
 
+  /**
+   * unpadData
+   */
   #unpadData(data_buffer) {
     const _size = new Uint32Array(data_buffer.slice(-4))[0];
     return data_buffer.slice(0, _size);
   }
 
+  /**
+   * retrieveData
+   */
   async retrieveData(msgId, messages, controlMessages) {
     const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
     const image_id = imageMetaData.previewId;
@@ -1670,6 +1857,9 @@ class StorageApi {
     return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
   }
 
+  /**
+   * retrieveDataFromMessage
+   */
   async retrieveDataFromMessage(message, controlMessages) {
     const imageMetaData = typeof message.imageMetaData === 'string' ? JSON.parse(message.imageMetaData) : message.imageMetaData;
     const image_id = imageMetaData.previewId;
@@ -1704,6 +1894,12 @@ class StorageApi {
    */
 }
 
+/**
+ * Channel API
+ * @class
+ * @constructor
+ * @public
+ */
 class ChannelApi {
   server;
   #identity;
@@ -1721,6 +1917,9 @@ class ChannelApi {
     this.#identity = identity;
   }
 
+  /**
+   * getLastMessageTimes
+   */
   getLastMessageTimes() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelApi + '/getLastMessageTimes', {
@@ -1738,6 +1937,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * getOldMessages
+   */
   getOldMessages(currentMessagesLength) {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
@@ -1755,6 +1957,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * updateCapacity
+   */
   updateCapacity(capacity) {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/updateRoomCapacity?capacity=' + capacity, {
@@ -1772,6 +1977,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * getCapacity
+   */
   getCapacity() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/getRoomCapacity', {
@@ -1789,6 +1997,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * getJoinRequests
+   */
   getJoinRequests() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/getJoinRequests', {
@@ -1811,6 +2022,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * isLocked
+   */
   isLocked() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/roomLocked', {
@@ -1830,6 +2044,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * Set message of the day
+   */
   setMOTD(motd) {
     console.log(motd);
     return new Promise(async (resolve, reject) => {
@@ -1856,6 +2073,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * getAdminData
+   */
   getAdminData() {
     return new Promise(async (resolve, reject) => {
       //if (this.#channel.owner) {
@@ -1886,6 +2106,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * downloadData
+   */
   downloadData() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/downloadData', {
@@ -2088,6 +2311,12 @@ class ChannelApi {
   }
 }
 
+/**
+ * KV
+ * @class
+ * @constructor
+ * @public
+ */
 class KV {
   db;
   events = new EventEmitter();
@@ -2126,6 +2355,12 @@ class KV {
   };
 }
 
+/**
+ * FileSystemDB
+ * @class
+ * @constructor
+ * @public
+ */
 class FileSystemDB {
   path;
   options = {
@@ -2305,7 +2540,14 @@ class FileSystemDB {
 }
 
 
-// Augments IndexedDB to be used as a KV to easily replace localStorage for larger and more complex datasets
+/**
+ * Augments IndexedDB to be used as a KV to easily
+ * replace localStorage for larger and more complex datasets
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class IndexedKV {
   indexedDB;
   db;
@@ -2489,6 +2731,14 @@ if (!process.browser) {
   global.localStorage = new KV({db: 'localStorage', table: 'items'});
 }
 
+
+/**
+ * QueueItem class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class QueueItem {
   timestamp = Date.now();
   action;
@@ -2510,7 +2760,13 @@ class QueueItem {
   }
 }
 
-// Manages all the
+/**
+ * Queue Class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class Queue {
   cacheDb;
   wsOptions;
@@ -2644,6 +2900,13 @@ class Queue {
   };
 }
 
+/**
+ * Snackabra Class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class Snackabra {
   MessageBus = MessageBus;
   #channel = Channel;
