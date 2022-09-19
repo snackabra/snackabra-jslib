@@ -594,6 +594,7 @@ class EventEmitter extends EventTarget {
 
 /**
  * Crypto is a class that contains all the SB specific crypto functions
+ *
  * @class
  * @constructor
  * @public
@@ -1378,7 +1379,7 @@ class Channel {
   }
 
   /**
-   * Join channel
+   * Join channel, channel_id is the :term:`Channel Name`. 
    */
   join(channel_id) {
     return new Promise((resolve) => {
@@ -2351,6 +2352,7 @@ class KV {
 
 /**
  * FileSystemDB
+ *
  * @class
  * @constructor
  * @public
@@ -2707,11 +2709,15 @@ class Queue {
 }
 
 /**
- * Snackabra Class
+ * Constructor expects an object with the names of the matching servers, for example:
+ * ::
  *
- * @class
- * @constructor
- * @public
+ *     {
+ *       channel_server: 'http://127.0.0.1:4001',
+ *       channel_ws: 'ws://127.0.0.1:4001',
+ *       storage_server: 'http://127.0.0.1:4000'
+ *     }
+ *
  */
 class Snackabra {
   MessageBus = MessageBus;
@@ -2723,6 +2729,8 @@ class Snackabra {
     channel_server: null, channel_ws: null, storage_server: null
   };
 
+  /**
+   */
   constructor(args) {
     this.options = Object.assign(this.options, {
       channel_server: args.channel_server,
