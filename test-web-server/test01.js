@@ -5,8 +5,21 @@
 
 // these are the tests to carry out:
 
-// const test_list = ['test01a', 'test01b', 'test02', 'test02b', 'test03', 'test04a', 'test04', 'test05' ];
-const test_list = ['test05' ];
+const test_list = [
+  /* 'test01a', 'test01b', 'test02', 'test02b', 'test03', */
+
+  /* SB API */
+  'test04c',
+  'test04a', 'test04',
+
+  /* voprf test, not standard
+     plus: need to uncomment the import far below on voprf
+     (we will be removing this since snackabra-jslib is constrained to standardized web API */
+  /* 'test05' */
+];
+
+
+
 
 // import {jest} from '@jest/globals';
 import {
@@ -16,14 +29,10 @@ import {
   base64ToArrayBuffer,
   arrayBufferToBase64,
   getRandomValues,
+  jsonParseWrapper,
   MessageBus,
   Snackabra
 } from './browser.mjs';
-
-import {
-  Oprf, VOPRFClient, VOPRFServer, generatePublicKey, randomPrivateKey
-  // '@cloudflare/voprf-ts';
-} from './voprf-src/index.js';
 
 
 const z = document.getElementById('testResults');
@@ -177,16 +186,26 @@ if (test_list.includes('test03')) {
 /* snackabra channel tests ... these correspond to snackabra.pages.dev public server */
 
 const sb_config = {
-  channel_server: 'https://r.somethingstuff.workers.dev',
-  channel_ws: 'wss://r.somethingstuff.workers.dev',
-  storage_server: 'https://s.somethingstuff.workers.dev'
+  // channel_server: 'https://r.somethingstuff.workers.dev',
+  channel_server: 'http://127.0.0.1:4001',
+  // channel_ws: 'wss://r.somethingstuff.workers.dev',
+  channel_ws: 'ws://127.0.0.1:4001',
+  // storage_server: 'https://s.somethingstuff.workers.dev'
+  storage_server: 'http://127.0.0.1:4000'
 };
 
 
 /* so you can also reach this on:
    https://snackabra.pages.dev/rooms/yzeQWYahP87ngAVbhdP7DxU3or0mOrOTLJ3HcQ9UQQzZgKMYq3zWr1Qk5bZTXpHl
 */
-const channel_id = 'yzeQWYahP87ngAVbhdP7DxU3or0mOrOTLJ3HcQ9UQQzZgKMYq3zWr1Qk5bZTXpHl';
+
+// updating tests - channel ID is created
+// const channel_id = 'yzeQWYahP87ngAVbhdP7DxU3or0mOrOTLJ3HcQ9UQQzZgKMYq3zWr1Qk5bZTXpHl';
+
+
+
+var channel_id_resolve;
+var channel_id = new Promise((resolve) => { channel_id_resolve = resolve; });
 
 /* this is one of Matt's keys */
 const key = {
@@ -199,71 +218,100 @@ const key = {
   d: '9sYVDOfUJ8YofRh4y_4dItXcXzTiiwYKI6pXU9thJyfMqMtaFhvUbCsHl14Wx37k'
 };
 
-if (test_list.includes('test04a')) {
-  // Watch for incoming messages on the socket
+if (test_list.includes('test04c')) {
+  const z = document.getElementById('test04c');
+  z.innerHTML = 'starting test ... creating Snackabra object ...<br\>';
   const SB = new Snackabra(sb_config);
+  z.innerHTML += ' ... received Snackabra object (see console log) ...<br\>';
+  console.log(SB);
   SB.setIdentity(key).then(async () => {
-    const c = await SB.connect(channel_id);
-    const messages = [];
-    const controlMessages = [];
-    c.channel.socket.onMessage = async (sb_message) => {
-      console.log('Message Received:\n ', sb_message);
-      const message = JSON.parse(sb_message);
-      if (message?.control) {
-        controlMessages.push(message);
-      } else {
-        if (message?.image !== '') {
-          messages.push(message);
+    z.innerHTML += ' ... set identity ...<br\>';
+    SB.create('password').then((c) => {
+      z.innerHTML += ' ... received new channel:<br\>';
+      z.innerHTML += c + '<br\n>';
+      channel_id_resolve(c);
+    });
+  });
+}
+
+
+if (test_list.includes('test04a')) {
+  channel_id.then((channel_id) => {
+    // Watch for incoming messages on the socket
+    const SB = new Snackabra(sb_config);
+    SB.setIdentity(key).then(async () => {
+      const c = await SB.connect(channel_id);
+      const messages = [];
+      const controlMessages = [];
+      c.channel.socket.onMessage = async (sb_message) => {
+        console.log('Message Received:\n ', sb_message);
+        const message = jsonParseWrapper(sb_message, 'L248');
+        if (message?.control) {
+          controlMessages.push(message);
+        } else {
+          if (message?.image !== '') {
+            messages.push(message);
+          }
         }
-      }
-      if (controlMessages.length === messages.length * 2 && controlMessages.length > 0) {
-        const imageData = await c.storage.retrieveData(messages[0]._id, messages, controlMessages);
-        const img = document.getElementById('new-snackabra-img');
-	console.log(imageData);
-        img.src = imageData.url;
-      }
-    };
+        if (controlMessages.length === messages.length * 2 && controlMessages.length > 0) {
+          const imageData = await c.storage.retrieveData(messages[0]._id, messages, controlMessages);
+          const img = document.getElementById('new-snackabra-img');
+          console.log(imageData);
+          img.src = imageData.url;
+        }
+      };
+    });
   });
 }
 
 
 if (test_list.includes('test04')) {
-  const z = document.getElementById('test04');
-  z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
-  const SB = new Snackabra(sb_config);
-  SB.setIdentity(key).then(async () => {
-    z.innerHTML += '.. identity set ...<br\>';
-    const c = await SB.connect(channel_id);
-    z.innerHTML += '.. connected ...<br\>';
-    console.log(c);
-    try {
-      // All methods are promises we need to await or use .then().catch()
-      c.channel.api.getOldMessages(10).then(() => {
-        c.sendMessage('hello!');
-        console.log('got channel response:');
-        console.log(z2);
-        const img = document.getElementById('original-snackabra-img');
+  channel_id.then((channel_id) => {
+    const z = document.getElementById('test04');
+    z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
+    const SB = new Snackabra(sb_config);
+    SB.setIdentity(key).then(async () => {
+      z.innerHTML += '.. identity set ...<br\>';
+      const c = await SB.connect(channel_id);
+      z.innerHTML += '.. connected ...<br\>';
+      console.log(c);
+      try {
+        // All methods are promises we need to await or use .then().catch()
+        c.channel.api.getOldMessages(10).then(() => {
+          c.sendMessage('hello!');
+          console.log('got channel response:');
+          console.log(z2);
+          const img = document.getElementById('original-snackabra-img');
 
-        fetch(img.src)
-          .then((res) => res.blob())
-          .then((blob) => {
-            // const file = new File([blob], 'dot.png', blob);
-            const file = new File([blob], 'dot.svg', blob);
-            console.log(file);
-            c.sendFile(file);
-          });
-      });
-    } catch (e) {
-      console.log('ERROR in channel test:');
-      console.log(e);
-      test_fail++;
-    }
+          fetch(img.src)
+            .then((res) => res.blob())
+            .then((blob) => {
+              // const file = new File([blob], 'dot.png', blob);
+              const file = new File([blob], 'dot.svg', blob);
+              console.log(file);
+              c.sendFile(file);
+            });
+        });
+      } catch (e) {
+        console.log('ERROR in channel test:');
+        console.log(e);
+        test_fail++;
+      }
+    });
   });
 }
 
 
 // VOPRF testing ...
+// ... uncomment this if you're running test05
+
+// import {
+//   Oprf, VOPRFClient, VOPRFServer, generatePublicKey, randomPrivateKey
+//   // '@cloudflare/voprf-ts';
+// } from './voprf-src/index.js';
+
 if (test_list.includes('test05')) {
+
   // kick-tire test from
   // https://github.com/cloudflare/voprf-ts
 
@@ -307,7 +355,6 @@ if (test_list.includes('test05')) {
   const evaluation3 = await server.evaluate(evalReq3);
   const output3 = await client.finalize(finData3, evaluation3);
   console.log("Test 3 (same client secret as test 2) returns: ", arrayBufferToBase64(output3[0]));
-
 }
 
 

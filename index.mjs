@@ -2,18 +2,25 @@
 
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
 
+/* eslint-disable no-trailing-spaces */
+
+
 function SB_libraryVersion() {
   return 'This is the NODE.JS version of the library';
 }
 
-/* SB simple events (mesage bus) class */
+/**
+ * SB simple events (mesage bus) class
+ */
 class MessageBus {
   constructor(args) {
     this.args = args;
     this.bus = {};
   }
 
-  /* for possible future use with cleaner identifiers */
+  /**
+   * For possible future use with cleaner identifiers
+   */
   * #uniqueID() {
     let i = 0;
     while (true) {
@@ -22,17 +29,24 @@ class MessageBus {
     }
   }
 
-  /* safely returns handler for any event */
+  /**
+   * Safely returns handler for any event
+   */
   #select(event) {
     return this.bus[event] || (this.bus[event] = []);
   }
 
-  /* 'event' is a string, special case '*' means everything
-     (in which case the handler is also given the message) */
+  /**
+   * Subscribe. 'event' is a string, special case '*' means everything
+   *  (in which case the handler is also given the message)
+   */
   subscribe(event, handler) {
     this.#select(event).push(handler);
   }
 
+  /**
+   * Unsubscribe
+   */
   unsubscribe(event, handler) {
     let i = -1;
     if (this.bus[event]) {
@@ -44,6 +58,9 @@ class MessageBus {
     }
   }
 
+  /**
+   * Publish
+   */
   publish(event, ...args) {
     for (const handler of this.#select('*')) {
       handler(event, ...args);
@@ -106,12 +123,13 @@ String.fromCharCode.bind(String);
 
 const _U8Afrom = (it, fn = (x) => x) => new Uint8Array(Array.prototype.slice.call(it, 0).map(fn));
 
-/** Standardized 'btoa()'-like function, e.g., takes a binary string
- ('b') and returns a Base64 encoded version ('a' used to be short
- for 'ascii').
-
- @param {buffer} Uint8Array buffer
- @return {string} base64 string
+/**
+ * Standardized 'btoa()'-like function, e.g., takes a binary string
+ * ('b') and returns a Base64 encoded version ('a' used to be short
+ * for 'ascii').
+ *
+ * @param {buffer} Uint8Array buffer
+ * @return {string} base64 string
  */
 function arrayBufferToBase64(buffer) {
   const u8a = new Uint8Array(buffer);
@@ -133,11 +151,12 @@ const b64chs = Array.prototype.slice.call(b64ch);
   return tab;
 })(b64chs);
 
-/** Standardized 'atob()' function, e.g. takes the a Base64 encoded
- input and decodes it. Note: always returns Uint8Array.
-
- @param {string} base64 string
- @return {Uint8Array} returns decoded result
+/**
+ * Standardized 'atob()' function, e.g. takes the a Base64 encoded
+ * input and decodes it. Note: always returns Uint8Array.
+ *
+ * @param {string} base64 string
+ * @return {Uint8Array} returns decoded result
  */
 function base64ToArrayBuffer(asc) {
   asc = asc.replace(/\s+/g, ''); // collapse any whitespace
@@ -177,13 +196,16 @@ let _crypto, _fs, _path, _ws;
   _ws = node_ws.default;
 }
 
+/** 
+ * Fills buffer with random data
+ */
 function getRandomValues(buffer) {
   return _crypto.getRandomValues(buffer);
 }
 
 /**
- Returns 'true' if (and only if) object is of type 'Uint8Array'.
- Works same on browsers and nodejs.
+ * Returns 'true' if (and only if) object is of type 'Uint8Array'.
+ * Works same on browsers and nodejs.
  */
 function _assertUint8Array(obj) {
   if (typeof obj === 'object') if (Object.prototype.toString.call(obj) === '[object Uint8Array]') return true;
@@ -193,8 +215,8 @@ function _assertUint8Array(obj) {
 const b64_regex = new RegExp('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$');
 
 /**
- Returns 'true' if (and only if) string is well-formed base64.
- Works same on browsers and nodejs.
+ * Returns 'true' if (and only if) string is well-formed base64.
+ * Works same on browsers and nodejs.
  */
 function _assertBase64(base64) {
   /* webpack 4 doesn't support optional chaining, requires webpack 5;
@@ -205,10 +227,12 @@ function _assertBase64(base64) {
   if (z) return (z[0] === base64); else return false;
 }
 
-/** Standardized 'str2ab()' function, string to array buffer.
- This assumes on byte per character.
- @param {string} string
- @return {Uint8Array} buffer
+/**
+ * Standardized 'str2ab()' function, string to array buffer.
+ * This assumes on byte per character.
+ *
+ * @param {string} string
+ * @return {Uint8Array} buffer
  */
 function str2ab(string) {
   const length = string.length;
@@ -217,21 +241,235 @@ function str2ab(string) {
   return buffer;
 }
 
-/** Standardized 'ab2str()' function, array buffer to string.
- This assumes one byte per character.
- @param {string} string
- @return {Uint8Array} buffer
+/**
+ * Standardized 'ab2str()' function, array buffer to string.
+ * This assumes one byte per character.
+ *
+ * @param {string} string
+ * @return {Uint8Array} buffer
+ *
  */
 function ab2str(buffer) {
   if (!_assertUint8Array(buffer)) _sb_exception('ab2str()', 'parameter is not a Uint8Array buffer'); // this will throw
   return String.fromCharCode.apply(null, new Uint8Array(buffer));
 }
 
+/* ****************************************************************
+ *  TODO functions - look for duplicates
+ * ****************************************************************/
+
+/* TODO
+export function verifyCookie(request, env) {
+  // room.mjs uses without env, storage with env
+}
+*/
+
+// the publicKeyPEM paramater below needs to look like this:
+const defaultPublicKeyPEM = `-----BEGIN PUBLIC KEY-----
+MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtVedzwPq7OIl84xx9ruV
+TAkv+sUPUYeQJ3PtFOJkBSrMyGPErVxjXQQ6nvb+OevQ2t7EhimyQ3bnP7PdeAU2
+mWQX6V8LfhJj0ox8Envtw9DF7nEED5aLwnimTjox906j7itXO2xDdJCRuAfpar3u
+Tj3d0EAKWFXTBHrorKI0pHCg1opIRsqNjpVnetZn1SweCtArE7YymNRQmoi8XWzj
+yCt41fGFoFcmVeE87hiq41NJkE0iMfrmf6QqE91Fp1BSSTD75KEbKPXepS/jl3nV
+VFe4tWrHypcT+Uk7I2UBqHnR+AnODVrSxZMzoVnXoYbhDAdReTQ81MrSQ+LW7yZV
+rTxa5uYVPIRB6l58dpBEhIGcvEz376fvEwdhEqw9iXm7FchbqX3FQpwDVKvguj+w
+jIaV60/hyBaRPO2oD9IhByvL3F+Gq+iwQRXbEgvI8QvkJ1w/WcelytljcwUoYbC5
+7VS7EvnoNvMQT+r5RJfoPVPbwsCOFAQCVnzyOPAMZyUn69ycK+rONvrVxkM+c8Q2
+8w7do2MDeRWJRf4Va0XceXsN+YcK7g9bqBWrBYJIWzeRiAQ3R6kyaxxbdEhyY3Hl
+OlY876IbVmwlWAQ82l9r7ECjBL2nGMjDFm5Lv8TXKC5NHWHwY1b2vfvl6cyGtG1I
+OTJj8TMRI6y3Omop3kIfpgUCAwEAAQ==
+-----END PUBLIC KEY-----`;
+
+/**
+ * Import a PEM encoded RSA public key, to use for RSA-OAEP
+ * encryption.  Takes a string containing the PEM encoded key, and
+ * returns a Promise that will resolve to a CryptoKey representing
+ * the public key.
+ *
+ * @param {PEM} RSA public key, string, PEM format
+ * @return {cryptoKey} RSA-OAEP key
+ *
+ */
+function importPublicKey(pem) {
+  if (!pem) pem = defaultPublicKeyPEM;
+  // fetch the part of the PEM string between header and footer
+  const pemHeader = '-----BEGIN PUBLIC KEY-----';
+  const pemFooter = '-----END PUBLIC KEY-----';
+  const start = pem.indexOf(pemHeader);
+  const end = pem.indexOf(pemFooter);
+  if ((start < 0) || (end < 0)) _sb_exception('importPublicKey()', 'fail to find BEGIN and/or END string in RSA (PEM) key');
+  const pemContents = pem.slice(start + pemHeader.length, end);
+  // const pemContents = pem.substring(pemHeader.length, pem.length - pemFooter.length);
+  const binaryDer = base64ToArrayBuffer(pemContents);
+  return _crypto.subtle.importKey('spki', binaryDer, {name: 'RSA-OAEP', hash: 'SHA-256'}, true, ['encrypt']);
+}
+
+/**
+ * Returns random number
+ *
+ * @return {int} integer 0..255
+ *
+ */
+function simpleRand256() {
+  return _crypto.getRandomValues(new Uint8Array(1))[0];
+}
+
+
+const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
+
+/**
+ * Returns a random string in requested encoding
+ *
+ * @param {n} number of characters
+ * @param {code} encoding, supported types: 'base32mi'
+ * @return {string} random string
+ *
+ * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
+ */
+function simpleRandomString(n, code) {
+  if (code == 'base32mi') {
+    // yeah of course we need to add base64 etc
+    const z = _crypto.getRandomValues(new Uint8Array(n));
+    let r = '';
+    for (let i = 0; i < n; i++) r += base32mi[z[i] & 31];
+    return r;
+  }
+  _sb_exception('simpleRandomString', 'code ' + code + ' not supported');
+}
+
+/**
+ * Disambiguates strings that are known to be 'base32mi' type
+ * 
+ * ::
+ *
+ *     'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
+ * 
+ * This is the base32mi disambiguation table ::
+ * 
+ *     [OoQD] -> '0'  
+ *     [lIiJ] -> '1'  
+ *     [Zz] -> '2'  
+ *     [A] -> '4'  
+ *     [Ss] -> '5'  
+ *     [G] -> '6'  
+ *     [t] -> '7'  
+ *     [B] -> '8'  
+ *     [gq] -> '9'  
+ *     [C] -> 'c'  
+ *     [Y] -> 'y'  
+ *     [KxX] -> 'k'  
+ *     [M] -> 'm'  
+ *     [n] -> 'N'  
+ *     [P] -> 'p'  
+ *     [uvV] -> 'U'  
+ *     [w] -> 'W'  
+ * 
+ * Another way to think of it is that this, becomes this ('.' means no change): ::
+ *
+ *     0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
+ *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
+ * 
+ */
+function cleanBase32mi(s) {
+  // this of course is not the most efficient
+  return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
+}
+
+
+/**
+ * Takes an arbitrary dict object, a public key in PEM
+ * format, and a callback function: generates a random AES key,
+ * wraps that in (RSA) key, and when all done will call the
+ * callback function with the results
+ *
+ * @param {dict} dictionary (payload)
+ * @param {publicKeyPEM} public key (PEM format)
+ * @param {callback} callback function, called with results
+ *
+ */
+function packageEncryptDict(dict, publicKeyPEM, callback) {
+  const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
+  const aesAlgorithmKeyGen = {name: 'AES-GCM', length: 256};
+  const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: _crypto.getRandomValues(new Uint8Array(16))};
+  if (!publicKeyPEM) publicKeyPEM = defaultPublicKeyPEM;
+  // Create a key generator to produce a one-time-use AES key to encrypt some data
+  _crypto.subtle.generateKey(aesAlgorithmKeyGen, true, ['encrypt']).then((aesKey) => {
+    // we are exporting the symmetric AES key so we can encrypt it using pub key
+    _crypto.subtle.exportKey('raw', aesKey).then((theKey) => {
+      const rsaAlgorithmEncrypt = {name: 'RSA-OAEP'};
+      importPublicKey(publicKeyPEM).then((publicKey) => {
+        return _crypto.subtle.encrypt(rsaAlgorithmEncrypt, publicKey, theKey);
+      }).then((buf) => {
+        const encryptedAesKey = arrayBufferToBase64(buf);
+        return encryptedAesKey;
+      }).then((encAesKey) => {
+        return Promise.all([_crypto.subtle.encrypt(aesAlgorithmEncrypt, aesKey, clearDataArrayBufferView), encAesKey]);
+      }).then((arr) => {
+        // arr[0] is the encrypted dict in raw format, arr[1] is the aes key encrypted with rsa public key
+        const encryptedData = arrayBufferToBase64(arr[0]);
+        const postableEncryptedAesKey = arr[1];
+        const theContent = encodeURIComponent(encryptedData);
+        const data = {
+          enc_aes_key: encodeURIComponent(postableEncryptedAesKey),
+          iv: encodeURIComponent(arrayBufferToBase64(aesAlgorithmEncrypt.iv)),
+          content: theContent
+        };
+        if (callback) {
+          callback(data);
+        } else {
+          console.error('(No Callback) Resulting data:');
+          console.error(data);
+        }
+      });
+    });
+  });
+} // packageEncrypt()
+
+/**
+ * Partition
+ */
+function partition(str, n) {
+  const returnArr = [];
+  let i, l;
+  for (i = 0, l = str.length; i < l; i += n) {
+    returnArr.push(str.substr(i, n));
+  }
+  return returnArr;
+}
+
+/**
+ * There are o many problems with JSON parsing, adding a wrapper to capture more info.
+ * The 'loc' parameter should be a (unique) string that allows you to find the usage
+ * in the code; one approach is the line number in the file (at some point).
+ */
+function jsonParseWrapper(str, loc) {
+  try {
+    return JSON.parse(str);
+  } catch (error) {
+    // sometimes it's an embedded string
+    try {
+      return JSON.parse(eval(str));
+    } catch {
+      // let's try one more thing
+      try {
+        return JSON.parse(str.slice(1, -1));
+      } catch {
+        // we'll throw the original error
+        throw new Error('JSON.parse() error at ' + loc + ' (tried eval and slice): ' + error.message + '\nString was: ' + str);
+      }
+    }
+  }
+}
+
+
+/**
+ * Extract payload
+ */
 function extractPayloadV1(payload) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
-    const metadata = JSON.parse(decoder.decode(payload.slice(4, 4 + metadataSize)));
+    const metadata = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L476');
     let startIndex = 4 + metadataSize;
     const data = {};
     for (const key in metadata) {
@@ -247,6 +485,9 @@ function extractPayloadV1(payload) {
   }
 }
 
+/**
+ * Assemble payload
+ */
 function assemblePayload(data) {
   try {
     const metadata = {};
@@ -276,13 +517,16 @@ function assemblePayload(data) {
   }
 }
 
+/**
+ * Extract payload (latest version)
+ */
 function extractPayload(payload) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
     console.info('METADATASIZE: ', metadataSize);
     console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
-    const _metadata = JSON.parse(decoder.decode(payload.slice(4, 4 + metadataSize)));
+    const _metadata = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
     console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
     const startIndex = 4 + metadataSize;
     if (!_metadata.hasOwnProperty('version')) {
@@ -312,10 +556,16 @@ function extractPayload(payload) {
   }
 }
 
+/**
+ * Encode into b64 URL
+ */
 function encodeB64Url(input) {
   return input.replaceAll('+', '-').replaceAll('/', '_');
 }
 
+/**
+ * Decode b64 URL
+ */
 function decodeB64Url(input) {
   input = input.replaceAll('-', '+').replaceAll('_', '/');
 
@@ -331,6 +581,7 @@ function decodeB64Url(input) {
   return input;
 }
 
+
 class EventEmitter extends EventTarget {
   on(type, callback) {
     this.addEventListener(type, callback);
@@ -341,8 +592,16 @@ class EventEmitter extends EventTarget {
   }
 }
 
-// A class that contains all the SB specific crypto functions
+/**
+ * Crypto is a class that contains all the SB specific crypto functions
+ * @class
+ * @constructor
+ * @public
+ */
 class Crypto {
+  /**
+   * Extracts (generates) public key from a private key.
+   */
   extractPubKey(privateKey) {
     try {
       const pubKey = {...privateKey};
@@ -359,6 +618,9 @@ class Crypto {
     }
   }
 
+  /**
+   * Generates standard ``ECDH`` keys using ``P-384``.
+   */
   generateKeys() {
     return new Promise(async (resolve, reject) => {
       try {
@@ -371,6 +633,10 @@ class Crypto {
     });
   }
 
+
+  /**
+   * Import keys
+   */
   importKey(format, key, type, extractable, keyUsages) {
     return new Promise(async (resolve, reject) => {
       const keyAlgorithms = {
@@ -390,6 +656,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Derive key.
+   */
   deriveKey(privateKey, publicKey, type, extractable, keyUsages) {
     return new Promise(async (resolve, reject) => {
       const keyAlgorithms = {
@@ -410,6 +679,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Get file key
+   */
   getFileKey(fileHash, _salt) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -429,6 +701,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Encrypt
+   */
   encrypt(contents, secret_key = null, outputType = 'string', _iv = null) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -462,6 +737,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Decrypt
+   */
   decrypt(secretKey, contents, outputType = 'string') {
     return new Promise(async (resolve, reject) => {
       try {
@@ -480,6 +758,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Sign
+   */
   sign(secretKey, contents) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -498,6 +779,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Verify
+   */
   verify(secretKey, sign, contents) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -516,6 +800,9 @@ class Crypto {
     });
   }
 
+  /**
+   * Compare keys
+   */
   areKeysSame(key1, key2) {
     if (key1 != null && key2 != null && typeof key1 === 'object' && typeof key2 === 'object') {
       return key1['x'] === key2['x'] && key1['y'] === key2['y'];
@@ -526,7 +813,12 @@ class Crypto {
 
 const SB_Crypto = new Crypto();
 
-// Identity aka a key for use in SB
+/**
+ * Identity (key for use in SB)
+ * @class
+ * @constructor
+ * @public
+ */
 class Identity {
   exportable_pubKey;
   exportable_privateKey;
@@ -547,6 +839,9 @@ class Identity {
     });
   }
 
+  /**
+   * Mint keys
+   */
   #mintKeys() {
     return new Promise(async (resolve, reject) => {
       try {
@@ -561,6 +856,9 @@ class Identity {
     });
   }
 
+  /**
+   * Mount keys
+   */
   #mountKeys(key) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -580,6 +878,12 @@ class Identity {
 }
 
 
+/**
+ * SBMessage
+ * @class
+ * @constructor
+ * @public
+ */
 class SBMessage {
   encrypted = false;
   contents;
@@ -611,6 +915,12 @@ class SBMessage {
   }
 }
 
+/**
+ * SBFile
+ * @class
+ * @constructor
+ * @public
+ */
 class SBFile {
   encrypted = false;
   contents;
@@ -642,6 +952,9 @@ class SBFile {
     });
   }
 
+  /**
+   * asImage
+   */
   #asImage(image, signKey) {
     return new Promise(async (resolve) => {
       this.data.previewImage = this.#padImage(await (await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
@@ -661,6 +974,9 @@ class SBFile {
     });
   }
 
+  /**
+   * getFileData
+   */
   async #getFileData(file, outputType) {
     try {
       const reader = new FileReader();
@@ -680,6 +996,9 @@ class SBFile {
     }
   }
 
+  /**
+   * padImage
+   */
   #padImage(image_buffer) {
     let _sizes = [128, 256, 512, 1024, 2048, 4096]; // in KB
     _sizes = _sizes.map((size) => size * 1024);
@@ -716,6 +1035,9 @@ class SBFile {
     return final_data;
   }
 
+  /**
+   * restrictPhoto
+   */
   async #restrictPhoto(photo, maxSize, imageType, qualityArgument) {
     // imageType default should be 'image/jpeg'
     // qualityArgument should be 0.92 for jpeg and 0.8 for png (MDN default)
@@ -772,6 +1094,9 @@ class SBFile {
     return _b1;
   }
 
+  /**
+   * scaleCanvas
+   */
   #scaleCanvas(canvas, scale) {
     const scaledCanvas = document.createElement('canvas');
     scaledCanvas.width = canvas.width * scale;
@@ -784,6 +1109,9 @@ class SBFile {
     return scaledCanvas;
   }
 
+  /**
+   * generateImageHash
+   */
   async #generateImageHash(image) {
     try {
       const digest = await crypto.subtle.digest('SHA-512', image);
@@ -799,6 +1127,9 @@ class SBFile {
     }
   }
 
+  /**
+   * readPhoto
+   */
   async #readPhoto(photo) {
     const canvas = document.createElement('canvas');
     const img = document.createElement('img');
@@ -826,8 +1157,14 @@ class SBFile {
   }
 }
 
-// Takes a message object and turns it into a payload to be used by SB protocol
+/**
+ * Takes a message object and turns it into a payload to be
+ * used by SB protocol
+ */
 class Payload { // eslint-disable-line no-unused-vars
+  /**
+   * wrap
+   */
   wrap(contents, key) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -840,6 +1177,9 @@ class Payload { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * unwrap
+   */
   async unwrap(payload, key) {
     try {
       const msg = await SB_Crypto.decrypt(key, payload.encrypted_contents);
@@ -854,9 +1194,12 @@ class Payload { // eslint-disable-line no-unused-vars
 }
 
 
-// mtg: Protocol code that we wrap our WebSocket in
-// I will be updating this to send messages and remove the wait to send messages only when ack received
-// The benefit is reduced latency in communication protocol
+/**
+ * mtg: Protocol code that we wrap our WebSocket in
+ * I will be updating this to send messages and remove
+ * the wait to send messages only when ack received
+ * The benefit is reduced latency in communication protocol
+ */
 class WS_Protocol { // eslint-disable-line no-unused-vars
   currentWebSocket;
   _id;
@@ -873,10 +1216,16 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     this.join();
   }
 
+  /**
+   * Get options
+   */
   get options() {
     return this.options;
   }
 
+  /**
+   * join
+   */
   join() {
     return new Promise((resolve, reject) => {
       try {
@@ -893,6 +1242,9 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * close
+   */
   close() {
     this.currentWebSocket.close();
   }
@@ -929,6 +1281,9 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   };
 
+  /**
+   * onError
+   */
   async onError() {
     this.currentWebSocket.addEventListener('error', (event) => {
       console.error('WebSocket error, reconnecting:', event);
@@ -938,6 +1293,9 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * onClose
+   */
   async onClose() {
     this.currentWebSocket.addEventListener('close', (event) => {
       console.info('Websocket closed', event);
@@ -947,9 +1305,12 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * onMessage
+   */
   async onMessage() {
     this.currentWebSocket.addEventListener('message', async (event) => {
-      const data = JSON.parse(event.data);
+      const data = jsonParseWrapper(event.data, 'L1342');
       if (data.ack) {
         this.events.publish('ws_ack_' + data._id);
         return;
@@ -965,10 +1326,16 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     });
   }
 
+  /**
+   * readyState
+   */
   get readyState() {
     return this.currentWebSocket.readyState;
   }
 
+  /**
+   * onOpen
+   */
   async onOpen() {
     this.currentWebSocket.addEventListener('open', async (event) => {
       if (typeof this.options.onOpen === 'function') {
@@ -978,6 +1345,12 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
   }
 }
 
+/**
+ * Channel
+ * @class
+ * @constructor
+ * @public
+ */
 class Channel {
   _id;
   url;
@@ -1004,6 +1377,9 @@ class Channel {
     });
   }
 
+  /**
+   * Join channel
+   */
   join(channel_id) {
     return new Promise((resolve) => {
       if (channel_id === null) {
@@ -1025,14 +1401,23 @@ class Channel {
     });
   }
 
+  /**
+   * Return keys
+   */
   get keys() {
     return this.#keys;
   }
 
+  /**
+   * Return API
+   */
   get api() {
     return this.#api;
   }
 
+  /**
+   * Return socket
+   */
   get socket() {
     return this.#socket;
   }
@@ -1042,18 +1427,18 @@ class Channel {
       if (keys.ownerKey === null) {
         reject(new Error('Channel does not exist'));
       }
-      let _exportable_owner_pubKey = JSON.parse(keys.ownerKey || JSON.stringify({}));
+      let _exportable_owner_pubKey = jsonParseWrapper(keys.ownerKey || JSON.stringify({}), 'L1460');
       if (_exportable_owner_pubKey.hasOwnProperty('key')) {
-        _exportable_owner_pubKey = typeof _exportable_owner_pubKey.key === 'object' ? _exportable_owner_pubKey.key : JSON.parse(_exportable_owner_pubKey.key);
+        _exportable_owner_pubKey = typeof _exportable_owner_pubKey.key === 'object' ? _exportable_owner_pubKey.key : jsonParseWrapper(_exportable_owner_pubKey.key, 'L1463');
       }
       try {
         _exportable_owner_pubKey.key_ops = [];
       } catch (error) {
         reject(error);
       }
-      const _exportable_room_signKey = JSON.parse(keys.signKey);
-      const _exportable_encryption_key = JSON.parse(keys.encryptionKey);
-      let _exportable_verifiedGuest_pubKey = JSON.parse(keys.guestKey || null);
+      const _exportable_room_signKey = jsonParseWrapper(keys.signKey, 'L1470');
+      const _exportable_encryption_key = jsonParseWrapper(keys.encryptionKey, 'L1471');
+      let _exportable_verifiedGuest_pubKey = jsonParseWrapper(keys.guestKey || null, 'L1472');
       const _exportable_pubKey = this.identity.exportable_pubKey;
       const _privateKey = this.identity.privateKey;
       let isVerifiedGuest = false;
@@ -1094,11 +1479,11 @@ class Channel {
         _exportable_locked_key = await localStorage.getItem(this._id + '_lockedKey');
       }
       if (_exportable_locked_key !== null) {
-        _locked_key = await SB_Crypto.importKey('jwk', JSON.parse(_exportable_locked_key), 'AES', false, ['encrypt', 'decrypt']);
+        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
       } else if (keys.locked_key) {
-        const _string_locked_key = (await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key, JSON.parse(keys.locked_key), 'string')).plaintext;
-        _exportable_locked_key = JSON.parse(_string_locked_key);
-        _locked_key = await SB_Crypto.importKey('jwk', JSON.parse(_exportable_locked_key), 'AES', false, ['encrypt', 'decrypt']);
+        const _string_locked_key = (await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key, jsonParseWrapper(keys.locked_key, 'L1519'), 'string')).plaintext;
+        _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
+        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
       }
 
       this.#keys = {
@@ -1119,7 +1504,12 @@ class Channel {
   };
 }
 
-// A SB Socket
+/**
+ * Channel Socket
+ * @class
+ * @constructor
+ * @public
+ */
 class ChannelSocket {
   socket;
   url;
@@ -1146,10 +1536,16 @@ class ChannelSocket {
     this.open();
   }
 
+  /**
+   * setKeys
+   */
   setKeys(_keys) {
     this.#channel.loadKeys(_keys);
   }
 
+  /**
+   * open
+   */
   open() {
     const options = {
       url: this.url + '/api/room/' + this.channelId + '/websocket',
@@ -1193,10 +1589,16 @@ class ChannelSocket {
     this.socket = new WS_Protocol(options);
   }
 
+  /**
+   * close
+   */
   close() {
     this.socket.close();
   }
 
+  /**
+   * isReady
+   */
   isReady() {
     console.info('SB Socket ready');
     this.ready = true;
@@ -1207,6 +1609,9 @@ class ChannelSocket {
     }
   }
 
+  /**
+   * Send message on channel socket
+   */
   async send(message) {
     if (this.ready) {
       let payload;
@@ -1228,6 +1633,9 @@ class ChannelSocket {
     }
   }
 
+  /**
+   * Send SB object (file) on channel socket
+   */
   async sendSbObject(file) {
     if (this.ready) {
       const payload = await this.#payload.wrap(
@@ -1240,26 +1648,40 @@ class ChannelSocket {
     }
   }
 
+  /**
+   * Receive message on channel socket
+   */
   async receive(message) {
-    const id = Object.keys(message)[0];
-    let unwrapped;
-    if (message[id].hasOwnProperty('encrypted_contents')) {
-      try {
-        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
-      } catch (e) {
-        console.warn(e);
-        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
+    try {
+      const id = Object.keys(message)[0];
+      let unwrapped;
+      if (message[id].hasOwnProperty('encrypted_contents')) {
+        try {
+          unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
+        } catch (e) {
+          console.warn(e);
+          unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
+        }
+      } else {
+        unwrapped = message;
       }
-    } else {
-      unwrapped = message;
+      unwrapped = jsonParseWrapper(unwrapped, 'L1702');
+      unwrapped._id = id;
+      localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
+      return JSON.stringify(unwrapped);
+    } catch (e) {
+      console.error('ERROR: receive() failed to process message: ', e);
+      return null;
     }
-    unwrapped = JSON.parse(unwrapped);
-    unwrapped._id = id;
-    localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
-    return JSON.stringify(unwrapped);
   }
 }
 
+/**
+ * Storage API
+ * @class
+ * @constructor
+ * @public
+ */
 class StorageApi {
   server;
   #channel;
@@ -1271,10 +1693,13 @@ class StorageApi {
     this.#identity = identity;
   }
 
+  /**
+   * saveFile
+   */
   async saveFile(file) {
     if (file instanceof File) {
       const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
-      const metaData = JSON.parse(sbFile.imageMetaData);
+      const metaData = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
       const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
       const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
       Promise.all([fullStorePromise, previewStorePromise]).then(async (results) => {
@@ -1288,6 +1713,9 @@ class StorageApi {
     }
   }
 
+  /**
+   * getFileKey
+   */
   async #getFileKey(fileHash, _salt) {
     const keyMaterial = await SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
 
@@ -1302,6 +1730,9 @@ class StorageApi {
     return key;
   }
 
+  /**
+   * storeRequest
+   */
   storeRequest(fileId) {
     return new Promise(async (resolve, reject) => {
       fetch(this.server + '/storeRequest?name=' + fileId)
@@ -1319,6 +1750,9 @@ class StorageApi {
     });
   }
 
+  /**
+   * storeData
+   */
   storeData(type, fileId, encrypt_data, storageToken, data) {
     return new Promise(async (resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
@@ -1344,6 +1778,9 @@ class StorageApi {
     });
   }
 
+  /**
+   * storeImage
+   */
   storeImage(image, image_id, keyData, type) {
     return new Promise(async (resolve, reject) => {
       const storeReqResp = await this.storeRequest(image_id);
@@ -1363,6 +1800,9 @@ class StorageApi {
     });
   }
 
+  /**
+   * fetchData
+   */
   fetchData(msgId, verificationToken) {
     return new Promise(async (resolve, reject) => {
       fetch(this.server + '/fetchData?id=' + encodeURIComponent(msgId) + '&verification_token=' + verificationToken, {
@@ -1382,11 +1822,17 @@ class StorageApi {
     });
   }
 
+  /**
+   * unpadData
+   */
   #unpadData(data_buffer) {
     const _size = new Uint32Array(data_buffer.slice(-4))[0];
     return data_buffer.slice(0, _size);
   }
 
+  /**
+   * retrieveData
+   */
   async retrieveData(msgId, messages, controlMessages) {
     const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
     const image_id = imageMetaData.previewId;
@@ -1410,8 +1856,11 @@ class StorageApi {
     return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
   }
 
+  /**
+   * retrieveDataFromMessage
+   */
   async retrieveDataFromMessage(message, controlMessages) {
-    const imageMetaData = typeof message.imageMetaData === 'string' ? JSON.parse(message.imageMetaData) : message.imageMetaData;
+    const imageMetaData = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData;
     const image_id = imageMetaData.previewId;
     const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.hasOwnProperty('id') && ctrl_msg.id === image_id);
     if (!control_msg) {
@@ -1444,6 +1893,12 @@ class StorageApi {
    */
 }
 
+/**
+ * Channel API
+ * @class
+ * @constructor
+ * @public
+ */
 class ChannelApi {
   server;
   #identity;
@@ -1461,6 +1916,9 @@ class ChannelApi {
     this.#identity = identity;
   }
 
+  /**
+   * getLastMessageTimes
+   */
   getLastMessageTimes() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelApi + '/getLastMessageTimes', {
@@ -1478,6 +1936,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * getOldMessages
+   */
   getOldMessages(currentMessagesLength) {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
@@ -1495,6 +1956,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * updateCapacity
+   */
   updateCapacity(capacity) {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/updateRoomCapacity?capacity=' + capacity, {
@@ -1512,6 +1976,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * getCapacity
+   */
   getCapacity() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/getRoomCapacity', {
@@ -1529,6 +1996,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * getJoinRequests
+   */
   getJoinRequests() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/getJoinRequests', {
@@ -1551,6 +2021,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * isLocked
+   */
   isLocked() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/roomLocked', {
@@ -1570,6 +2043,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * Set message of the day
+   */
   setMOTD(motd) {
     console.log(motd);
     return new Promise(async (resolve, reject) => {
@@ -1596,6 +2072,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * getAdminData
+   */
   getAdminData() {
     return new Promise(async (resolve, reject) => {
       //if (this.#channel.owner) {
@@ -1626,6 +2105,9 @@ class ChannelApi {
     });
   }
 
+  /**
+   * downloadData
+   */
   downloadData() {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/downloadData', {
@@ -1761,7 +2243,7 @@ class ChannelApi {
 
   acceptVisitor(pubKey) {
     return new Promise(async (resolve, reject) => {
-      const shared_key = await SB_Crypto.deriveKey(this.#identity.keys.privateKey, await SB_Crypto.importKey('jwk', JSON.parse(pubKey), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
+      const shared_key = await SB_Crypto.deriveKey(this.#identity.keys.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
       const _encrypted_locked_key = await SB_Crypto.encrypt(JSON.stringify(this.#channel.keys.exportable_locked_key), shared_key, 'string');
       fetch(this.#channelServer + this.#channel._id + '/acceptVisitor', {
         method: 'POST',
@@ -1828,6 +2310,12 @@ class ChannelApi {
   }
 }
 
+/**
+ * KV
+ * @class
+ * @constructor
+ * @public
+ */
 class KV {
   db;
   events = new EventEmitter();
@@ -1861,6 +2349,12 @@ class KV {
   };
 }
 
+/**
+ * FileSystemDB
+ * @class
+ * @constructor
+ * @public
+ */
 class FileSystemDB {
   path;
   options = {
@@ -1946,7 +2440,7 @@ class FileSystemDB {
   #unserialize(value) {
     return new Promise(async (resolve, reject) => {
       try {
-        const readable = JSON.parse(value);
+        const readable = jsonParseWrapper(value, 'L2478');
         switch (readable.dataType) {
           case 'string' || 'number' || 'bigint' || 'boolean' || 'symbol':
             break;
@@ -2043,6 +2537,14 @@ class FileSystemDB {
   global.localStorage = new KV({db: 'localStorage', table: 'items'});
 }
 
+
+/**
+ * QueueItem class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class QueueItem {
   timestamp = Date.now();
   action;
@@ -2064,7 +2566,13 @@ class QueueItem {
   }
 }
 
-// Manages all the
+/**
+ * Queue Class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class Queue {
   cacheDb;
   wsOptions;
@@ -2198,6 +2706,13 @@ class Queue {
   };
 }
 
+/**
+ * Snackabra Class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class Snackabra {
   MessageBus = MessageBus;
   #channel = Channel;
@@ -2254,6 +2769,11 @@ class Snackabra {
     });
   }
 
+  /**
+   * Creates a channel. Currently uses trivial authentication.
+   * Returns the :term:`Channel Name`. 
+   * (TODO: token-based approval of storage spend)
+   */
   create(serverSecret) {
     return new Promise(async (resolve, reject) => {
       try {
@@ -2339,4 +2859,4 @@ class Snackabra {
   }
 }
 
-export { MessageBus, SBFile, SBMessage, SB_libraryVersion, Snackabra, ab2str, arrayBufferToBase64, base64ToArrayBuffer, getRandomValues, str2ab };
+export { MessageBus, SBFile, SBMessage, SB_libraryVersion, Snackabra, ab2str, arrayBufferToBase64, base64ToArrayBuffer, cleanBase32mi, getRandomValues, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };

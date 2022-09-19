@@ -2,6 +2,9 @@
 
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
 
+/* eslint-disable no-trailing-spaces */
+
+
 function SB_libraryVersion() {
   if (process.browser)
     return 'This is the BROWSER version of the library';
@@ -336,7 +339,7 @@ function importPublicKey(pem) {
  * @return {int} integer 0..255
  *
  */
-function simpleRand256() {
+export function simpleRand256() {
   return _crypto.getRandomValues(new Uint8Array(1))[0];
 }
 
@@ -352,7 +355,7 @@ const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
  *
  * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
  */
-function simpleRandomString(n, code) {
+export function simpleRandomString(n, code) {
   if (code == 'base32mi') {
     // yeah of course we need to add base64 etc
     const z = _crypto.getRandomValues(new Uint8Array(n));
@@ -396,7 +399,7 @@ function simpleRandomString(n, code) {
  *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
  * 
  */
-function cleanBase32mi(s) {
+export function cleanBase32mi(s) {
   // this of course is not the most efficient
   return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
 }
@@ -413,7 +416,7 @@ function cleanBase32mi(s) {
  * @param {callback} callback function, called with results
  *
  */
-function packageEncryptDict(dict, publicKeyPEM, callback) {
+export function packageEncryptDict(dict, publicKeyPEM, callback) {
   const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
   const aesAlgorithmKeyGen = {name: 'AES-GCM', length: 256};
   const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: _crypto.getRandomValues(new Uint8Array(16))};
@@ -454,7 +457,7 @@ function packageEncryptDict(dict, publicKeyPEM, callback) {
 /**
  * Partition
  */
-function partition(str, n) {
+export function partition(str, n) {
   const returnArr = [];
   let i, l;
   for (i = 0, l = str.length; i < l; i += n) {
@@ -464,13 +467,38 @@ function partition(str, n) {
 }
 
 /**
+ * There are o many problems with JSON parsing, adding a wrapper to capture more info.
+ * The 'loc' parameter should be a (unique) string that allows you to find the usage
+ * in the code; one approach is the line number in the file (at some point).
+ */
+export function jsonParseWrapper(str, loc) {
+  try {
+    return JSON.parse(str);
+  } catch (error) {
+    // sometimes it's an embedded string
+    try {
+      return JSON.parse(eval(str));
+    } catch {
+      // let's try one more thing
+      try {
+        return JSON.parse(str.slice(1, -1));
+      } catch {
+        // we'll throw the original error
+        throw new Error('JSON.parse() error at ' + loc + ' (tried eval and slice): ' + error.message + '\nString was: ' + str);
+      }
+    }
+  }
+}
+
+
+/**
  * Extract payload
  */
 function extractPayloadV1(payload) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
-    const metadata = JSON.parse(decoder.decode(payload.slice(4, 4 + metadataSize)));
+    const metadata = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L476');
     let startIndex = 4 + metadataSize;
     const data = {};
     for (const key in metadata) {
@@ -527,7 +555,7 @@ function extractPayload(payload) {
     const decoder = new TextDecoder();
     console.info('METADATASIZE: ', metadataSize);
     console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
-    const _metadata = JSON.parse(decoder.decode(payload.slice(4, 4 + metadataSize)));
+    const _metadata = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
     console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
     const startIndex = 4 + metadataSize;
     if (!_metadata.hasOwnProperty('version')) {
@@ -582,6 +610,7 @@ function decodeB64Url(input) {
   return input;
 }
 
+
 class EventEmitter extends EventTarget {
   on(type, callback) {
     this.addEventListener(type, callback);
@@ -599,7 +628,6 @@ class EventEmitter extends EventTarget {
  * @public
  */
 class Crypto {
-
   /**
    * Extracts (generates) public key from a private key.
    */
@@ -899,7 +927,7 @@ class SBMessage {
   constructor(contents, signKey, key) {
     return new Promise(async (resolve) => {
       // eslint-disable-next-line prefer-const
-      let imgId = '', previewId = '', imgKey = '', previewKey = '', fullStorePromise = '', previewStorePromise = '';
+      let imgId = '', previewId = '', imgKey = '', previewKey = '';
       this.contents = contents;
       this.sender_pubKey = key;
       this.sign = await SB_Crypto.sign(signKey, contents);
@@ -1163,7 +1191,6 @@ class SBFile {
  * used by SB protocol
  */
 class Payload { // eslint-disable-line no-unused-vars
-
   /**
    * wrap
    */
@@ -1312,7 +1339,7 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
    */
   async onMessage() {
     this.currentWebSocket.addEventListener('message', async (event) => {
-      const data = JSON.parse(event.data);
+      const data = jsonParseWrapper(event.data, 'L1342');
       if (data.ack) {
         this.events.publish('ws_ack_' + data._id);
         return;
@@ -1429,18 +1456,18 @@ class Channel {
       if (keys.ownerKey === null) {
         reject(new Error('Channel does not exist'));
       }
-      let _exportable_owner_pubKey = JSON.parse(keys.ownerKey || JSON.stringify({}));
+      let _exportable_owner_pubKey = jsonParseWrapper(keys.ownerKey || JSON.stringify({}), 'L1460');
       if (_exportable_owner_pubKey.hasOwnProperty('key')) {
-        _exportable_owner_pubKey = typeof _exportable_owner_pubKey.key === 'object' ? _exportable_owner_pubKey.key : JSON.parse(_exportable_owner_pubKey.key);
+        _exportable_owner_pubKey = typeof _exportable_owner_pubKey.key === 'object' ? _exportable_owner_pubKey.key : jsonParseWrapper(_exportable_owner_pubKey.key, 'L1463');
       }
       try {
         _exportable_owner_pubKey.key_ops = [];
       } catch (error) {
         reject(error);
       }
-      const _exportable_room_signKey = JSON.parse(keys.signKey);
-      const _exportable_encryption_key = JSON.parse(keys.encryptionKey);
-      let _exportable_verifiedGuest_pubKey = JSON.parse(keys.guestKey || null);
+      const _exportable_room_signKey = jsonParseWrapper(keys.signKey, 'L1470');
+      const _exportable_encryption_key = jsonParseWrapper(keys.encryptionKey, 'L1471');
+      let _exportable_verifiedGuest_pubKey = jsonParseWrapper(keys.guestKey || null, 'L1472');
       const _exportable_pubKey = this.identity.exportable_pubKey;
       const _privateKey = this.identity.privateKey;
       let isVerifiedGuest = false;
@@ -1485,11 +1512,11 @@ class Channel {
         _exportable_locked_key = await localStorage.getItem(this._id + '_lockedKey');
       }
       if (_exportable_locked_key !== null) {
-        _locked_key = await SB_Crypto.importKey('jwk', JSON.parse(_exportable_locked_key), 'AES', false, ['encrypt', 'decrypt']);
+        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
       } else if (keys.locked_key) {
-        const _string_locked_key = (await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key, JSON.parse(keys.locked_key), 'string')).plaintext;
-        _exportable_locked_key = JSON.parse(_string_locked_key);
-        _locked_key = await SB_Crypto.importKey('jwk', JSON.parse(_exportable_locked_key), 'AES', false, ['encrypt', 'decrypt']);
+        const _string_locked_key = (await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key, jsonParseWrapper(keys.locked_key, 'L1519'), 'string')).plaintext;
+        _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
+        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
       }
 
       this.#keys = {
@@ -1658,22 +1685,27 @@ class ChannelSocket {
    * Receive message on channel socket
    */
   async receive(message) {
-    const id = Object.keys(message)[0];
-    let unwrapped;
-    if (message[id].hasOwnProperty('encrypted_contents')) {
-      try {
-        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
-      } catch (e) {
-        console.warn(e);
-        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
+    try {
+      const id = Object.keys(message)[0];
+      let unwrapped;
+      if (message[id].hasOwnProperty('encrypted_contents')) {
+        try {
+          unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
+        } catch (e) {
+          console.warn(e);
+          unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
+        }
+      } else {
+        unwrapped = message;
       }
-    } else {
-      unwrapped = message;
+      unwrapped = jsonParseWrapper(unwrapped, 'L1702');
+      unwrapped._id = id;
+      localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
+      return JSON.stringify(unwrapped);
+    } catch (e) {
+      console.error('ERROR: receive() failed to process message: ', e);
+      return null;
     }
-    unwrapped = JSON.parse(unwrapped);
-    unwrapped._id = id;
-    localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
-    return JSON.stringify(unwrapped);
   }
 }
 
@@ -1700,7 +1732,7 @@ class StorageApi {
   async saveFile(file) {
     if (file instanceof File) {
       const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
-      const metaData = JSON.parse(sbFile.imageMetaData);
+      const metaData = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
       const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
       const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
       Promise.all([fullStorePromise, previewStorePromise]).then(async (results) => {
@@ -1861,7 +1893,7 @@ class StorageApi {
    * retrieveDataFromMessage
    */
   async retrieveDataFromMessage(message, controlMessages) {
-    const imageMetaData = typeof message.imageMetaData === 'string' ? JSON.parse(message.imageMetaData) : message.imageMetaData;
+    const imageMetaData = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData;
     const image_id = imageMetaData.previewId;
     const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.hasOwnProperty('id') && ctrl_msg.id === image_id);
     if (!control_msg) {
@@ -2244,7 +2276,7 @@ class ChannelApi {
 
   acceptVisitor(pubKey) {
     return new Promise(async (resolve, reject) => {
-      const shared_key = await SB_Crypto.deriveKey(this.#identity.keys.privateKey, await SB_Crypto.importKey('jwk', JSON.parse(pubKey), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
+      const shared_key = await SB_Crypto.deriveKey(this.#identity.keys.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
       const _encrypted_locked_key = await SB_Crypto.encrypt(JSON.stringify(this.#channel.keys.exportable_locked_key), shared_key, 'string');
       fetch(this.#channelServer + this.#channel._id + '/acceptVisitor', {
         method: 'POST',
@@ -2446,7 +2478,7 @@ class FileSystemDB {
   #unserialize(value) {
     return new Promise(async (resolve, reject) => {
       try {
-        const readable = JSON.parse(value);
+        const readable = jsonParseWrapper(value, 'L2478');
         switch (readable.dataType) {
           case 'string' || 'number' || 'bigint' || 'boolean' || 'symbol':
             break;
@@ -2963,6 +2995,11 @@ class Snackabra {
     });
   }
 
+  /**
+   * Creates a channel. Currently uses trivial authentication.
+   * Returns the :term:`Channel Name`. 
+   * (TODO: token-based approval of storage spend)
+   */
   create(serverSecret) {
     return new Promise(async (resolve, reject) => {
       try {
