@@ -1,3 +1,7 @@
+/*
+  NOTE: THIS IS IN PROGRESS PURE BROWSER TYPESCRIPT
+  */
+
 /* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
 
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
@@ -5,14 +9,15 @@
 /* eslint-disable no-trailing-spaces */
 
 
+/* Zen Master: "um" */
 function SB_libraryVersion() {
-  return 'This is the BROWSER version of the library';
+  throw new Error("THIS IS NEITHER BROWSER NOR NODE THIS IS SPARTA!");
 }
 
 /**
  * SB simple events (mesage bus) class
  */
-class MessageBus {
+export class MessageBus {
   constructor(args) {
     this.args = args;
     this.bus = {};
@@ -139,6 +144,12 @@ function _sb_assert(val, msg) {
 
 const _fromCC = String.fromCharCode.bind(String);
 
+// ****************************************************************
+// implement SB flavor of 'btoa'
+// ****************************************************************
+
+const _U8Afrom = (it, fn = (x) => x) => new Uint8Array(Array.prototype.slice.call(it, 0).map(fn));
+
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short
@@ -149,21 +160,19 @@ const _fromCC = String.fromCharCode.bind(String);
  */
 function arrayBufferToBase64(buffer) {
   const u8a = new Uint8Array(buffer);
-  {
-    // we could use window.btoa but chose not to
-    let u32, c0, c1, c2, asc = '';
-    const maxargs = 0x1000;
-    const strs = [];
-    for (let i = 0, l = u8a.length; i < l; i += maxargs) strs.push(_fromCC.apply(null, u8a.subarray(i, i + maxargs)));
-    const bin = strs.join('');
-    const pad = bin.length % 3;
-    for (let i = 0; i < bin.length;) {
-      if ((c0 = bin.charCodeAt(i++)) > 255 || (c1 = bin.charCodeAt(i++)) > 255 || (c2 = bin.charCodeAt(i++)) > 255) throw new Error('Invalid Character');
-      u32 = (c0 << 16) | (c1 << 8) | c2;
-      asc += b64chs[u32 >> 18 & 63] + b64chs[u32 >> 12 & 63] + b64chs[u32 >> 6 & 63] + b64chs[u32 & 63];
-    }
-    return pad ? asc.slice(0, pad - 3) + '==='.substring(pad) : asc;
+  // we could use window.btoa but chose not to
+  let u32, c0, c1, c2, asc = '';
+  const maxargs = 0x1000;
+  const strs = [];
+  for (let i = 0, l = u8a.length; i < l; i += maxargs) strs.push(_fromCC.apply(null, u8a.subarray(i, i + maxargs)));
+  const bin = strs.join('');
+  const pad = bin.length % 3;
+  for (let i = 0; i < bin.length;) {
+    if ((c0 = bin.charCodeAt(i++)) > 255 || (c1 = bin.charCodeAt(i++)) > 255 || (c2 = bin.charCodeAt(i++)) > 255) throw new Error('Invalid Character');
+    u32 = (c0 << 16) | (c1 << 8) | c2;
+    asc += b64chs[u32 >> 18 & 63] + b64chs[u32 >> 12 & 63] + b64chs[u32 >> 6 & 63] + b64chs[u32 & 63];
   }
+  return pad ? asc.slice(0, pad - 3) + '==='.substring(pad) : asc;
 }
 
 // ****************************************************************
@@ -189,15 +198,14 @@ function base64ToArrayBuffer(asc) {
   asc = asc.replace(/\s+/g, ''); // collapse any whitespace
   asc += '=='.slice(2 - (asc.length & 3)); // make it tolerant of padding
   if (!_assertBase64(asc)) throw new Error('Invalid Character');
-  {
-    // we could use window.atob but chose not to
-    let u24, bin = '', r1, r2;
-    for (let i = 0; i < asc.length;) {
-      u24 = b64tab[asc.charAt(i++)] << 18 | b64tab[asc.charAt(i++)] << 12 | (r1 = b64tab[asc.charAt(i++)]) << 6 | (r2 = b64tab[asc.charAt(i++)]);
-      bin += r1 === 64 ? _fromCC(u24 >> 16 & 255) : r2 === 64 ? _fromCC(u24 >> 16 & 255, u24 >> 8 & 255) : _fromCC(u24 >> 16 & 255, u24 >> 8 & 255, u24 & 255);
-    }
-    return str2ab(bin);
+
+  // we could use window.atob but chose not to
+  let u24, bin = '', r1, r2;
+  for (let i = 0; i < asc.length;) {
+    u24 = b64tab[asc.charAt(i++)] << 18 | b64tab[asc.charAt(i++)] << 12 | (r1 = b64tab[asc.charAt(i++)]) << 6 | (r2 = b64tab[asc.charAt(i++)]);
+    bin += r1 === 64 ? _fromCC(u24 >> 16 & 255) : r2 === 64 ? _fromCC(u24 >> 16 & 255, u24 >> 8 & 255) : _fromCC(u24 >> 16 & 255, u24 >> 8 & 255, u24 & 255);
   }
+  return str2ab(bin);
 }
 
 function _appendBuffer(buffer1, buffer2) {
@@ -210,20 +218,19 @@ function _appendBuffer(buffer1, buffer2) {
     console.error(e);
     return {};
   }
-}
+};
+
 /* ****************************************************************
  *  These are wrappers to handle both browser and node targets
- *  with the same code. The 'true' value is replaced
+ *  with the same code. The 'process.browser' value is replaced
  *  by rollup and this whole library is then tree-shaken so
  *  that only either the node-specific or browser-specific code
  *  is retained, into 'index.mjs' and 'browser.mjs' respectively.
  * ****************************************************************/
 
-let _crypto, _ws;
-{
-  _crypto = crypto;
-  _ws = WebSocket;
-}
+let _crypto, _fs, _path, _ws;
+_crypto = crypto;
+_ws = WebSocket;
 
 /** 
  * Fills buffer with random data
@@ -339,7 +346,7 @@ function importPublicKey(pem) {
  * @return {int} integer 0..255
  *
  */
-function simpleRand256() {
+export function simpleRand256() {
   return _crypto.getRandomValues(new Uint8Array(1))[0];
 }
 
@@ -355,7 +362,7 @@ const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
  *
  * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
  */
-function simpleRandomString(n, code) {
+export function simpleRandomString(n, code) {
   if (code == 'base32mi') {
     // yeah of course we need to add base64 etc
     const z = _crypto.getRandomValues(new Uint8Array(n));
@@ -399,7 +406,7 @@ function simpleRandomString(n, code) {
  *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
  * 
  */
-function cleanBase32mi(s) {
+export function cleanBase32mi(s) {
   // this of course is not the most efficient
   return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
 }
@@ -416,7 +423,7 @@ function cleanBase32mi(s) {
  * @param {callback} callback function, called with results
  *
  */
-function packageEncryptDict(dict, publicKeyPEM, callback) {
+export function packageEncryptDict(dict, publicKeyPEM, callback) {
   const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
   const aesAlgorithmKeyGen = {name: 'AES-GCM', length: 256};
   const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: _crypto.getRandomValues(new Uint8Array(16))};
@@ -457,7 +464,7 @@ function packageEncryptDict(dict, publicKeyPEM, callback) {
 /**
  * Partition
  */
-function partition(str, n) {
+export function partition(str, n) {
   const returnArr = [];
   let i, l;
   for (i = 0, l = str.length; i < l; i += n) {
@@ -471,7 +478,7 @@ function partition(str, n) {
  * The 'loc' parameter should be a (unique) string that allows you to find the usage
  * in the code; one approach is the line number in the file (at some point).
  */
-function jsonParseWrapper(str, loc) {
+export function jsonParseWrapper(str, loc) {
   try {
     return JSON.parse(str);
   } catch (error) {
@@ -1485,9 +1492,12 @@ class Channel {
       }
       const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
       let isAdmin;
-      {
-        isAdmin = (document.cookie.split('; ').find((row) => row.startsWith('token_' + this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
-      }
+      // TODO .. hardcoded i don't know what this does ...
+      // if (process.browser) {
+      isAdmin = (document.cookie.split('; ').find((row) => row.startsWith('token_' + this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
+      // } else {
+      //   isAdmin = (process.env.REACT_APP_ROOM_SERVER !== 's_socket.privacy.app' && isOwner);
+      // }
 
       if (!isOwner && !isAdmin) {
         if (_exportable_verifiedGuest_pubKey === null) {
@@ -1512,9 +1522,11 @@ class Channel {
       }
 
       let _locked_key = null, _exportable_locked_key;
-      {
-        _exportable_locked_key = localStorage.getItem(this._id + '_lockedKey');
-      }
+      // if (process.browser) {
+      _exportable_locked_key = localStorage.getItem(this._id + '_lockedKey');
+      // } else {
+      //   _exportable_locked_key = await localStorage.getItem(this._id + '_lockedKey');
+      // }
       if (_exportable_locked_key !== null) {
         _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
       } else if (keys.locked_key) {
@@ -2358,12 +2370,14 @@ class KV {
   events = new EventEmitter();
 
   constructor(options) {
-    {
-      if (!window.indexedDB) {
-        throw new Error('Your browser doesn\'t support a stable version of IndexedDB.');
-      }
-      this.db = new IndexedKV(options);
+    // if (!process.browser) {
+    //   this.db = new FileSystemDB(options);
+    // } else {
+    if (!window.indexedDB) {
+      throw new Error('Your browser doesn\'t support a stable version of IndexedDB.');
     }
+    this.db = new IndexedKV(options);
+    // }
   }
 
   openCursor(match, callback) {
@@ -2386,6 +2400,191 @@ class KV {
 
   removeItem(key) {
     return this.db.removeItem(key);
+  };
+}
+
+/**
+ * FileSystemDB
+ *
+ * @class
+ * @constructor
+ * @public
+ */
+class FileSystemDB {
+  path;
+  options = {
+    db: 'MyDB', table: 'default', onReady: null
+  };
+
+  constructor(options) {
+    this.options = Object.assign(this.options, options);
+    this.#useDatabase();
+  }
+
+  openCursor = (match, callback) => {
+    return new Promise((resolve, reject) => {
+      try {
+        _fs.readdir(this.path, (err, files) => {
+          if (err) {
+            reject(err);
+          }
+          files.forEach(async (f) => {
+            const regex = new RegExp(`^${match}`);
+            if (f.match(regex)) {
+              callback(await this.getItem(f));
+            }
+          });
+          resolve();
+        });
+      } catch (e) {
+        reject(e);
+      }
+    });
+  };
+
+  #useDatabase = () => {
+    this.path = _path.join(process.env.PWD, 'FileSystemDB', this.options.db, this.options.table);
+    if (!_fs.existsSync(this.path)) {
+      _fs.mkdirSync(this.path, {recursive: true});
+      console.info('Created directory for FileSystemDB');
+    }
+  };
+
+  #serialize(value) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const storable = {
+          dataType: typeof value
+        };
+        switch (storable.dataType) {
+          case 'string' || 'number' || 'bigint' || 'boolean' || 'symbol':
+            storable.value = value;
+            break;
+          case 'object':
+            storable.constructor = value.constructor.name;
+            storable.value = this.#serializeConstructor(value, storable.constructor);
+        }
+        resolve(JSON.stringify(storable));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  #serializeConstructor(value, constructor) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let data;
+        switch (constructor) {
+          case 'ArrayBuffer' || 'TypedArray' || 'DataView' || 'Blob':
+            data = arrayBufferToBase64(value);
+            break;
+          case 'Array' || 'Object' || 'Map' || 'Set':
+            data = value;
+            break;
+          default:
+            data = value;
+        }
+        return data;
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  #unserialize(value) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const readable = jsonParseWrapper(value, 'L2478');
+        switch (readable.dataType) {
+          case 'string' || 'number' || 'bigint' || 'boolean' || 'symbol':
+            break;
+          case 'object':
+            readable.value = this.#unserializeConstructor(value, readable.constructor);
+        }
+        resolve(readable.value);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  #unserializeConstructor(value, constructor) {
+    return new Promise(async (resolve, reject) => {
+      try {
+        let data;
+        switch (constructor) {
+          case 'ArrayBuffer' || 'TypedArray' || 'DataView' || 'Blob':
+            data = base64ToArrayBuffer(value);
+            break;
+          case 'Array' || 'Object' || 'Map' || 'Set':
+            data = value;
+            break;
+          default:
+            data = value;
+        }
+        return data;
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  #serializeKey(key) {
+    return (key.replace(/[ &\/\\#,+()$~%.'":*?<>{}]/g, ''));
+  }
+
+  // Set item will insert or replace
+  setItem = (key, value) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const data = await this.#serialize(value);
+        _fs.writeFileSync(this.path + _path.sep + this.#serializeKey(key), data);
+      } catch (e) {
+        reject(e);
+      }
+    });
+  };
+
+  //Add item but not replace
+  add = (key, value) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const data = await this.#serialize(value);
+        _fs.writeFileSync(this.path + _path.sep + this.#serializeKey(key), data, 'wx');
+        resolve(true);
+      } catch (e) {
+        console.error(e);
+        reject(e);
+      }
+    });
+  };
+
+  getItem = (key) => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const file = this.path + _path.sep + this.#serializeKey(key);
+        if (_fs.existsSync(file)) {
+          const data = _fs.readFileSync(file);
+          resolve(this.#unserialize(data));
+        } else {
+          resolve(null);
+        }
+      } catch (e) {
+        reject(e);
+      }
+    });
+  };
+
+  removeItem = (key) => {
+    return new Promise((resolve, reject) => {
+      try {
+        _fs.unlinkSync(this.path + _path.sep + this.#serializeKey(key));
+        resolve(true);
+      } catch (e) {
+        reject(e);
+      }
+    });
   };
 }
 
@@ -2413,16 +2612,17 @@ class IndexedKV {
         this.options.onReady(e);
       });
     }
-    {
-      if (!window.indexedDB) {
-        console.error('Your browser doesn\'t support a stable version of IndexedDB.');
-        return;
-      }
-      this.indexedDB = window.indexedDB;
+    // if (!process.browser) {
+    //   this.indexedDB = global.indexedDB;
+    // } else {
+    if (!window.indexedDB) {
+      console.error('Your browser doesn\'t support a stable version of IndexedDB.');
+      return;
     }
+    this.indexedDB = window.indexedDB;
+    // }
 
     const openReq = this.indexedDB.open(this.options.db);
-
 
     openReq.onerror = (event) => {
       console.error(event);
@@ -2574,6 +2774,10 @@ class IndexedKV {
     });
   };
 }
+
+// if (!process.browser) {
+//   global.localStorage = new KV({db: 'localStorage', table: 'items'});
+// }
 
 
 /**
@@ -2921,4 +3125,14 @@ class Snackabra {
   }
 }
 
-export { MessageBus, SBFile, SBMessage, SB_libraryVersion, Snackabra, ab2str, arrayBufferToBase64, base64ToArrayBuffer, cleanBase32mi, getRandomValues, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };
+export {
+  Snackabra,
+  SBMessage,
+  SBFile,
+  SB_libraryVersion,
+  ab2str,
+  str2ab,
+  base64ToArrayBuffer,
+  arrayBufferToBase64,
+  getRandomValues
+};

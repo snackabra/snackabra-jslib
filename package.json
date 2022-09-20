@@ -6,7 +6,8 @@
   "scripts": {
     "prepare": "eslint src/main.js && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
     "pretest": "eslint src/main.js && rollup -c > index.mjs",
-    "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest --verbose --detectOpenHandles"
+    "test": "NODE_OPTIONS=\"--experimental-vm-modules\" jest --verbose --detectOpenHandles",
+    "denoprep": "eslint src/main.js && BROWSER=true rollup -c > index.mjs"
   },
   "repository": {
     "type": "git",

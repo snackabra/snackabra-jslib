@@ -8,10 +8,10 @@
 'use strict';
 
 // nota bene ... pretty basic testing, not very sophisticated yet
-import fetch from 'node-fetch';
+// import fetch from 'node-fetch';
 
 // Shouldn't have to do with --experimental-fetch flag but it isn't working?
-global.fetch = fetch;
+// global.fetch = fetch;
 
 import {
   SB_libraryVersion,
