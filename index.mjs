@@ -106,9 +106,31 @@ function sleep(ms) {
 
 function _sb_exception(loc, msg) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
-  console.error(m);
+  // for now disabling this to keep node testing less noisy
+  // console.error(m);
   throw new Error(m);
 }
+
+// internal - general handling of paramaters that might be promises
+// (basically the "anti" of resolve, if it's *not* a promise then
+// it becomes one
+function _sb_resolve(val) {
+  if (val.then) {
+    // it's already a promise
+    return val;
+  } else {
+    return new Promise((resolve) => resolve(val));
+  }
+}
+
+// internal - handle assertions
+function _sb_assert(val, msg) {
+  if (!(val)) {
+    const m = `<< SB assertion error: ${msg} >>`;
+    throw new Error(m);
+  }
+}
+
 
 // Parts of this code is based on 'base64.ts':
 // raw.githubusercontent.com/dankogai/js-base64/main/base64.mjs which
@@ -448,7 +470,14 @@ function jsonParseWrapper(str, loc) {
   } catch (error) {
     // sometimes it's an embedded string
     try {
-      return JSON.parse(eval(str));
+      // This would be simple: 'return JSON.parse(eval(str));'
+      // But eval() not safe. Instead we iteratively strip possible wrapping
+      // single or double quotation marks. There are various cases where this
+      // will not be enough, but we'll add "unwrapping" logic as we find
+      // the examples.
+      let s3 = s2 = undefined;
+      while (str != (s3 = s2, s2 = str, str = str?.match(/^(['"])(.*)\1$/m)?.[2]));
+      return JSON.parse(`'${s3}'`);
     } catch {
       // let's try one more thing
       try {
@@ -2709,7 +2738,8 @@ class Queue {
 }
 
 /**
- * Constructor expects an object with the names of the matching servers, for example:
+ * Constructor expects an object with the names of the matching servers, for example
+ * (this shows the miniflare local dev config):
  * ::
  *
  *     {
@@ -2721,6 +2751,7 @@ class Queue {
  */
 class Snackabra {
   MessageBus = MessageBus;
+  // PSM: i think these two are on a per-channel object basis?
   #channel = Channel;
   #storage = StorageApi;
   #identity = Identity;
@@ -2732,11 +2763,16 @@ class Snackabra {
   /**
    */
   constructor(args) {
-    this.options = Object.assign(this.options, {
-      channel_server: args.channel_server,
-      channel_ws: args.channel_ws,
-      storage_server: args.storage_server
-    });
+    _sb_assert(args, 'Snackabra(args) - missing args');
+    try {
+      this.options = Object.assign(this.options, {
+        channel_server: args.channel_server,
+        channel_ws: args.channel_ws,
+        storage_server: args.storage_server
+      });
+    } catch (e) {
+      _sb_exception('Snackabra.constructor()', e);
+    }
   }
 
   setIdentity(keys) {
@@ -2761,16 +2797,27 @@ class Snackabra {
     });
   }
 
+  /**
+   * Connects to :term:`Channel Name` on this SB config.
+   * Returns a (promise to a) channel object
+   */
   connect(channel_id) {
     return new Promise(async (resolve, reject) => {
       try {
-        if (!this.#identity.exportable_pubKey) {
+        const _self = this;
+        if (!_self.#identity.exportable_pubKey) {
+          // TODO: does it?
           reject(new Error('setIdentity must be called before connecting'));
         }
-        this.#queue = new Queue({processor: true});
-        this.#channel = await new Channel(this.options.channel_server, this.options.channel_ws, this.#identity, channel_id);
-        this.#storage = new StorageApi(this.options.storage_server, this.#channel, this.#identity);
-        resolve(this);
+        _self.#queue = new Queue({processor: true});
+        _sb_resolve(channel_id).then((channel_id) => {
+          const c = new Channel(_self.options.channel_server, _self.options.channel_ws, _self.#identity, channel_id);
+          c.then((c) => {
+            _self.#channel = c;
+            _self.#storage = new StorageApi(_self.options.storage_server, _self.#channel, _self.#identity);
+            resolve(_self);
+          });
+        });
       } catch (e) {
         reject(e);
       }

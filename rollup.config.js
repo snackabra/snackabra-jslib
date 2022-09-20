@@ -2,7 +2,7 @@ import replace from '@rollup/plugin-replace';
 
 export default {
   input: 'src/main.js',
-  external: ['crypto', 'fs', 'path'],
+  external: ['crypto', 'fs', 'path', 'ws'],
   plugins: [
     replace({
       'preventAssignment': true,
