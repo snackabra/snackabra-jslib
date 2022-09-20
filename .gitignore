@@ -6,3 +6,4 @@ dist/
 /FileSystemDB/
 #*
 .#*
+__tests__/cov_profile
