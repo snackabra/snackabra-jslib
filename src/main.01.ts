@@ -6,14 +6,21 @@
  *  is retained, into 'index.mjs' and 'browser.mjs' respectively.
  * ****************************************************************/
 
-let _crypto, _fs, _path, _ws;
-_crypto = crypto;
-_ws = WebSocket;
+
+function _sb_exception(loc, msg) {
+  const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
+  // for now disabling this to keep node testing less noisy
+  // console.error(m);
+  throw new Error(m);
+}
+
+let _crypto = crypto;
+let _ws = WebSocket;
 
 /** 
  * Fills buffer with random data
  */
-function getRandomValues(buffer) {
+function getRandomValues(buffer: Uint8Array) {
   return _crypto.getRandomValues(buffer);
 }
 
