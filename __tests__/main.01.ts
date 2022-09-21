@@ -1,4 +1,7 @@
-function _sb_exception(loc: string, msg: string) {
+
+
+// exported for testing purposes
+export function _sb_exception(loc: string, msg: string) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
   // for now disabling this to keep node testing less noisy
   // console.error(m);
@@ -186,9 +189,9 @@ function encodeChunk (lookup: string[], view: DataView, start: number, end: numb
 // }
 
 
-const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
-  ? new DataView(bs)
-  : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
+// const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
+//   ? new DataView(bs)
+//   : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
 
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
@@ -198,17 +201,17 @@ const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
  * @param {bufferSource} Uint8Array buffer
  * @return {string} base64 string
  */
-export function arrayBufferToBase64(bufferSource: BufferSource): string {
-  const urlFriendly = true // hard-coded in SB
-  const view = bs2dv(bufferSource)
+export function arrayBufferToBase64(buffer: Uint8Array): string {
+  // const view = bs2dv(bufferSource)
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength)
   const len = view.byteLength
   const extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
   const len2 = len - extraBytes
   const parts = new Array(
     Math.floor(len2 / MAX_CHUNK_LENGTH) + Math.sign(extraBytes)
   )
-  const lookup = urlFriendly ? urlLookup : b64lookup
-  const pad = urlFriendly ? '' : PAD
+  const lookup = urlLookup
+  const pad = ''
   let j = 0
   for (let i = 0; i < len2; i += MAX_CHUNK_LENGTH) {
     parts[j++] = encodeChunk(
@@ -262,14 +265,9 @@ export function arrayBufferToBase64(bufferSource: BufferSource): string {
 //   }
 // }
 
-export function _appendBuffer(buffer1: Uint8Array, buffer2: Uint8Array) {
-  try {
-    const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
-    tmp.set(new Uint8Array(buffer1), 0);
-    tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
-    return tmp.buffer;
-  } catch (e) {
-    console.error(e);
-    return {};
-  }
+export function _appendBuffer(buffer1: Uint8Array, buffer2: Uint8Array): ArrayBufferLike {
+  const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength)
+  tmp.set(new Uint8Array(buffer1), 0)
+  tmp.set(new Uint8Array(buffer2), buffer1.byteLength)
+  return tmp.buffer
 };

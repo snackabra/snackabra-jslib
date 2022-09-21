@@ -214,7 +214,8 @@ function base64ToArrayBuffer(asc) {
   }
 }
 
-function _appendBuffer(buffer1, buffer2) {
+// only exported for testing purposes
+export function _appendBuffer(buffer1, buffer2) {
   try {
     const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
     tmp.set(new Uint8Array(buffer1), 0);
