@@ -7,7 +7,7 @@
  * ****************************************************************/
 
 
-function _sb_exception(loc, msg) {
+function _sb_exception(loc: string, msg: string) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
   // for now disabling this to keep node testing less noisy
   // console.error(m);
@@ -20,7 +20,7 @@ let _ws = WebSocket;
 /** 
  * Fills buffer with random data
  */
-function getRandomValues(buffer: Uint8Array) {
+export function getRandomValues(buffer: Uint8Array) {
   return _crypto.getRandomValues(buffer);
 }
 
@@ -39,7 +39,7 @@ const b64_regex = new RegExp('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-
  * Returns 'true' if (and only if) string is well-formed base64.
  * Works same on browsers and nodejs.
  */
-function _assertBase64(base64) {
+function _assertBase64(base64: string) {
   /* webpack 4 doesn't support optional chaining, requires webpack 5;
      since wp 5 is pretty recent (2020-10-10), we'll avoid using
      optional chaining in this library for a while */
@@ -55,7 +55,7 @@ function _assertBase64(base64) {
  * @param {string} string
  * @return {Uint8Array} buffer
  */
-function str2ab(string) {
+export function str2ab(string: string) {
   const length = string.length;
   const buffer = new Uint8Array(length);
   for (let i = 0; i < length; i++) buffer[i] = string.charCodeAt(i);
@@ -70,7 +70,50 @@ function str2ab(string) {
  * @return {Uint8Array} buffer
  *
  */
-function ab2str(buffer) {
+export function ab2str(buffer: Uint8Array) {
   if (!_assertUint8Array(buffer)) _sb_exception('ab2str()', 'parameter is not a Uint8Array buffer'); // this will throw
-  return String.fromCharCode.apply(null, new Uint8Array(buffer));
+  // return String.fromCharCode.apply(String, new Uint8Array(buffer));
+  return new TextDecoder("utf-8").decode(buffer);
 }
+
+
+/*
+ * Historically we wanted detailed controll of this, but looks like
+ * we no longer need that. Should the need arise, a good choice is
+ * https://raw.githubusercontent.com/dankogai/js-base64/main/base64.mjs
+ */
+
+/**
+ * Standardized 'btoa()'-like function, e.g., takes a binary string
+ * ('b') and returns a Base64 encoded version ('a' used to be short
+ * for 'ascii').
+ *
+ * @param {buffer} Uint8Array buffer
+ * @return {string} base64 string
+ */
+export function arrayBufferToBase64(buffer: Uint8Array) {
+  return window.btoa(unescape(encodeURIComponent(new TextDecoder("utf-8").decode(buffer))));
+}
+
+/**
+ * Standardized 'atob()' function, e.g. takes the a Base64 encoded
+ * input and decodes it. Note: always returns Uint8Array.
+ *
+ * @param {string} base64 string
+ * @return {Uint8Array} returns decoded result
+ */
+export function base64ToArrayBuffer(asc: string) {
+  return new TextEncoder().encode(window.atob(asc));
+}
+
+export function _appendBuffer(buffer1: Uint8Array, buffer2: Uint8Array) {
+  try {
+    const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
+    tmp.set(new Uint8Array(buffer1), 0);
+    tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
+    return tmp.buffer;
+  } catch (e) {
+    console.error(e);
+    return {};
+  }
+};
