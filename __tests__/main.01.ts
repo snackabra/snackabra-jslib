@@ -78,10 +78,11 @@ export function ab2str(buffer: Uint8Array) {
 
 
 /*
- * Historically we wanted detailed controll of this, but looks like
- * we no longer need that. Should the need arise, a good choice is
- * https://raw.githubusercontent.com/dankogai/js-base64/main/base64.mjs
+ * Extracted from:
+ * https://raw.githubusercontent.com/dankogai/js-base64/main/base64.ts
  */
+
+const _fromCC = String.fromCharCode.bind(String);
 
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
@@ -91,9 +92,16 @@ export function ab2str(buffer: Uint8Array) {
  * @param {buffer} Uint8Array buffer
  * @return {string} base64 string
  */
-export function arrayBufferToBase64(buffer: Uint8Array) {
-  return window.btoa(unescape(encodeURIComponent(new TextDecoder("utf-8").decode(buffer))));
+export function arrayBufferToBase64(u8a: Uint8Array) {
+  const maxargs = 0x1000;
+  let strs: string[] = [];
+  for (let i = 0, l = u8a.length; i < l; i += maxargs) {
+    strs.push(new TextDecoder("utf-8").decode(u8a.subarray(i, i + maxargs)));
+  }
+  // return window.btoa(strs.join(''));
+  return window.btoa(unescape(encodeURIComponent(strs.join(''))));
 }
+
 
 /**
  * Standardized 'atob()' function, e.g. takes the a Base64 encoded
