@@ -3,6 +3,7 @@
     "allowJs": true,
     "lib": ["deno.window"],
     "strict": true,
+    "strictNullChecks": true,
     "types": [
       "types/index.d.ts"
     ]

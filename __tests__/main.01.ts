@@ -1,12 +1,3 @@
-/* ****************************************************************
- *  These are wrappers to handle both browser and node targets
- *  with the same code. The 'process.browser' value is replaced
- *  by rollup and this whole library is then tree-shaken so
- *  that only either the node-specific or browser-specific code
- *  is retained, into 'index.mjs' and 'browser.mjs' respectively.
- * ****************************************************************/
-
-
 function _sb_exception(loc: string, msg: string) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
   // for now disabling this to keep node testing less noisy
@@ -24,25 +15,17 @@ export function getRandomValues(buffer: Uint8Array) {
   return _crypto.getRandomValues(buffer);
 }
 
-/**
- * Returns 'true' if (and only if) object is of type 'Uint8Array'.
- * Works same on browsers and nodejs.
- */
-function _assertUint8Array(obj: any) {
-  if (typeof obj === 'object') if (Object.prototype.toString.call(obj) === '[object Uint8Array]') return true;
-  return false;
-}
 
-const b64_regex = new RegExp('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$');
+// Strict b64 check:
+// const b64_regex = new RegExp('^(?:[A-Za-z0-9+/_\-]{4})*(?:[A-Za-z0-9+/_\-]{2}==|[A-Za-z0-9+/_\-]{3}=)?$')
+// But we will go (very) lenient:
+const b64_regex = /^([A-Za-z0-9+/_\-=]*)$/
 
 /**
  * Returns 'true' if (and only if) string is well-formed base64.
  * Works same on browsers and nodejs.
  */
 function _assertBase64(base64: string) {
-  /* webpack 4 doesn't support optional chaining, requires webpack 5;
-     since wp 5 is pretty recent (2020-10-10), we'll avoid using
-     optional chaining in this library for a while */
   // return (b64_regex.exec(base64)?.[0] === base64);
   const z = b64_regex.exec(base64);
   if (z) return (z[0] === base64); else return false;
@@ -56,10 +39,7 @@ function _assertBase64(base64: string) {
  * @return {Uint8Array} buffer
  */
 export function str2ab(string: string) {
-  const length = string.length;
-  const buffer = new Uint8Array(length);
-  for (let i = 0; i < length; i++) buffer[i] = string.charCodeAt(i);
-  return buffer;
+  return new TextEncoder().encode(string)
 }
 
 /**
@@ -71,48 +51,216 @@ export function str2ab(string: string) {
  *
  */
 export function ab2str(buffer: Uint8Array) {
-  if (!_assertUint8Array(buffer)) _sb_exception('ab2str()', 'parameter is not a Uint8Array buffer'); // this will throw
-  // return String.fromCharCode.apply(String, new Uint8Array(buffer));
   return new TextDecoder("utf-8").decode(buffer);
 }
 
 
-/*
- * Extracted from:
- * https://raw.githubusercontent.com/dankogai/js-base64/main/base64.ts
+/**
+ * From:
+ * https://github.com/qwtel/base64-encoding/blob/master/base64-js.ts
  */
+const b64lookup: string[] = []
+const urlLookup: string[] = []
+const revLookup: number[] = []
+const CODE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+const CODE_B64 = CODE + '+/'
+const CODE_URL = CODE + '-_'
+const PAD = '='
+const MAX_CHUNK_LENGTH = 16383 // must be multiple of 3
+for (let i = 0, len = CODE_B64.length; i < len; ++i) {
+  b64lookup[i] = CODE_B64[i]
+  urlLookup[i] = CODE_URL[i]
+  revLookup[CODE_B64.charCodeAt(i)] = i
+}
+revLookup['-'.charCodeAt(0)] = 62
+revLookup['_'.charCodeAt(0)] = 63
 
-const _fromCC = String.fromCharCode.bind(String);
+function getLens (b64: string) {
+  const len = b64.length
+  let validLen = b64.indexOf(PAD)
+  if (validLen === -1) validLen = len
+  const placeHoldersLen = validLen === len ? 0 : 4 - (validLen % 4)
+  return [validLen, placeHoldersLen]
+}
+
+function _byteLength(validLen: number, placeHoldersLen: number) {
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen
+}
+
+/**
+ * Standardized 'atob()' function, e.g. takes the a Base64 encoded
+ * input and decodes it. Note: always returns Uint8Array.
+ * Accepts both regular Base64 and the URL-friendly variant,
+ * where `+` => `-`, `/` => `_`, and the padding character is omitted.
+ *
+ * @param {str} base64 string in either regular or URL-friendly representation.
+ * @return {Uint8Array} returns decoded binary result
+ */
+export function base64ToArrayBuffer(str: string): Uint8Array {
+  if (!_assertBase64(str)) throw new Error('invalid character')
+  let tmp: number
+  switch (str.length % 4) {
+    case 2: str += "=="; break
+    case 3: str += "="; break
+  }
+  const [validLen, placeHoldersLen] = getLens(str)
+  const arr = new Uint8Array(_byteLength(validLen, placeHoldersLen))
+  let curByte = 0
+  const len = placeHoldersLen > 0 ? validLen - 4 : validLen
+  let i: number
+  for (i = 0; i < len; i += 4) {
+    let r0: number = revLookup[str.charCodeAt(i    )]
+    let r1: number = revLookup[str.charCodeAt(i + 1)]
+    let r2: number = revLookup[str.charCodeAt(i + 2)]
+    let r3: number = revLookup[str.charCodeAt(i + 3)]
+    tmp = (r0 << 18) | (r1 << 12) | (r2 <<  6) | (r3)
+    arr[curByte++] = (tmp >> 16) & 0xff
+    arr[curByte++] = (tmp >>  8) & 0xff
+    arr[curByte++] = (tmp      ) & 0xff
+  }
+  if (placeHoldersLen === 2) {
+    let r0 = revLookup[str.charCodeAt(i    )]
+    let r1 = revLookup[str.charCodeAt(i + 1)]
+    tmp = (r0 <<  2) | (r1 >>  4)
+    arr[curByte++] = tmp & 0xff
+  }
+  if (placeHoldersLen === 1) {
+    let r0 = revLookup[str.charCodeAt(i    )]
+    let r1 = revLookup[str.charCodeAt(i + 1)]
+    let r2 = revLookup[str.charCodeAt(i + 2)]
+    tmp = (r0 << 10) | (r1 << 4) | (r2 >> 2)
+    arr[curByte++] = (tmp >> 8) & 0xff
+    arr[curByte++] = tmp & 0xff
+  }
+  return arr
+}
+
+function tripletToBase64 (lookup: string[], num: number) {
+  return (
+    lookup[num >> 18 & 0x3f] +
+    lookup[num >> 12 & 0x3f] +
+    lookup[num >>  6 & 0x3f] +
+    lookup[num       & 0x3f]
+  )
+}
+
+function encodeChunk (lookup: string[], view: DataView, start: number, end: number) {
+  let tmp: number;
+  const output = new Array((end - start) / 3)
+  for (let i = start, j = 0; i < end; i += 3, j++) {
+    tmp =
+      ((view.getUint8(i    ) << 16) & 0xff0000) +
+      ((view.getUint8(i + 1) <<  8) & 0x00ff00) +
+      ( view.getUint8(i + 2)        & 0x0000ff)
+    output[j] = tripletToBase64(lookup, tmp)
+  }
+  return output.join('')
+}
+
+
+// /* ALTERNATIVE solution below, just needs some typescripting */
+//
+// const b64ch = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+// const b64chs = Array.prototype.slice.call(b64ch);
+// const b64tab = ((a) => {
+//   const tab = {};
+//   a.forEach((c, i) => tab[c] = i);
+//   return tab;
+// })(b64chs);
+//
+// function base64ToArrayBuffer(asc) {
+//   asc = asc.replace(/\s+/g, ''); // collapse any whitespace
+//   asc += '=='.slice(2 - (asc.length & 3)); // make it tolerant of padding
+//   if (!_assertBase64(asc)) throw new Error('Invalid Character');
+//   if (process.browser) {
+//     // we could use window.atob but chose not to
+//     let u24, bin = '', r1, r2;
+//     for (let i = 0; i < asc.length;) {
+//       u24 = b64tab[asc.charAt(i++)] << 18 | b64tab[asc.charAt(i++)] << 12 | (r1 = b64tab[asc.charAt(i++)]) << 6 | (r2 = b64tab[asc.charAt(i++)]);
+//       bin += r1 === 64 ? _fromCC(u24 >> 16 & 255) : r2 === 64 ? _fromCC(u24 >> 16 & 255, u24 >> 8 & 255) : _fromCC(u24 >> 16 & 255, u24 >> 8 & 255, u24 & 255);
+//     }
+//     return str2ab(bin);
+//   } else {
+//     return _U8Afrom(Buffer.from(asc, 'base64'));
+//   }
+// }
+
+
+const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
+  ? new DataView(bs)
+  : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
 
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short
  * for 'ascii').
  *
- * @param {buffer} Uint8Array buffer
+ * @param {bufferSource} Uint8Array buffer
  * @return {string} base64 string
  */
-export function arrayBufferToBase64(u8a: Uint8Array) {
-  const maxargs = 0x1000;
-  let strs: string[] = [];
-  for (let i = 0, l = u8a.length; i < l; i += maxargs) {
-    strs.push(new TextDecoder("utf-8").decode(u8a.subarray(i, i + maxargs)));
+export function arrayBufferToBase64(bufferSource: BufferSource): string {
+  const urlFriendly = true // hard-coded in SB
+  const view = bs2dv(bufferSource)
+  const len = view.byteLength
+  const extraBytes = len % 3 // if we have 1 byte left, pad 2 bytes
+  const len2 = len - extraBytes
+  const parts = new Array(
+    Math.floor(len2 / MAX_CHUNK_LENGTH) + Math.sign(extraBytes)
+  )
+  const lookup = urlFriendly ? urlLookup : b64lookup
+  const pad = urlFriendly ? '' : PAD
+  let j = 0
+  for (let i = 0; i < len2; i += MAX_CHUNK_LENGTH) {
+    parts[j++] = encodeChunk(
+      lookup,
+      view, 
+      i, 
+      (i + MAX_CHUNK_LENGTH) > len2 ? len2 : (i + MAX_CHUNK_LENGTH),
+    )
   }
-  // return window.btoa(strs.join(''));
-  return window.btoa(unescape(encodeURIComponent(strs.join(''))));
+  if (extraBytes === 1) {
+    const tmp = view.getUint8(len - 1)
+    parts[j] = (
+      lookup[ tmp >>  2]         +
+      lookup[(tmp <<  4) & 0x3f] +
+      pad + pad
+    )
+  } else if (extraBytes === 2) {
+    const tmp = (view.getUint8(len - 2) << 8) + view.getUint8(len - 1)
+    parts[j] = (
+      lookup[ tmp >> 10]         +
+      lookup[(tmp >>  4) & 0x3f] +
+      lookup[(tmp <<  2) & 0x3f] +
+      pad
+    )
+  }
+  return parts.join('')
 }
 
-
-/**
- * Standardized 'atob()' function, e.g. takes the a Base64 encoded
- * input and decodes it. Note: always returns Uint8Array.
- *
- * @param {string} base64 string
- * @return {Uint8Array} returns decoded result
- */
-export function base64ToArrayBuffer(asc: string) {
-  return new TextEncoder().encode(window.atob(asc));
-}
+// /* ALTERNATIVE implementation to above (not yet typescripted) */
+// const _fromCC = String.fromCharCode.bind(String);
+// const _U8Afrom = (it, fn = (x) => x) => new Uint8Array(Array.prototype.slice.call(it, 0).map(fn));
+// function arrayBufferToBase64(buffer) {
+//   const u8a = new Uint8Array(buffer);
+//   if (process.browser) {
+//     // we could use window.btoa but chose not to
+//     let u32, c0, c1, c2, asc = '';
+//     const maxargs = 0x1000;
+//     const strs = [];
+//     for (let i = 0, l = u8a.length; i < l; i += maxargs) strs.push(_fromCC.apply(null, u8a.subarray(i, i + maxargs)));
+//     const bin = strs.join('');
+//     const pad = bin.length % 3;
+//     for (let i = 0; i < bin.length;) {
+//       if ((c0 = bin.charCodeAt(i++)) > 255 || (c1 = bin.charCodeAt(i++)) > 255 || (c2 = bin.charCodeAt(i++)) > 255) throw new Error('Invalid Character');
+//       u32 = (c0 << 16) | (c1 << 8) | c2;
+//       asc += b64chs[u32 >> 18 & 63] + b64chs[u32 >> 12 & 63] + b64chs[u32 >> 6 & 63] + b64chs[u32 & 63];
+//     }
+//     return pad ? asc.slice(0, pad - 3) + '==='.substring(pad) : asc;
+//   } else {
+//     // nodejs, so has Buffer, just use that
+//     return Buffer.from(u8a).toString('base64');
+//   }
+// }
 
 export function _appendBuffer(buffer1: Uint8Array, buffer2: Uint8Array) {
   try {
