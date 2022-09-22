@@ -5,6 +5,29 @@
 
   */
 
+import {
+  ab2str,
+  str2ab,
+  base64ToArrayBuffer,
+  arrayBufferToBase64,
+  _appendBuffer,
+  _sb_exception,
+  getRandomValues,
+  SB_libraryVersion
+// @ts-ignore
+} from './main.01.ts'
+
+import {
+  MessageBus,
+  _sb_resolve,
+  _sb_assert,
+  importPublicKey,
+  simpleRand256,
+  simpleRandomString,
+  cleanBase32mi
+// @ts-ignore
+} from './main.02.ts'
+
 
 /* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
 
@@ -58,26 +81,29 @@
  * @param {callback} callback function, called with results
  *
  */
-export function packageEncryptDict(dict, publicKeyPEM, callback) {
+export function packageEncryptDict(dict:any, publicKeyPEM:string, callback:Function) {
   const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
   const aesAlgorithmKeyGen = {name: 'AES-GCM', length: 256};
-  const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: _crypto.getRandomValues(new Uint8Array(16))};
-  if (!publicKeyPEM) publicKeyPEM = defaultPublicKeyPEM;
+  const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(16))};
+  // if (!publicKeyPEM) publicKeyPEM = defaultPublicKeyPEM;
+  if (!publicKeyPEM) {
+    _sb_exception('packageEncryptDict()', 'invalid PEM')
+  }
   // Create a key generator to produce a one-time-use AES key to encrypt some data
-  _crypto.subtle.generateKey(aesAlgorithmKeyGen, true, ['encrypt']).then((aesKey) => {
+  crypto.subtle.generateKey(aesAlgorithmKeyGen, true, ['encrypt']).then((aesKey) => {
     // we are exporting the symmetric AES key so we can encrypt it using pub key
-    _crypto.subtle.exportKey('raw', aesKey).then((theKey) => {
+    crypto.subtle.exportKey('raw', aesKey).then((theKey) => {
       const rsaAlgorithmEncrypt = {name: 'RSA-OAEP'};
       importPublicKey(publicKeyPEM).then((publicKey) => {
-        return _crypto.subtle.encrypt(rsaAlgorithmEncrypt, publicKey, theKey);
+        return crypto.subtle.encrypt(rsaAlgorithmEncrypt, publicKey, theKey);
       }).then((buf) => {
-        const encryptedAesKey = arrayBufferToBase64(buf);
+        const encryptedAesKey = arrayBufferToBase64(new Uint8Array(buf));
         return encryptedAesKey;
       }).then((encAesKey) => {
-        return Promise.all([_crypto.subtle.encrypt(aesAlgorithmEncrypt, aesKey, clearDataArrayBufferView), encAesKey]);
+        return Promise.all([crypto.subtle.encrypt(aesAlgorithmEncrypt, aesKey, clearDataArrayBufferView), encAesKey]);
       }).then((arr) => {
         // arr[0] is the encrypted dict in raw format, arr[1] is the aes key encrypted with rsa public key
-        const encryptedData = arrayBufferToBase64(arr[0]);
+        const encryptedData = arrayBufferToBase64(new Uint8Array(arr[0]));
         const postableEncryptedAesKey = arr[1];
         const theContent = encodeURIComponent(encryptedData);
         const data = {
@@ -100,7 +126,7 @@ export function packageEncryptDict(dict, publicKeyPEM, callback) {
 /**
  * Partition
  */
-export function partition(str, n) {
+export function partition(str: string, n: number) {
   const returnArr = [];
   let i, l;
   for (i = 0, l = str.length; i < l; i += n) {
@@ -114,7 +140,7 @@ export function partition(str, n) {
  * The 'loc' parameter should be a (unique) string that allows you to find the usage
  * in the code; one approach is the line number in the file (at some point).
  */
-export function jsonParseWrapper(str, loc) {
+export function jsonParseWrapper(str: string, loc: string) {
   try {
     return JSON.parse(str);
   } catch (error) {
@@ -125,7 +151,8 @@ export function jsonParseWrapper(str, loc) {
       // single or double quotation marks. There are various cases where this
       // will not be enough, but we'll add "unwrapping" logic as we find
       // the examples.
-      let s3 = s2 = undefined;
+      let s2 = '';
+      let s3 = '';
       while (str != (s3 = s2, s2 = str, str = str?.match(/^(['"])(.*)\1$/m)?.[2]));
       return JSON.parse(`'${s3}'`);
     } catch {
@@ -144,7 +171,7 @@ export function jsonParseWrapper(str, loc) {
 /**
  * Extract payload
  */
-function extractPayloadV1(payload) {
+function extractPayloadV1(payload: ArrayBuffer) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
@@ -164,12 +191,17 @@ function extractPayloadV1(payload) {
   }
 }
 
+export interface sbDict {
+  [index: string] : any;
+} 
+
+
 /**
  * Assemble payload
  */
-function assemblePayload(data) {
+function assemblePayload(data: sbDict) {
   try {
-    const metadata = {};
+    const metadata: sbDict = []
     metadata['version'] = '002';
     let keyCount = 0;
     let startIndex = 0;
@@ -183,10 +215,10 @@ function assemblePayload(data) {
     const encoder = new TextEncoder();
     const metadataBuffer = encoder.encode(JSON.stringify(metadata));
     const metadataSize = new Uint32Array([metadataBuffer.byteLength]);
-    let payload = _appendBuffer(metadataSize.buffer, metadataBuffer);
+    let payload = _appendBuffer(new Uint32Array(metadataSize.buffer), new Uint8Array(metadataBuffer));
     for (const key in data) {
       if (data.hasOwnProperty(key)) {
-        payload = _appendBuffer(payload, data[key]);
+        payload = _appendBuffer(new Uint8Array(payload), data[key]);
       }
     }
     return payload;
@@ -199,7 +231,7 @@ function assemblePayload(data) {
 /**
  * Extract payload (latest version)
  */
-function extractPayload(payload) {
+function extractPayload(payload: ArrayBuffer) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
@@ -238,14 +270,14 @@ function extractPayload(payload) {
 /**
  * Encode into b64 URL
  */
-function encodeB64Url(input) {
+function encodeB64Url(input: string) {
   return input.replaceAll('+', '-').replaceAll('/', '_');
 }
 
 /**
  * Decode b64 URL
  */
-function decodeB64Url(input) {
+function decodeB64Url(input: string) {
   input = input.replaceAll('-', '+').replaceAll('_', '/');
 
   // Pad out with standard base64 required padding characters
@@ -262,11 +294,10 @@ function decodeB64Url(input) {
 
 
 class EventEmitter extends EventTarget {
-  on(type, callback) {
+  on(type: string, callback: Function) {
     this.addEventListener(type, callback);
   }
-
-  emit(type, data) {
+  emit(type: string, data: string) {
     new Event(type, data);
   }
 }
@@ -304,7 +335,7 @@ class Crypto {
   generateKeys() {
     return new Promise(async (resolve, reject) => {
       try {
-        resolve(await _crypto.subtle.generateKey({
+        resolve(await crypto.subtle.generateKey({
           name: 'ECDH', namedCurve: 'P-384'
         }, true, ['deriveKey']));
       } catch (e) {
@@ -327,7 +358,7 @@ class Crypto {
         }, PBKDF2: 'PBKDF2'
       };
       try {
-        const response = await _crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
+        const response = await crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
         resolve(response);
       } catch (e) {
         console.error(format, key, type, extractable, keyUsages);
@@ -349,7 +380,7 @@ class Crypto {
         }
       };
       try {
-        resolve(await _crypto.subtle.deriveKey({
+        resolve(await crypto.subtle.deriveKey({
           name: 'ECDH', public: publicKey
         }, privateKey, keyAlgorithms[type], extractable, keyUsages));
       } catch (e) {
@@ -368,8 +399,8 @@ class Crypto {
         const keyMaterial = await this.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
 
         // TODO - Support deriving from PBKDF2 in deriveKey function
-        const key = await _crypto.subtle.deriveKey({
-          'name': 'PBKDF2', // salt: _crypto.getRandomValues(new Uint8Array(16)),
+        const key = await crypto.subtle.deriveKey({
+          'name': 'PBKDF2', // salt: crypto.getRandomValues(new Uint8Array(16)),
           'salt': _salt, 'iterations': 100000, // small is fine, we want it snappy
           'hash': 'SHA-256'
         }, keyMaterial, {'name': 'AES-GCM', 'length': 256}, true, ['encrypt', 'decrypt']);
@@ -390,7 +421,7 @@ class Crypto {
         if (contents === null) {
           reject(new Error('no contents'));
         }
-        const iv = _iv === null ? _crypto.getRandomValues(new Uint8Array(12)) : _iv;
+        const iv = _iv === null ? crypto.getRandomValues(new Uint8Array(12)) : _iv;
         const algorithm = {
           name: 'AES-GCM', iv: iv
         };
@@ -403,7 +434,7 @@ class Crypto {
 
         let encrypted;
         try {
-          encrypted = await _crypto.subtle.encrypt(algorithm, key, data);
+          encrypted = await crypto.subtle.encrypt(algorithm, key, data);
         } catch (e) {
           reject(e);
         }
@@ -425,7 +456,7 @@ class Crypto {
       try {
         const ciphertext = typeof contents.content === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.content)) : contents.content;
         const iv = typeof contents.iv === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.iv)) : contents.iv;
-        const decrypted = await _crypto.subtle.decrypt({
+        const decrypted = await crypto.subtle.decrypt({
           name: 'AES-GCM', iv: iv
         }, secretKey, ciphertext);
         if (outputType === 'string') {
@@ -448,7 +479,7 @@ class Crypto {
         const encoded = encoder.encode(contents);
         let sign;
         try {
-          sign = await _crypto.subtle.sign('HMAC', secretKey, encoded);
+          sign = await crypto.subtle.sign('HMAC', secretKey, encoded);
           resolve(encodeURIComponent(arrayBufferToBase64(sign)));
         } catch (error) {
           reject(error);
@@ -469,7 +500,7 @@ class Crypto {
         const encoder = new TextEncoder();
         const encoded = encoder.encode(contents);
         try {
-          const verified = await _crypto.subtle.verify('HMAC', secretKey, _sign, encoded);
+          const verified = await crypto.subtle.verify('HMAC', secretKey, _sign, encoded);
           resolve(verified);
         } catch (e) {
           reject(e);
@@ -526,8 +557,8 @@ class Identity {
     return new Promise(async (resolve, reject) => {
       try {
         const keyPair = await SB_Crypto.generateKeys();
-        this.exportable_pubKey = await _crypto.subtle.exportKey('jwk', keyPair.publicKey);
-        this.exportable_privateKey = await _crypto.subtle.exportKey('jwk', keyPair.privateKey);
+        this.exportable_pubKey = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+        this.exportable_privateKey = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
         this.privateKey = keyPair.privateKey;
         resolve(true);
       } catch (e) {
@@ -933,7 +964,7 @@ class WS_Protocol { // eslint-disable-line no-unused-vars
     return new Promise(async (resolve, reject) => {
       try {
         if (this.currentWebSocket.readyState === 1) {
-          const hash = await _crypto.subtle
+          const hash = await crypto.subtle
             .digest('SHA-256', new TextEncoder().encode(message));
           const ackPayload = {
             timestamp: Date.now(), type: 'ack', _id: arrayBufferToBase64(hash)
@@ -1405,7 +1436,7 @@ class StorageApi {
     const keyMaterial = await SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
 
     // TODO - Support deriving from PBKDF2 in deriveKey function
-    const key = await _crypto.subtle.deriveKey({
+    const key = await crypto.subtle.deriveKey({
       'name': 'PBKDF2',
       'salt': _salt,
       'iterations': 100000, // small is fine, we want it snappy
@@ -1446,7 +1477,7 @@ class StorageApi {
           salt: encrypt_data.salt,
           image: data.content,
           storageToken: (new TextEncoder()).encode(storageToken),
-          vid: _crypto.getRandomValues(new Uint8Array(48))
+          vid: crypto.getRandomValues(new Uint8Array(48))
         })
       })
         .then((response) => {
@@ -1901,10 +1932,10 @@ class ChannelApi {
   lock() {
     return new Promise(async (resolve, reject) => {
       if (this.#channel.keys.locked_key == null && this.#channel.channel_admin) {
-        const _locked_key = await _crypto.subtle.generateKey({
+        const _locked_key = await crypto.subtle.generateKey({
           name: 'AES-GCM', length: 256
         }, true, ['encrypt', 'decrypt']);
-        const _exportable_locked_key = await _crypto.subtle.exportKey('jwk', _locked_key);
+        const _exportable_locked_key = await crypto.subtle.exportKey('jwk', _locked_key);
         fetch(this.#channelServer + this.#channel._id + '/lockRoom', {
           method: 'GET', credentials: 'include'
         })
@@ -2434,7 +2465,7 @@ class QueueItem {
       try {
         this.action = action;
         this.body = body;
-        this._id = arrayBufferToBase64(await _crypto.subtle
+        this._id = arrayBufferToBase64(await crypto.subtle
           .digest('SHA-256', new TextEncoder().encode(JSON.stringify(body))));
         resolve(this);
       } catch (e) {
@@ -2679,22 +2710,22 @@ class Snackabra {
   create(serverSecret) {
     return new Promise(async (resolve, reject) => {
       try {
-        const ownerKeyPair = await _crypto.subtle.generateKey({
+        const ownerKeyPair = await crypto.subtle.generateKey({
           name: 'ECDH',
           namedCurve: 'P-384'
         }, true, ['deriveKey']);
-        const exportable_privateKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
-        const exportable_pubKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
+        const exportable_privateKey = await crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
+        const exportable_pubKey = await crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
         const channelId = await this.#generateRoomId(exportable_pubKey.x, exportable_pubKey.y);
-        const encryptionKey = await _crypto.subtle.generateKey({
+        const encryptionKey = await crypto.subtle.generateKey({
           name: 'AES-GCM',
           length: 256
         }, true, ['encrypt', 'decrypt']);
-        const exportable_encryptionKey = await _crypto.subtle.exportKey('jwk', encryptionKey);
-        const signKeyPair = await _crypto.subtle.generateKey({
+        const exportable_encryptionKey = await crypto.subtle.exportKey('jwk', encryptionKey);
+        const signKeyPair = await crypto.subtle.generateKey({
           name: 'ECDH', namedCurve: 'P-384'
         }, true, ['deriveKey']);
-        const exportable_signKey = await _crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
+        const exportable_signKey = await crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
         const channelData = {
           roomId: channelId,
           ownerKey: JSON.stringify(exportable_pubKey),
@@ -2727,7 +2758,7 @@ class Snackabra {
         const xBytes = base64ToArrayBuffer(decodeB64Url(x));
         const yBytes = base64ToArrayBuffer(decodeB64Url(y));
         const channelBytes = _appendBuffer(xBytes, yBytes);
-        const channelBytesHash = await _crypto.subtle.digest('SHA-384', channelBytes);
+        const channelBytesHash = await crypto.subtle.digest('SHA-384', channelBytes);
         resolve(encodeB64Url(arrayBufferToBase64(channelBytesHash)));
       } catch (e) {
         reject(e);

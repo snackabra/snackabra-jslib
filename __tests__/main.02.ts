@@ -4,11 +4,8 @@
 
 /* PART 2 of rewrite of "main.js" */
 
-import {
-  base64ToArrayBuffer,
-  _sb_exception,
-  getRandomValues
-} from './main.01.ts'
+// @ts-ignore
+import { base64ToArrayBuffer, _sb_exception, getRandomValues } from './main.01.ts'
 
 interface Dictionary {
   [index: string]: any;
@@ -108,7 +105,7 @@ export function _sb_assert(val:any, msg:string) {
 
 // the publicKeyPEM paramater below needs to look like this
 // if not given, will use this default (MI/384 has private key)
-const defaultPublicKeyPEM = `-----BEGIN PUBLIC KEY-----
+export const defaultPublicKeyPEM = `-----BEGIN PUBLIC KEY-----
 MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtVedzwPq7OIl84xx9ruV
 TAkv+sUPUYeQJ3PtFOJkBSrMyGPErVxjXQQ6nvb+OevQ2t7EhimyQ3bnP7PdeAU2
 mWQX6V8LfhJj0ox8Envtw9DF7nEED5aLwnimTjox906j7itXO2xDdJCRuAfpar3u
