@@ -18,26 +18,12 @@ function SB_libraryVersion() {
  * SB simple events (mesage bus) class
  */
 export class MessageBus {
-  constructor(args) {
-    this.args = args;
-    this.bus = {};
-  }
-
-  /**
-   * For possible future use with cleaner identifiers
-   */
-  * #uniqueID() {
-    let i = 0;
-    while (true) {
-      i += 1;
-      yield i;
-    }
-  }
+  bus: Dictionary = {};
 
   /**
    * Safely returns handler for any event
    */
-  #select(event) {
+  #select(event: string) {
     return this.bus[event] || (this.bus[event] = []);
   }
 
@@ -45,28 +31,30 @@ export class MessageBus {
    * Subscribe. 'event' is a string, special case '*' means everything
    *  (in which case the handler is also given the message)
    */
-  subscribe(event, handler) {
+  subscribe(event: string, handler: () => void) {
     this.#select(event).push(handler);
   }
 
   /**
    * Unsubscribe
    */
-  unsubscribe(event, handler) {
+  unsubscribe(event: string, handler: Function) {
     let i = -1;
     if (this.bus[event]) {
-      if ((i = this.bus[event].findLastIndex((e) => e == handler)) != -1) {
+      if ((i = this.bus[event].findLastIndex((e: any) => e == handler)) != -1) {
         this.bus[event].splice(i, 1);
+      } else {
+        console.info(`fyi: asked to remove a handler but it's not there`);
       }
     } else {
-      console.info(`fyi: asked to remove a handler but it's not there`);
+      console.info(`fyi: asked to remove a handler but the event is not there`);
     }
   }
 
   /**
    * Publish
    */
-  publish(event, ...args) {
+  publish(event: string, ...args: any[]) {
     for (const handler of this.#select('*')) {
       handler(event, ...args);
     }
@@ -76,10 +64,26 @@ export class MessageBus {
   }
 }
 
+/*
+  For possible future use with cleaner identifiers:
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+  * #uniqueID() {
+    let i = 0;
+    while (true) {
+      i += 1;
+      yield i;
+    }
+  }
+*/
+
+/* where do we use sleep()?  we should probably use setInterval() instead */
+
+// /*
+//   Sleep for ms milliseconds
+//   */
+// export function sleep(ms: number) {
+//   return new Promise((resolve) => setTimeout(resolve, ms));
+// }
 
 /**
  * @fileoverview Main file for snackabra javascript utilities.
@@ -109,7 +113,7 @@ function sleep(ms) {
 // }
 // throw new RethrownError(`Oh no a "${error.message}" error`, error)
 
-function _sb_exception(loc, msg) {
+export function _sb_exception(loc: string, msg: string) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
   // for now disabling this to keep node testing less noisy
   // console.error(m);
@@ -119,104 +123,22 @@ function _sb_exception(loc, msg) {
 // internal - general handling of paramaters that might be promises
 // (basically the "anti" of resolve, if it's *not* a promise then
 // it becomes one
-function _sb_resolve(val) {
+export function _sb_resolve(val: any) {
   if (val.then) {
     // it's already a promise
+    // console.log('it is a promise')
     return val;
   } else {
+    // console.log('it was not a promise')
     return new Promise((resolve) => resolve(val));
   }
 }
 
 // internal - handle assertions
-function _sb_assert(val, msg) {
+export function _sb_assert(val: any, msg: string) {
   if (!(val)) {
     const m = `<< SB assertion error: ${msg} >>`;
     throw new Error(m);
-  }
-}
-
-
-// Parts of this code is based on 'base64.ts':
-// raw.githubusercontent.com/dankogai/js-base64/main/base64.mjs which
-// was distributed under BSD 3-Clause; we believe our use of the code
-// here under GPL v3 is compatible with that license.
-
-const _fromCC = String.fromCharCode.bind(String);
-
-// ****************************************************************
-// implement SB flavor of 'btoa'
-// ****************************************************************
-
-const _U8Afrom = (it, fn = (x) => x) => new Uint8Array(Array.prototype.slice.call(it, 0).map(fn));
-
-/**
- * Standardized 'btoa()'-like function, e.g., takes a binary string
- * ('b') and returns a Base64 encoded version ('a' used to be short
- * for 'ascii').
- *
- * @param {buffer} Uint8Array buffer
- * @return {string} base64 string
- */
-function arrayBufferToBase64(buffer) {
-  const u8a = new Uint8Array(buffer);
-  // we could use window.btoa but chose not to
-  let u32, c0, c1, c2, asc = '';
-  const maxargs = 0x1000;
-  const strs = [];
-  for (let i = 0, l = u8a.length; i < l; i += maxargs) strs.push(_fromCC.apply(null, u8a.subarray(i, i + maxargs)));
-  const bin = strs.join('');
-  const pad = bin.length % 3;
-  for (let i = 0; i < bin.length;) {
-    if ((c0 = bin.charCodeAt(i++)) > 255 || (c1 = bin.charCodeAt(i++)) > 255 || (c2 = bin.charCodeAt(i++)) > 255) throw new Error('Invalid Character');
-    u32 = (c0 << 16) | (c1 << 8) | c2;
-    asc += b64chs[u32 >> 18 & 63] + b64chs[u32 >> 12 & 63] + b64chs[u32 >> 6 & 63] + b64chs[u32 & 63];
-  }
-  return pad ? asc.slice(0, pad - 3) + '==='.substring(pad) : asc;
-}
-
-// ****************************************************************
-// implement SB flavor of 'atob'
-// ****************************************************************
-
-const b64ch = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-const b64chs = Array.prototype.slice.call(b64ch);
-const b64tab = ((a) => {
-  const tab = {};
-  a.forEach((c, i) => tab[c] = i);
-  return tab;
-})(b64chs);
-
-/**
- * Standardized 'atob()' function, e.g. takes the a Base64 encoded
- * input and decodes it. Note: always returns Uint8Array.
- *
- * @param {string} base64 string
- * @return {Uint8Array} returns decoded result
- */
-function base64ToArrayBuffer(asc) {
-  asc = asc.replace(/\s+/g, ''); // collapse any whitespace
-  asc += '=='.slice(2 - (asc.length & 3)); // make it tolerant of padding
-  if (!_assertBase64(asc)) throw new Error('Invalid Character');
-
-  // we could use window.atob but chose not to
-  let u24, bin = '', r1, r2;
-  for (let i = 0; i < asc.length;) {
-    u24 = b64tab[asc.charAt(i++)] << 18 | b64tab[asc.charAt(i++)] << 12 | (r1 = b64tab[asc.charAt(i++)]) << 6 | (r2 = b64tab[asc.charAt(i++)]);
-    bin += r1 === 64 ? _fromCC(u24 >> 16 & 255) : r2 === 64 ? _fromCC(u24 >> 16 & 255, u24 >> 8 & 255) : _fromCC(u24 >> 16 & 255, u24 >> 8 & 255, u24 & 255);
-  }
-  return str2ab(bin);
-}
-
-function _appendBuffer(buffer1, buffer2) {
-  try {
-    const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
-    tmp.set(new Uint8Array(buffer1), 0);
-    tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
-    return tmp.buffer;
-  } catch (e) {
-    console.error(e);
-    return {};
   }
 }
 
@@ -235,29 +157,20 @@ _ws = WebSocket;
 /**
  * Fills buffer with random data
  */
-function getRandomValues(buffer) {
+export function getRandomValues(buffer: Uint8Array) {
   return _crypto.getRandomValues(buffer);
 }
 
-/**
- * Returns 'true' if (and only if) object is of type 'Uint8Array'.
- * Works same on browsers and nodejs.
- */
-function _assertUint8Array(obj) {
-  if (typeof obj === 'object') if (Object.prototype.toString.call(obj) === '[object Uint8Array]') return true;
-  return false;
-}
-
-const b64_regex = new RegExp('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$');
+// Strict b64 check:
+// const b64_regex = new RegExp('^(?:[A-Za-z0-9+/_\-]{4})*(?:[A-Za-z0-9+/_\-]{2}==|[A-Za-z0-9+/_\-]{3}=)?$')
+// But we will go (very) lenient:
+const b64_regex = /^([A-Za-z0-9+/_\-=]*)$/;
 
 /**
  * Returns 'true' if (and only if) string is well-formed base64.
  * Works same on browsers and nodejs.
  */
-function _assertBase64(base64) {
-  /* webpack 4 doesn't support optional chaining, requires webpack 5;
-     since wp 5 is pretty recent (2020-10-10), we'll avoid using
-     optional chaining in this library for a while */
+function _assertBase64(base64: string) {
   // return (b64_regex.exec(base64)?.[0] === base64);
   const z = b64_regex.exec(base64);
   if (z) return (z[0] === base64); else return false;
@@ -270,24 +183,239 @@ function _assertBase64(base64) {
  * @param {string} string
  * @return {Uint8Array} buffer
  */
-function str2ab(string) {
-  const length = string.length;
-  const buffer = new Uint8Array(length);
-  for (let i = 0; i < length; i++) buffer[i] = string.charCodeAt(i);
-  return buffer;
+export function str2ab(string: string) {
+  return new TextEncoder().encode(string);
 }
 
 /**
  * Standardized 'ab2str()' function, array buffer to string.
  * This assumes one byte per character.
  *
- * @param {string} string
- * @return {Uint8Array} buffer
+ * @return {Uint8Array} Uint8Array
  *
+ * @param buffer
  */
-function ab2str(buffer) {
-  if (!_assertUint8Array(buffer)) _sb_exception('ab2str()', 'parameter is not a Uint8Array buffer'); // this will throw
-  return String.fromCharCode.apply(null, new Uint8Array(buffer));
+export function ab2str(buffer: Uint8Array) {
+  return new TextDecoder('utf-8').decode(buffer);
+}
+
+
+/**
+ * From:
+ * https://github.com/qwtel/base64-encoding/blob/master/base64-js.ts
+ */
+const b64lookup: string[] = [];
+const urlLookup: string[] = [];
+const revLookup: number[] = [];
+const CODE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+const CODE_B64 = CODE + '+/';
+const CODE_URL = CODE + '-_';
+const PAD = '=';
+const MAX_CHUNK_LENGTH = 16383; // must be multiple of 3
+for (let i = 0, len = CODE_B64.length; i < len; ++i) {
+  b64lookup[i] = CODE_B64[i];
+  urlLookup[i] = CODE_URL[i];
+  revLookup[CODE_B64.charCodeAt(i)] = i;
+}
+revLookup['-'.charCodeAt(0)] = 62;
+revLookup['_'.charCodeAt(0)] = 63;
+
+function getLens(b64: string) {
+  const len = b64.length;
+  let validLen = b64.indexOf(PAD);
+  if (validLen === -1) validLen = len;
+  const placeHoldersLen = validLen === len ? 0 : 4 - (validLen % 4);
+  return [validLen, placeHoldersLen];
+}
+
+function _byteLength(validLen: number, placeHoldersLen: number) {
+  return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen;
+}
+
+/**
+ * Standardized 'atob()' function, e.g. takes the a Base64 encoded
+ * input and decodes it. Note: always returns Uint8Array.
+ * Accepts both regular Base64 and the URL-friendly variant,
+ * where `+` => `-`, `/` => `_`, and the padding character is omitted.
+ *
+ * @param {str} base64 string in either regular or URL-friendly representation.
+ * @return {Uint8Array} returns decoded binary result
+ */
+export function base64ToArrayBuffer(str: string): Uint8Array {
+  if (!_assertBase64(str)) throw new Error('invalid character');
+  let tmp: number;
+  switch (str.length % 4) {
+    case 2:
+      str += '==';
+      break;
+    case 3:
+      str += '=';
+      break;
+  }
+  const [validLen, placeHoldersLen] = getLens(str);
+  const arr = new Uint8Array(_byteLength(validLen, placeHoldersLen));
+  let curByte = 0;
+  const len = placeHoldersLen > 0 ? validLen - 4 : validLen;
+  let i: number;
+  for (i = 0; i < len; i += 4) {
+    const r0: number = revLookup[str.charCodeAt(i)];
+    const r1: number = revLookup[str.charCodeAt(i + 1)];
+    const r2: number = revLookup[str.charCodeAt(i + 2)];
+    const r3: number = revLookup[str.charCodeAt(i + 3)];
+    tmp = (r0 << 18) | (r1 << 12) | (r2 << 6) | (r3);
+    arr[curByte++] = (tmp >> 16) & 0xff;
+    arr[curByte++] = (tmp >> 8) & 0xff;
+    arr[curByte++] = (tmp) & 0xff;
+  }
+  if (placeHoldersLen === 2) {
+    const r0 = revLookup[str.charCodeAt(i)];
+    const r1 = revLookup[str.charCodeAt(i + 1)];
+    tmp = (r0 << 2) | (r1 >> 4);
+    arr[curByte++] = tmp & 0xff;
+  }
+  if (placeHoldersLen === 1) {
+    const r0 = revLookup[str.charCodeAt(i)];
+    const r1 = revLookup[str.charCodeAt(i + 1)];
+    const r2 = revLookup[str.charCodeAt(i + 2)];
+    tmp = (r0 << 10) | (r1 << 4) | (r2 >> 2);
+    arr[curByte++] = (tmp >> 8) & 0xff;
+    arr[curByte++] = tmp & 0xff;
+  }
+  return arr;
+}
+
+function tripletToBase64(lookup: string[], num: number) {
+  return (
+    lookup[num >> 18 & 0x3f] +
+    lookup[num >> 12 & 0x3f] +
+    lookup[num >> 6 & 0x3f] +
+    lookup[num & 0x3f]
+  );
+}
+
+function encodeChunk(lookup: string[], view: DataView, start: number, end: number) {
+  let tmp: number;
+  const output = new Array((end - start) / 3);
+  for (let i = start, j = 0; i < end; i += 3, j++) {
+    tmp =
+      ((view.getUint8(i) << 16) & 0xff0000) +
+      ((view.getUint8(i + 1) << 8) & 0x00ff00) +
+      (view.getUint8(i + 2) & 0x0000ff);
+    output[j] = tripletToBase64(lookup, tmp);
+  }
+  return output.join('');
+}
+
+
+// /* ALTERNATIVE solution below, just needs some typescripting */
+//
+// const b64ch = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
+// const b64chs = Array.prototype.slice.call(b64ch);
+// const b64tab = ((a) => {
+//   const tab = {};
+//   a.forEach((c, i) => tab[c] = i);
+//   return tab;
+// })(b64chs);
+//
+// function base64ToArrayBuffer(asc) {
+//   asc = asc.replace(/\s+/g, ''); // collapse any whitespace
+//   asc += '=='.slice(2 - (asc.length & 3)); // make it tolerant of padding
+//   if (!_assertBase64(asc)) throw new Error('Invalid Character');
+//   if (process.browser) {
+//     // we could use window.atob but chose not to
+//     let u24, bin = '', r1, r2;
+//     for (let i = 0; i < asc.length;) {
+//       u24 = b64tab[asc.charAt(i++)] << 18 | b64tab[asc.charAt(i++)] << 12 | (r1 = b64tab[asc.charAt(i++)]) << 6 | (r2 = b64tab[asc.charAt(i++)]);
+//       bin += r1 === 64 ? _fromCC(u24 >> 16 & 255) : r2 === 64 ? _fromCC(u24 >> 16 & 255, u24 >> 8 & 255) : _fromCC(u24 >> 16 & 255, u24 >> 8 & 255, u24 & 255);
+//     }
+//     return str2ab(bin);
+//   } else {
+//     return _U8Afrom(Buffer.from(asc, 'base64'));
+//   }
+// }
+
+
+// const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
+//   ? new DataView(bs)
+//   : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
+
+/**
+ * Standardized 'btoa()'-like function, e.g., takes a binary string
+ * ('b') and returns a Base64 encoded version ('a' used to be short
+ * for 'ascii').
+ *
+ * @param {bufferSource} Uint8Array buffer
+ * @return {string} base64 string
+ */
+export function arrayBufferToBase64(buffer: Uint8Array): string {
+  // const view = bs2dv(bufferSource)
+  const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  const len = view.byteLength;
+  const extraBytes = len % 3; // if we have 1 byte left, pad 2 bytes
+  const len2 = len - extraBytes;
+  const parts = new Array(
+    Math.floor(len2 / MAX_CHUNK_LENGTH) + Math.sign(extraBytes)
+  );
+  const lookup = urlLookup;
+  const pad = '';
+  let j = 0;
+  for (let i = 0; i < len2; i += MAX_CHUNK_LENGTH) {
+    parts[j++] = encodeChunk(
+      lookup,
+      view,
+      i,
+      (i + MAX_CHUNK_LENGTH) > len2 ? len2 : (i + MAX_CHUNK_LENGTH),
+    );
+  }
+  if (extraBytes === 1) {
+    const tmp = view.getUint8(len - 1);
+    parts[j] = (
+      lookup[tmp >> 2] +
+      lookup[(tmp << 4) & 0x3f] +
+      pad + pad
+    );
+  } else if (extraBytes === 2) {
+    const tmp = (view.getUint8(len - 2) << 8) + view.getUint8(len - 1);
+    parts[j] = (
+      lookup[tmp >> 10] +
+      lookup[(tmp >> 4) & 0x3f] +
+      lookup[(tmp << 2) & 0x3f] +
+      pad
+    );
+  }
+  return parts.join('');
+}
+
+// /* ALTERNATIVE implementation to above (not yet typescripted) */
+// const _fromCC = String.fromCharCode.bind(String);
+// const _U8Afrom = (it, fn = (x) => x) => new Uint8Array(Array.prototype.slice.call(it, 0).map(fn));
+// function arrayBufferToBase64(buffer) {
+//   const u8a = new Uint8Array(buffer);
+//   if (process.browser) {
+//     // we could use window.btoa but chose not to
+//     let u32, c0, c1, c2, asc = '';
+//     const maxargs = 0x1000;
+//     const strs = [];
+//     for (let i = 0, l = u8a.length; i < l; i += maxargs) strs.push(_fromCC.apply(null, u8a.subarray(i, i + maxargs)));
+//     const bin = strs.join('');
+//     const pad = bin.length % 3;
+//     for (let i = 0; i < bin.length;) {
+//       if ((c0 = bin.charCodeAt(i++)) > 255 || (c1 = bin.charCodeAt(i++)) > 255 || (c2 = bin.charCodeAt(i++)) > 255) throw new Error('Invalid Character');
+//       u32 = (c0 << 16) | (c1 << 8) | c2;
+//       asc += b64chs[u32 >> 18 & 63] + b64chs[u32 >> 12 & 63] + b64chs[u32 >> 6 & 63] + b64chs[u32 & 63];
+//     }
+//     return pad ? asc.slice(0, pad - 3) + '==='.substring(pad) : asc;
+//   } else {
+//     // nodejs, so has Buffer, just use that
+//     return Buffer.from(u8a).toString('base64');
+//   }
+// }
+
+export function _appendBuffer(buffer1: Uint8Array, buffer2: Uint8Array): ArrayBufferLike {
+  const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
+  tmp.set(new Uint8Array(buffer1), 0);
+  tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
+  return tmp.buffer;
 }
 
 /* ****************************************************************
@@ -300,8 +428,9 @@ export function verifyCookie(request, env) {
 }
 */
 
-// the publicKeyPEM paramater below needs to look like this:
-const defaultPublicKeyPEM = `-----BEGIN PUBLIC KEY-----
+// the publicKeyPEM paramater below needs to look like this
+// if not given, will use this default (MI/384 has private key)
+const defaultPublicKeyPEM: string = `-----BEGIN PUBLIC KEY-----
 MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtVedzwPq7OIl84xx9ruV
 TAkv+sUPUYeQJ3PtFOJkBSrMyGPErVxjXQQ6nvb+OevQ2t7EhimyQ3bnP7PdeAU2
 mWQX6V8LfhJj0ox8Envtw9DF7nEED5aLwnimTjox906j7itXO2xDdJCRuAfpar3u
@@ -326,8 +455,8 @@ OTJj8TMRI6y3Omop3kIfpgUCAwEAAQ==
  * @return {cryptoKey} RSA-OAEP key
  *
  */
-function importPublicKey(pem) {
-  if (!pem) pem = defaultPublicKeyPEM;
+export function importPublicKey(pem?: string) {
+  if (typeof pem == 'undefined') pem = defaultPublicKeyPEM
   // fetch the part of the PEM string between header and footer
   const pemHeader = '-----BEGIN PUBLIC KEY-----';
   const pemFooter = '-----END PUBLIC KEY-----';
@@ -336,8 +465,9 @@ function importPublicKey(pem) {
   if ((start < 0) || (end < 0)) _sb_exception('importPublicKey()', 'fail to find BEGIN and/or END string in RSA (PEM) key');
   const pemContents = pem.slice(start + pemHeader.length, end);
   // const pemContents = pem.substring(pemHeader.length, pem.length - pemFooter.length);
+  // console.log(pemContents)
   const binaryDer = base64ToArrayBuffer(pemContents);
-  return _crypto.subtle.importKey('spki', binaryDer, {name: 'RSA-OAEP', hash: 'SHA-256'}, true, ['encrypt']);
+  return crypto.subtle.importKey('spki', binaryDer, {name: 'RSA-OAEP', hash: 'SHA-256'}, true, ['encrypt']);
 }
 
 /**
@@ -347,9 +477,8 @@ function importPublicKey(pem) {
  *
  */
 export function simpleRand256() {
-  return _crypto.getRandomValues(new Uint8Array(1))[0];
+  return crypto.getRandomValues(new Uint8Array(1))[0];
 }
-
 
 const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
 
@@ -362,15 +491,16 @@ const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
  *
  * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
  */
-export function simpleRandomString(n, code) {
+export function simpleRandomString(n: number, code: string): string {
   if (code == 'base32mi') {
     // yeah of course we need to add base64 etc
-    const z = _crypto.getRandomValues(new Uint8Array(n));
-    let r = '';
-    for (let i = 0; i < n; i++) r += base32mi[z[i] & 31];
-    return r;
+    const z = crypto.getRandomValues(new Uint8Array(n))
+    let r = ''
+    for (let i = 0; i < n; i++) r += base32mi[z[i] & 31]
+    return r
   }
-  _sb_exception('simpleRandomString', 'code ' + code + ' not supported');
+  _sb_exception('simpleRandomString', 'code ' + code + ' not supported')
+  return ''
 }
 
 /**
@@ -406,7 +536,7 @@ export function simpleRandomString(n, code) {
  *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
  *
  */
-export function cleanBase32mi(s) {
+export function cleanBase32mi(s: string) {
   // this of course is not the most efficient
   return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
 }
@@ -609,7 +739,7 @@ function encodeB64Url(input) {
 /**
  * Decode b64 URL
  */
-function decodeB64Url(input) {
+function decodeB64Url(input: string) {
   input = input.replaceAll('-', '+').replaceAll('_', '/');
 
   // Pad out with standard base64 required padding characters
@@ -2178,7 +2308,7 @@ class ChannelApi {
     });
   }
 
-  uploadChannel(channelData) {
+  uploadChannel(channelData: ChannelData) {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/uploadRoom', {
         method: 'POST', body: channelData, headers: {
@@ -2199,8 +2329,8 @@ class ChannelApi {
     });
   }
 
-  authorize(ownerPublicKey, serverSecret) {
-    return new Promise(async (resolve, reject) => {
+  authorize(ownerPublicKey: Dictionary, serverSecret: string) {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/authorizeRoom', {
         method: 'POST', body: {roomId: this.#channel._id, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey}
       })
@@ -2218,7 +2348,7 @@ class ChannelApi {
     });
   }
 
-  postPubKey(_exportable_pubKey) {
+  postPubKey(_exportable_pubKey: Dictionary) {
     return new Promise(async (resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/postPubKey?type=guestKey', {
         method: 'POST',
@@ -2241,8 +2371,8 @@ class ChannelApi {
     });
   }
 
-  storageRequest(byteLength) {
-    return new Promise(async (resolve, reject) => {
+  storageRequest(byteLength: number) {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/storageRequest?size=' + byteLength, {
         method: 'GET', credentials: 'include', headers: {
           'Content-Type': 'application/json'
@@ -2265,10 +2395,10 @@ class ChannelApi {
   lock() {
     return new Promise(async (resolve, reject) => {
       if (this.#channel.keys.locked_key == null && this.#channel.channel_admin) {
-        const _locked_key = await _crypto.subtle.generateKey({
+        const _locked_key: CryptoKey = await _crypto.subtle.generateKey({
           name: 'AES-GCM', length: 256
         }, true, ['encrypt', 'decrypt']);
-        const _exportable_locked_key = await _crypto.subtle.exportKey('jwk', _locked_key);
+        const _exportable_locked_key: CryptoKey = await _crypto.subtle.exportKey('jwk', _locked_key);
         fetch(this.#channelServer + this.#channel._id + '/lockRoom', {
           method: 'GET', credentials: 'include'
         })
@@ -2290,10 +2420,10 @@ class ChannelApi {
     });
   }
 
-  acceptVisitor(pubKey) {
+  acceptVisitor(pubKey: Dictionary) {
     return new Promise(async (resolve, reject) => {
-      const shared_key = await SB_Crypto.deriveKey(this.#identity.keys.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
-      const _encrypted_locked_key = await SB_Crypto.encrypt(JSON.stringify(this.#channel.keys.exportable_locked_key), shared_key, 'string');
+      const shared_key: CryptoKey = await SB_Crypto.deriveKey(this.#identity.keys.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
+      const _encrypted_locked_key: Dictionary = await SB_Crypto.encrypt(JSON.stringify(this.#channel.keys.exportable_locked_key), shared_key, 'string');
       fetch(this.#channelServer + this.#channel._id + '/acceptVisitor', {
         method: 'POST',
         body: JSON.stringify({pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key)}),
@@ -2336,7 +2466,8 @@ class ChannelApi {
       });
     });
   }
-
+  /*
+  matt: These methods have no implementation in the current webclient so I have skipped them for the time being
   // unused
   notifications() {
 
@@ -2357,6 +2488,8 @@ class ChannelApi {
   registerDevice() {
 
   }
+
+   */
 }
 
 /**
@@ -2366,7 +2499,7 @@ class ChannelApi {
  * @public
  */
 class KV {
-  db;
+  db: IndexedKV | FileSystemDB;
   events = new EventEmitter();
 
   constructor(options) {
@@ -2380,25 +2513,25 @@ class KV {
     // }
   }
 
-  openCursor(match, callback) {
+  openCursor(match: string, callback: FunctionConstructor) {
     return this.db.openCursor(match, callback);
   }
 
   // Set item will insert or replace
-  setItem(key, value) {
+  setItem(key: string, value:StorableDataType) {
     return this.db.setItem(key, value);
   }
 
   //Add item but not replace
-  add(key, value) {
+  add(key: string, value: StorableDataType) {
     return this.db.add(key, value);
   }
 
-  getItem(key) {
+  getItem(key: string) {
     return this.db.getItem(key);
   }
 
-  removeItem(key) {
+  removeItem(key: string) {
     return this.db.removeItem(key);
   }
 }
@@ -2411,8 +2544,8 @@ class KV {
  * @public
  */
 class FileSystemDB {
-  path;
-  options = {
+  path: string;
+  options: FileSystemDBOptions = {
     db: 'MyDB', table: 'default', onReady: null
   };
 
@@ -2421,7 +2554,7 @@ class FileSystemDB {
     this.#useDatabase();
   }
 
-  openCursor = (match, callback) => {
+  openCursor = (match: string, callback: FunctionConstructor) => {
     return new Promise((resolve, reject) => {
       try {
         _fs.readdir(this.path, (err, files) => {
@@ -2450,10 +2583,10 @@ class FileSystemDB {
     }
   };
 
-  #serialize(value: StorableDataType): string {
+  #serialize(value: StorableDataType) {
     return new Promise(async (resolve, reject) => {
       try {
-        const storable = {
+        const storable: Dictionary = {
           dataType: typeof value
         };
         switch (storable.dataType) {
@@ -2471,7 +2604,7 @@ class FileSystemDB {
     });
   }
 
-  #serializeConstructor(value, constructor) {
+  #serializeConstructor(value: ArrayBufferLike | object | Array<unknown> | Blob, constructor) {
     return new Promise(async (resolve, reject) => {
       try {
         let data;
@@ -2495,7 +2628,7 @@ class FileSystemDB {
   #unserialize(value: StorableDataType) {
     return new Promise(async (resolve, reject) => {
       try {
-        const readable = jsonParseWrapper(value, 'L2478');
+        const readable: Dictionary = jsonParseWrapper(value, 'L2478');
         switch (readable.dataType) {
           case 'string' || 'number' || 'bigint' || 'boolean' || 'symbol':
             break;
@@ -2512,7 +2645,7 @@ class FileSystemDB {
   #unserializeConstructor(value: object, constructor: string) {
     return new Promise(async (resolve, reject) => {
       try {
-        let data;
+        let data: Uint8Array;
         switch (constructor) {
           case 'ArrayBuffer' || 'TypedArray' || 'DataView' || 'Blob':
             data = base64ToArrayBuffer(value);
@@ -2535,7 +2668,7 @@ class FileSystemDB {
   }
 
   // Set item will insert or replace
-  setItem = (key, value) => {
+  setItem = (key: string, value: StorableDataType) => {
     return new Promise(async (resolve, reject) => {
       try {
         const data = await this.#serialize(value);
@@ -2550,7 +2683,7 @@ class FileSystemDB {
   add = (key: string, value: string) => {
     return new Promise(async (resolve, reject) => {
       try {
-        const data = await this.#serialize(value);
+        const data: string = await this.#serialize(value);
         _fs.writeFileSync(this.path + _path.sep + this.#serializeKey(key), data, 'wx');
         resolve(true);
       } catch (e) {
@@ -2565,7 +2698,7 @@ class FileSystemDB {
       try {
         const file = this.path + _path.sep + this.#serializeKey(key);
         if (_fs.existsSync(file)) {
-          const data = _fs.readFileSync(file);
+          const data: string = _fs.readFileSync(file);
           resolve(this.#unserialize(data));
         } else {
           resolve(null);
@@ -2598,8 +2731,7 @@ class FileSystemDB {
  * @public
  */
 class IndexedKV {
-  indexedDB;
-  db;
+  db: IDBDatabase;
   events = new MessageBus();
   options: IndexedKVOptions = {
     db: 'MyDB', table: 'default', onReady: null
@@ -2619,25 +2751,25 @@ class IndexedKV {
       console.error('Your browser doesn\'t support a stable version of IndexedDB.');
       return;
     }
-    this.indexedDB = window.indexedDB;
+    const indexedDB = window.indexedDB;
     // }
 
-    const openReq = this.indexedDB.open(this.options.db);
+    const openReq: IDBOpenDBRequestEventMap = indexedDB.open(this.options.db);
 
-    openReq.onerror = (event: Event) => {
+    openReq.onerror = (event: IDBVersionChangeEvent) => {
       console.error(event);
     };
 
-    openReq.onsuccess = (event: Event) => {
+    openReq.onsuccess = (event: IDBVersionChangeEvent) => {
       this.db = event.target.result;
       this.events.publish('ready');
     };
 
-    this.indexedDB.onerror = (event: Event) => {
+    indexedDB.onerror = (event: Event) => {
       console.error('Database error: ' + event.target.errorCode);
     };
 
-    openReq.onupgradeneeded = (event:IDBVersionChangeEvent) => {
+    openReq.onupgradeneeded = (event: IDBVersionChangeEvent) => {
       this.db = event.target.result;
       this.db.createObjectStore(this.options.table, {keyPath: 'key'});
       this.#useDatabase();
@@ -2647,12 +2779,11 @@ class IndexedKV {
 
   openCursor(match: string, callback: function) {
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.options.table], 'readonly');
-      const objectStore = transaction.objectStore(this.options.table);
-      const request = objectStore.openCursor(null, 'next');
-      request.onsuccess = function(event: Event) {
+      const objectStore: IDBObjectStore = this.db.transaction([this.options.table], 'readonly').objectStore(this.options.table);
+      const request: IDBRequest = objectStore.openCursor(null, 'next');
+      request.onsuccess = (event: Event) => {
         resolve(event.target.result);
-        const cursor = event.target.result;
+        const cursor: IDBCursorWithValue = event.target.result;
         if (cursor) {
           const regex = new RegExp(`^${match}`);
           if (cursor.key.match(regex)) {
@@ -2663,7 +2794,7 @@ class IndexedKV {
           resolve(true);
         }
       };
-      request.onerror = function(event) {
+      request.onerror = (event: Event) =>{
         reject(event);
       };
     });
@@ -2679,9 +2810,9 @@ class IndexedKV {
   // Set item will insert or replace
   setItem(key: string, value: StorableDataType) {
     return new Promise((resolve, reject) => {
-      const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
-      const request = objectStore.get(key);
-      request.onerror = (event) => {
+      const objectStore: IDBObjectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
+      const request: IDBRequest = objectStore.get(key);
+      request.onerror = (event: Event) => {
         reject(event);
       };
       request.onsuccess = (event: Event) => {
@@ -2689,7 +2820,7 @@ class IndexedKV {
 
         if (data?.value) {
           data.value = value;
-          const requestUpdate = objectStore.put(data);
+          const requestUpdate: IDBRequest = objectStore.put(data);
           requestUpdate.onerror = (event: Event) => {
             reject(event);
           };
@@ -2698,7 +2829,7 @@ class IndexedKV {
             resolve(data.value);
           };
         } else {
-          const requestAdd = objectStore.add({key: key, value: value});
+          const requestAdd: IDBRequest = objectStore.add({key: key, value: value});
           requestAdd.onsuccess = (event: Event) => {
             resolve(event.target.result);
           };
@@ -2712,10 +2843,10 @@ class IndexedKV {
   }
 
   //Add item but not replace
-  add(key: string, value: any) {
+  add(key: string, value: StorableDataType) {
     return new Promise((resolve, reject) => {
-      const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
-      const request = objectStore.get(key);
+      const objectStore: IDBObjectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
+      const request: IDBRequest = objectStore.get(key);
       request.onerror = (event) => {
         reject(event);
       };
@@ -2725,7 +2856,7 @@ class IndexedKV {
         if (data?.value) {
           resolve(data.value);
         } else {
-          const requestAdd = objectStore.add({key: key, value: value});
+          const requestAdd: IDBRequest = objectStore.add({key: key, value: value});
           requestAdd.onsuccess = (event) => {
             resolve(event.target.result);
           };
@@ -2740,9 +2871,8 @@ class IndexedKV {
 
   getItem(key: string) {
     return new Promise((resolve, reject) => {
-      const transaction = this.db.transaction([this.options.table]);
-      const objectStore = transaction.objectStore(this.options.table);
-      const request = objectStore.get(key);
+      const objectStore: IDBObjectStore = this.db.transaction([this.options.table]).objectStore(this.options.table);
+      const request: IDBRequest = objectStore.get(key);
 
       request.onerror = (event: Event) => {
         reject(event);
@@ -2761,7 +2891,7 @@ class IndexedKV {
 
   removeItem(key: string) {
     return new Promise((resolve, reject) => {
-      const request = this.db.transaction([this.options.table], 'readwrite')
+      const request: IDBRequest = this.db.transaction([this.options.table], 'readwrite')
         .objectStore(this.options.table)
         .delete(key);
       request.onsuccess = () => {
@@ -3028,7 +3158,7 @@ class Snackabra {
           reject(new Error('setIdentity must be called before connecting'));
         }
         _sb_resolve(channel_id).then((channel_id: string) => {
-          const c = new Channel(_self.options.channel_server, _self.options.channel_ws, _self.#identity, channel_id);
+          const c: Promise<Channel> = new Channel(_self.options.channel_server, _self.options.channel_ws, _self.#identity, channel_id);
           c.then((c) => {
             _self.#channel = c;
             _self.#storage = new StorageApi(_self.options.storage_server, _self.#channel, _self.#identity);
@@ -3046,34 +3176,34 @@ class Snackabra {
    * Returns the :term:`Channel Name`.
    * (TODO: token-based approval of storage spend)
    */
-  create(serverSecret) {
+  create(serverSecret: string) {
     return new Promise(async (resolve, reject) => {
       try {
-        const ownerKeyPair = await _crypto.subtle.generateKey({
+        const ownerKeyPair: CryptoKey = await _crypto.subtle.generateKey({
           name: 'ECDH',
           namedCurve: 'P-384'
         }, true, ['deriveKey']);
-        const exportable_privateKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
-        const exportable_pubKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
-        const channelId = await this.#generateRoomId(exportable_pubKey.x, exportable_pubKey.y);
-        const encryptionKey = await _crypto.subtle.generateKey({
+        const exportable_privateKey: CryptoKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
+        const exportable_pubKey: CryptoKey = await _crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
+        const channelId: string = await this.#generateRoomId(exportable_pubKey.x, exportable_pubKey.y);
+        const encryptionKey: CryptoKey = await _crypto.subtle.generateKey({
           name: 'AES-GCM',
           length: 256
         }, true, ['encrypt', 'decrypt']);
-        const exportable_encryptionKey = await _crypto.subtle.exportKey('jwk', encryptionKey);
-        const signKeyPair = await _crypto.subtle.generateKey({
+        const exportable_encryptionKey: CryptoKey = await _crypto.subtle.exportKey('jwk', encryptionKey);
+        const signKeyPair: CryptoKey = await _crypto.subtle.generateKey({
           name: 'ECDH', namedCurve: 'P-384'
         }, true, ['deriveKey']);
-        const exportable_signKey = await _crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
-        const channelData = {
+        const exportable_signKey: CryptoKey = await _crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
+        const channelData: ChannelData = {
           roomId: channelId,
           ownerKey: JSON.stringify(exportable_pubKey),
           encryptionKey: JSON.stringify(exportable_encryptionKey),
           signKey: JSON.stringify(exportable_signKey),
           SERVER_SECRET: serverSecret
         };
-        const data = new TextEncoder().encode(JSON.stringify(channelData));
-        let resp = await fetch(this.options.channel_server + '/api/room/' + channelId + '/uploadRoom', {
+        const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
+        let resp: Promise | Dictionary = await fetch(this.options.channel_server + '/api/room/' + channelId + '/uploadRoom', {
           method: 'POST',
           body: data
         });
@@ -3091,7 +3221,7 @@ class Snackabra {
     });
   }
 
-  #generateRoomId(x, y) {
+  #generateRoomId(x: string, y: string) {
     return new Promise(async (resolve, reject) => {
       try {
         const xBytes = base64ToArrayBuffer(decodeB64Url(x));
@@ -3122,11 +3252,11 @@ class Snackabra {
     return this.#identity;
   }
 
-  sendMessage(message) {
+  sendMessage(message: string | Dictionary) {
     this.channel.socket.send(message);
   }
 
-  sendFile(file) {
+  sendFile(file: File) {
     this.storage.saveFile(file);
   }
 }
