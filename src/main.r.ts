@@ -693,15 +693,15 @@ function assemblePayload(data) {
 /**
  * Extract payload (latest version)
  */
-function extractPayload(payload) {
+function extractPayload(payload: ArrayBufferLike) {
   try {
-    const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
+    const metadataSize: string = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
     console.info('METADATASIZE: ', metadataSize);
     console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
-    const _metadata = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
+    const _metadata: Dictionary = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
     console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
-    const startIndex = 4 + metadataSize;
+    const startIndex: number = 4 + metadataSize;
     if (!_metadata.hasOwnProperty('version')) {
       _metadata['version'] = '001';
     }
@@ -714,9 +714,9 @@ function extractPayload(payload) {
         for (let i = 1; i < Object.keys(_metadata).length; i++) {
           const _index = i.toString();
           if (_metadata.hasOwnProperty(_index)) {
-            const propertyStartIndex = _metadata[_index]['start'];
+            const propertyStartIndex: number = _metadata[_index]['start'];
             console.info(propertyStartIndex);
-            const size = _metadata[_index]['size'];
+            const size: number = _metadata[_index]['size'];
             data[_metadata[_index]['name']] = payload.slice(startIndex + propertyStartIndex, startIndex + propertyStartIndex + size);
           }
         }
@@ -864,7 +864,8 @@ class Crypto {
         // TODO - Support deriving from PBKDF2 in deriveKey function
         const key = await _crypto.subtle.deriveKey({
           'name': 'PBKDF2', // salt: _crypto.getRandomValues(new Uint8Array(16)),
-          'salt': _salt, 'iterations': 100000, // small is fine, we want it snappy
+          'salt': _salt,
+          'iterations': 100000, // small is fine, we want it snappy
           'hash': 'SHA-256'
         }, keyMaterial, {'name': 'AES-GCM', 'length': 256}, true, ['encrypt', 'decrypt']);
         // return key;
@@ -1862,11 +1863,11 @@ class ChannelSocket {
  * @public
  */
 class StorageApi {
-  server;
-  #channel;
-  #identity;
+  server: string;
+  #channel: Channel;
+  #identity: Identity;
 
-  constructor(server, channel, identity) {
+  constructor(server: string, channel: Channel, identity: Identity) {
     this.server = server + '/api/v1';
     this.#channel = channel;
     this.#identity = identity;
@@ -1875,14 +1876,14 @@ class StorageApi {
   /**
    * saveFile
    */
-  async saveFile(file) {
+  async saveFile(file: File) {
     if (file instanceof File) {
-      const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
-      const metaData = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
-      const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
-      const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
+      const sbFile: SBFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
+      const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
+      const fullStorePromise: Promise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
+      const previewStorePromise: Promise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
       Promise.all([fullStorePromise, previewStorePromise]).then(async (results) => {
-        results.forEach(async (controlData) => {
+        results.forEach( (controlData: Dictionary) => {
           this.#channel.socket.sendSbObject({...controlData, control: true});
         });
         this.#channel.socket.sendSbObject(sbFile);
@@ -1895,11 +1896,11 @@ class StorageApi {
   /**
    * getFileKey
    */
-  async #getFileKey(fileHash, _salt) {
+  async #getFileKey(fileHash: string, _salt: Uint8Array) {
     const keyMaterial = await SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
 
     // TODO - Support deriving from PBKDF2 in deriveKey function
-    const key = await _crypto.subtle.deriveKey({
+    const key: CryptoKey = await _crypto.subtle.deriveKey({
       'name': 'PBKDF2',
       'salt': _salt,
       'iterations': 100000, // small is fine, we want it snappy
@@ -1912,18 +1913,18 @@ class StorageApi {
   /**
    * storeRequest
    */
-  storeRequest(fileId) {
-    return new Promise(async (resolve, reject) => {
+  storeRequest(fileId: string) {
+    return new Promise( (resolve, reject) => {
       fetch(this.server + '/storeRequest?name=' + fileId)
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.arrayBuffer();
         })
-        .then((data) => {
+        .then((data: ArrayBufferLike) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -1932,8 +1933,8 @@ class StorageApi {
   /**
    * storeData
    */
-  storeData(type, fileId, encrypt_data, storageToken, data) {
-    return new Promise(async (resolve, reject) => {
+  storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: dictionary) {
+    return new Promise( (resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
         method: 'POST', body: assemblePayload({
           iv: encrypt_data.iv,
@@ -1943,7 +1944,7 @@ class StorageApi {
           vid: _crypto.getRandomValues(new Uint8Array(48))
         })
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
@@ -1951,7 +1952,7 @@ class StorageApi {
         })
         .then((data) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -1960,18 +1961,18 @@ class StorageApi {
   /**
    * storeImage
    */
-  storeImage(image, image_id, keyData, type) {
+  storeImage(image: string | ArrayBufferLike, image_id: string, keyData, type: string) {
     return new Promise(async (resolve, reject) => {
-      const storeReqResp = await this.storeRequest(image_id);
-      const encrypt_data = extractPayload(storeReqResp);
-      const key = await this.#getFileKey(keyData, encrypt_data.salt);
-      const data = await SB_Crypto.encrypt(image, key, 'arrayBuffer', encrypt_data.iv);
-      const storageTokenReq = await this.#channel.api.storageRequest(data.content.byteLength);
+      const storeReqResp: Dictionary = await this.storeRequest(image_id);
+      const encrypt_data: Dictionary = extractPayload(storeReqResp);
+      const key: CryptoKey = await this.#getFileKey(keyData, encrypt_data.salt);
+      const data: ArrayBufferLike = await SB_Crypto.encrypt(image, key, 'arrayBuffer', encrypt_data.iv);
+      const storageTokenReq: Dictionary = await this.#channel.api.storageRequest(data.content.byteLength);
       if (storageTokenReq.hasOwnProperty('error')) {
         return {error: storageTokenReq.error};
       }
-      const storageToken = JSON.stringify(storageTokenReq);
-      const resp_json = await this.storeData(type, image_id, encrypt_data, storageToken, data);
+      const storageToken: string = JSON.stringify(storageTokenReq);
+      const resp_json: Dictionary = await this.storeData(type, image_id, encrypt_data, storageToken, data);
       if (resp_json.hasOwnProperty('error')) {
         reject(new Error(resp_json.error));
       }
@@ -1982,20 +1983,20 @@ class StorageApi {
   /**
    * fetchData
    */
-  fetchData(msgId, verificationToken) {
-    return new Promise(async (resolve, reject) => {
+  fetchData(msgId: string, verificationToken: string) {
+    return new Promise( (resolve, reject) => {
       fetch(this.server + '/fetchData?id=' + encodeURIComponent(msgId) + '&verification_token=' + verificationToken, {
         method: 'GET'
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.arrayBuffer();
         })
-        .then((data) => {
+        .then((data: ArrayBufferLike) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -2004,7 +2005,7 @@ class StorageApi {
   /**
    * unpadData
    */
-  #unpadData(data_buffer) {
+  #unpadData(data_buffer: ArrayBuffer) {
     const _size = new Uint32Array(data_buffer.slice(-4))[0];
     return data_buffer.slice(0, _size);
   }
@@ -2012,21 +2013,21 @@ class StorageApi {
   /**
    * retrieveData
    */
-  async retrieveData(msgId, messages, controlMessages) {
-    const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
-    const image_id = imageMetaData.previewId;
-    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.hasOwnProperty('id') && ctrl_msg.id.startsWith(image_id));
+  async retrieveData(msgId: string, messages: Array<Dictionary>, controlMessages: Array<Dictionary>) {
+    const imageMetaData: Dictionary = messages.find((msg) => msg._id === msgId).imageMetaData;
+    const image_id: string = imageMetaData.previewId;
+    const control_msg: Dictionary = controlMessages.find((ctrl_msg) => ctrl_msg.hasOwnProperty('id') && ctrl_msg.id.startsWith(image_id));
     if (!control_msg) {
       return {'error': 'Failed to fetch data - missing control message for that image'};
     }
-    const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
-    const data = extractPayload(imageFetch);
-    const iv = data.iv;
-    const salt = data.salt;
-    const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
-    const encrypted_image = data.image;
-    const padded_img = await SB_Crypto.decrypt(image_key, {content: encrypted_image, iv: iv}, 'arrayBuffer');
-    const img = this.#unpadData(padded_img);
+    const imageFetch: Dictionary = await this.fetchData(control_msg.id, control_msg.verificationToken);
+    const data: Dictionary = extractPayload(imageFetch);
+    const iv: number = data.iv;
+    const salt: Uint8Array = data.salt;
+    const image_key: CryptoKey = await this.#getFileKey(imageMetaData.previewKey, salt);
+    const encrypted_image: string = data.image;
+    const padded_img: ArrayBufferLike = await SB_Crypto.decrypt(image_key, {content: encrypted_image, iv: iv}, 'arrayBuffer');
+    const img: Dictionary = this.#unpadData(padded_img);
 
     if (img.error) {
       console.error('(Image error: ' + img.error + ')');
@@ -2038,21 +2039,24 @@ class StorageApi {
   /**
    * retrieveDataFromMessage
    */
-  async retrieveDataFromMessage(message, controlMessages) {
-    const imageMetaData = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData;
-    const image_id = imageMetaData.previewId;
-    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.hasOwnProperty('id') && ctrl_msg.id === image_id);
+  async retrieveDataFromMessage(message: Dictionary, controlMessages: Array<Dictionary>) {
+    const imageMetaData: Dictionary = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData;
+    const image_id: string = imageMetaData.previewId;
+    const control_msg: Dictionary = controlMessages.find((ctrl_msg) => ctrl_msg.hasOwnProperty('id') && ctrl_msg.id === image_id);
     if (!control_msg) {
       return {'error': 'Failed to fetch data - missing control message for that image'};
     }
-    const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
-    const data = extractPayload(imageFetch);
-    const iv = data.iv;
-    const salt = data.salt;
-    const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
-    const encrypted_image = data.image;
-    const padded_img = await SB_Crypto.decrypt(image_key, {content: encrypted_image, iv: iv}, 'arrayBuffer');
-    const img = this.#unpadData(padded_img);
+    const imageFetch: ArrayBufferLike = await this.fetchData(control_msg.id, control_msg.verificationToken);
+    const data: Dictionary = extractPayload(imageFetch);
+    const iv: number = data.iv;
+    const salt: Uint8Array = data.salt;
+    const image_key: CryptoKey = await this.#getFileKey(imageMetaData.previewKey, salt);
+    const encrypted_image: string = data.image;
+    const padded_img: ArrayBufferLike = await SB_Crypto.decrypt(image_key, {
+      content: encrypted_image,
+      iv: iv
+    }, 'arrayBuffer');
+    const img: Dictionary = this.#unpadData(padded_img);
 
     if (img.error) {
       console.error('(Image error: ' + img.error + ')');
@@ -2079,14 +2083,14 @@ class StorageApi {
  * @public
  */
 class ChannelApi {
-  server;
-  #identity;
-  #channel;
-  #channelApi;
-  #channelServer;
-  #payload;
+  server: string;
+  #identity: Identity;
+  #channel: Channel;
+  #channelApi: string;
+  #channelServer: string;
+  #payload: Payload;
 
-  constructor(server, channel, identity) {
+  constructor(server: string, channel: Channel, identity: Identity) {
     this.server = server;
     this.#channel = channel;
     this.#payload = new Payload();
@@ -2099,17 +2103,17 @@ class ChannelApi {
    * getLastMessageTimes
    */
   getLastMessageTimes() {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelApi + '/getLastMessageTimes', {
         method: 'POST', body: JSON.stringify([this.#channel._id])
-      }).then((response) => {
+      }).then((response: Response) => {
         if (!response.ok) {
           reject(new Error('Network response was not OK'));
         }
         return response.json();
       }).then((message_times) => {
         resolve(message_times[this.#channel._id]);
-      }).catch((e) => {
+      }).catch((e: Error) => {
         reject(e);
       });
     });
@@ -2118,18 +2122,18 @@ class ChannelApi {
   /**
    * getOldMessages
    */
-  getOldMessages(currentMessagesLength) {
-    return new Promise(async (resolve, reject) => {
+  getOldMessages(currentMessagesLength: number) {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
         method: 'GET',
-      }).then((response) => {
+      }).then((response: Response) => {
         if (!response.ok) {
           reject(new Error('Network response was not OK'));
         }
         return response.json();
-      }).then(async (_encrypted_messages) => {
+      }).then((_encrypted_messages) => {
         resolve(_encrypted_messages);
-      }).catch((e) => {
+      }).catch((e: Error) => {
         reject(e);
       });
     });
@@ -2138,18 +2142,18 @@ class ChannelApi {
   /**
    * updateCapacity
    */
-  updateCapacity(capacity) {
-    return new Promise(async (resolve, reject) => {
+  updateCapacity(capacity: number) {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/updateRoomCapacity?capacity=' + capacity, {
         method: 'GET', credentials: 'include'
-      }).then((response) => {
+      }).then((response: Response) => {
         if (!response.ok) {
           reject(new Error('Network response was not OK'));
         }
         return response.json();
-      }).then(async (data) => {
+      }).then((data) => {
         resolve(data);
-      }).catch((e) => {
+      }).catch((e: Error) => {
         reject(e);
       });
     });
@@ -2159,17 +2163,17 @@ class ChannelApi {
    * getCapacity
    */
   getCapacity() {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/getRoomCapacity', {
         method: 'GET', credentials: 'include'
-      }).then((response) => {
+      }).then((response: Response) => {
         if (!response.ok) {
           reject(new Error('Network response was not OK'));
         }
         return response.json();
-      }).then(async (data) => {
+      }).then((data: Dictionary) => {
         resolve(data.capacity);
-      }).catch((e) => {
+      }).catch((e: Error) => {
         reject(e);
       });
     });
@@ -2179,22 +2183,22 @@ class ChannelApi {
    * getJoinRequests
    */
   getJoinRequests() {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/getJoinRequests', {
         method: 'GET', credentials: 'include'
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then(async (data) => {
+        .then((data: Dictionary) => {
           if (data.error) {
             reject(new Error(data.error));
           }
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -2204,19 +2208,19 @@ class ChannelApi {
    * isLocked
    */
   isLocked() {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/roomLocked', {
         method: 'GET', credentials: 'include'
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           resolve(data.locked);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -2225,8 +2229,7 @@ class ChannelApi {
   /**
    * Set message of the day
    */
-  setMOTD(motd) {
-    console.log(motd);
+  setMOTD(motd: string) {
     return new Promise(async (resolve, reject) => {
       //if (this.#channel.owner) {
       fetch(this.#channelServer + this.#channel._id + '/motd', {
@@ -2234,19 +2237,19 @@ class ChannelApi {
           'Content-Type': 'application/json'
         }
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
       //} else {
-      //  reject(new Error('Must be chann el owner to get admin data'));
+      //  reject(new Error('Must be channel owner to get admin data'));
       //}
     });
   }
@@ -2257,25 +2260,25 @@ class ChannelApi {
   getAdminData() {
     return new Promise(async (resolve, reject) => {
       //if (this.#channel.owner) {
-      const token_data = new Date().getTime().toString();
-      const token_sign = await SB_Crypto.sign(this.#identity.personal_signKey, token_data);
+      const token_data: string = new Date().getTime().toString();
+      const token_sign: string = await SB_Crypto.sign(this.#identity.personal_signKey, token_data);
       fetch(this.#channelServer + this.#channel._id + '/getAdminData', {
         method: 'GET', credentials: 'include', headers: {
           'authorization': token_data + '.' + token_sign, 'Content-Type': 'application/json'
         }
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           if (data.error) {
             reject(new Error(data.error));
           }
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
       ///} else {
@@ -2288,42 +2291,42 @@ class ChannelApi {
    * downloadData
    */
   downloadData() {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/downloadData', {
         method: 'GET', credentials: 'include', headers: {
           'Content-Type': 'application/json'
         }
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
   }
 
   uploadChannel(channelData: ChannelData) {
-    return new Promise(async (resolve, reject) => {
+    return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel._id + '/uploadRoom', {
         method: 'POST', body: channelData, headers: {
           'Content-Type': 'application/json'
         }
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -2334,15 +2337,15 @@ class ChannelApi {
       fetch(this.#channelServer + this.#channel._id + '/authorizeRoom', {
         method: 'POST', body: {roomId: this.#channel._id, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey}
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -2357,15 +2360,15 @@ class ChannelApi {
           'Content-Type': 'application/json'
         }
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -2378,15 +2381,15 @@ class ChannelApi {
           'Content-Type': 'application/json'
         }
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -2402,18 +2405,18 @@ class ChannelApi {
         fetch(this.#channelServer + this.#channel._id + '/lockRoom', {
           method: 'GET', credentials: 'include'
         })
-          .then((response) => {
+          .then((response: Response) => {
             if (!response.ok) {
               reject(new Error('Network response was not OK'));
             }
             return response.json();
           })
-          .then(async (data) => {
+          .then(async (data: Dictionary) => {
             if (data.locked) {
               await this.acceptVisitor(JSON.stringify(this.#identity.exportable_pubKey));
             }
             resolve({locked: data.locked, lockedKey: _exportable_locked_key});
-          }).catch((error) => {
+          }).catch((error: Error) => {
           reject(error);
         });
       }
@@ -2432,15 +2435,15 @@ class ChannelApi {
         },
         credentials: 'include'
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
@@ -2453,19 +2456,20 @@ class ChannelApi {
           'Content-Type': 'application/json'
         }
       })
-        .then((response) => {
+        .then((response: Response) => {
           if (!response.ok) {
             reject(new Error('Network response was not OK'));
           }
           return response.json();
         })
-        .then((data) => {
+        .then((data: Dictionary) => {
           resolve(data);
-        }).catch((error) => {
+        }).catch((error: Error) => {
         reject(error);
       });
     });
   }
+
   /*
   matt: These methods have no implementation in the current webclient so I have skipped them for the time being
   // unused
@@ -2518,7 +2522,7 @@ class KV {
   }
 
   // Set item will insert or replace
-  setItem(key: string, value:StorableDataType) {
+  setItem(key: string, value: StorableDataType) {
     return this.db.setItem(key, value);
   }
 
@@ -2740,7 +2744,7 @@ class IndexedKV {
   constructor(options: IndexedKVOptions) {
     this.options = Object.assign(this.options, options);
     if (typeof this.options.onReady === 'function') {
-      this.events.subscribe(`ready`, (e) => {
+      this.events.subscribe(`ready`, (e: Error) => {
         this.options.onReady(e);
       });
     }
@@ -2794,7 +2798,7 @@ class IndexedKV {
           resolve(true);
         }
       };
-      request.onerror = (event: Event) =>{
+      request.onerror = (event: Event) => {
         reject(event);
       };
     });
