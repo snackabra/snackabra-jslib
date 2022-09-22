@@ -1,4 +1,13 @@
+/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
 
+/* Distributed under GPL-v03, see 'LICENSE' file for details */
+
+/* PART 1 of rewrite of "main.js" */
+
+/* Zen Master: "um" */
+export function SB_libraryVersion() {
+  throw new Error("THIS IS NEITHER BROWSER NOR NODE THIS IS SPARTA!");
+}
 
 // exported for testing purposes
 export function _sb_exception(loc: string, msg: string) {
@@ -8,16 +17,28 @@ export function _sb_exception(loc: string, msg: string) {
   throw new Error(m);
 }
 
-let _crypto = crypto;
-let _ws = WebSocket;
+// the above general exception handler can be improved so as to retain the error stack, per:
+// https://stackoverflow.com/a/42755876
+//
+// class RethrownError extends Error {
+//   constructor(message, error){
+//     super(message)
+//     this.name = this.constructor.name
+//     if (!error) throw new Error('RethrownError requires a message and error')
+//     this.original_error = error
+//     this.stack_before_rethrow = this.stack
+//     const message_lines =  (this.message.match(/\n/g)||[]).length + 1
+//     this.stack = this.stack.split('\n').slice(0, message_lines+1).join('\n') + '\n' + error.stack
+//   }
+// }
+// throw new RethrownError(`Oh no a "${error.message}" error`, error)
 
 /** 
  * Fills buffer with random data
  */
 export function getRandomValues(buffer: Uint8Array) {
-  return _crypto.getRandomValues(buffer);
+  return crypto.getRandomValues(buffer);
 }
-
 
 // Strict b64 check:
 // const b64_regex = new RegExp('^(?:[A-Za-z0-9+/_\-]{4})*(?:[A-Za-z0-9+/_\-]{2}==|[A-Za-z0-9+/_\-]{3}=)?$')
@@ -29,9 +50,10 @@ const b64_regex = /^([A-Za-z0-9+/_\-=]*)$/
  * Works same on browsers and nodejs.
  */
 function _assertBase64(base64: string) {
-  // return (b64_regex.exec(base64)?.[0] === base64);
-  const z = b64_regex.exec(base64);
-  if (z) return (z[0] === base64); else return false;
+  return (b64_regex.exec(base64)?.[0] === base64);
+  // if above doesn't work try:
+  // const z = b64_regex.exec(base64);
+  // if (z) return (z[0] === base64); else return false;
 }
 
 /**
@@ -43,6 +65,11 @@ function _assertBase64(base64: string) {
  */
 export function str2ab(string: string) {
   return new TextEncoder().encode(string)
+  // previous JS version, potentially preferred:
+  // const length = string.length;
+  // const buffer = new Uint8Array(length);
+  // for (let i = 0; i < length; i++) buffer[i] = string.charCodeAt(i);
+  // return buffer;
 }
 
 /**
@@ -55,8 +82,9 @@ export function str2ab(string: string) {
  */
 export function ab2str(buffer: Uint8Array) {
   return new TextDecoder("utf-8").decode(buffer);
+  // prior JS version:
+  // return String.fromCharCode.apply(null, new Uint8Array(buffer));
 }
-
 
 /**
  * From:
@@ -100,6 +128,7 @@ function _byteLength(validLen: number, placeHoldersLen: number) {
  * @return {Uint8Array} returns decoded binary result
  */
 export function base64ToArrayBuffer(str: string): Uint8Array {
+  str = str.replace(/\s+/g, ''); // collapse any whitespace
   if (!_assertBase64(str)) throw new Error('invalid character')
   let tmp: number
   switch (str.length % 4) {

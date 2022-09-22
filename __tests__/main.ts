@@ -1,6 +1,10 @@
 /*
   NOTE: THIS IS IN PROGRESS PURE BROWSER TYPESCRIPT
+
+  As things are migrated out they will be moved to "main.NN.ts"
+
   */
+
 
 /* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
 
@@ -8,78 +12,6 @@
 
 /* eslint-disable no-trailing-spaces */
 
-
-/* Zen Master: "um" */
-function SB_libraryVersion() {
-  throw new Error("THIS IS NEITHER BROWSER NOR NODE THIS IS SPARTA!");
-}
-
-/**
- * SB simple events (mesage bus) class
- */
-export class MessageBus {
-  constructor(args) {
-    this.args = args;
-    this.bus = {};
-  }
-
-  /**
-   * For possible future use with cleaner identifiers
-   */
-  * #uniqueID() {
-    let i = 0;
-    while (true) {
-      i += 1;
-      yield i;
-    }
-  }
-
-  /**
-   * Safely returns handler for any event
-   */
-  #select(event) {
-    return this.bus[event] || (this.bus[event] = []);
-  }
-
-  /**
-   * Subscribe. 'event' is a string, special case '*' means everything
-   *  (in which case the handler is also given the message)
-   */
-  subscribe(event, handler) {
-    this.#select(event).push(handler);
-  }
-
-  /**
-   * Unsubscribe
-   */
-  unsubscribe(event, handler) {
-    let i = -1;
-    if (this.bus[event]) {
-      if ((i = this.bus[event].findLastIndex((e) => e == handler)) != -1) {
-        this.bus[event].splice(i, 1);
-      }
-    } else {
-      console.info(`fyi: asked to remove a handler but it's not there`);
-    }
-  }
-
-  /**
-   * Publish
-   */
-  publish(event, ...args) {
-    for (const handler of this.#select('*')) {
-      handler(event, ...args);
-    }
-    for (const handler of this.#select(event)) {
-      handler(...args);
-    }
-  }
-}
-
-
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 /**
  * @fileoverview Main file for snackabra javascript utilities.
@@ -92,53 +24,10 @@ function sleep(ms) {
    m042/src/scripts/components/FormSubmission.js
 */
 
-// the below general exception handler can be improved so us to
-// retain the error stack, per:
-// https://stackoverflow.com/a/42755876
-// class RethrownError extends Error {
-//   constructor(message, error){
-//     super(message)
-//     this.name = this.constructor.name
-//     if (!error) throw new Error('RethrownError requires a message and error')
-//     this.original_error = error
-//     this.stack_before_rethrow = this.stack
-//     const message_lines =  (this.message.match(/\n/g)||[]).length + 1
-//     this.stack = this.stack.split('\n').slice(0, message_lines+1).join('\n') + '\n' +
-//                  error.stack
-//   }
-// }
-// throw new RethrownError(`Oh no a "${error.message}" error`, error)
-
-function _sb_exception(loc, msg) {
-  const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
-  // for now disabling this to keep node testing less noisy
-  // console.error(m);
-  throw new Error(m);
-}
-
-// internal - general handling of paramaters that might be promises
-// (basically the "anti" of resolve, if it's *not* a promise then
-// it becomes one
-function _sb_resolve(val) {
-  if (val.then) {
-    // it's already a promise
-    return val;
-  } else {
-    return new Promise((resolve) => resolve(val));
-  }
-}
-
-// internal - handle assertions
-function _sb_assert(val, msg) {
-  if (!(val)) {
-    const m = `<< SB assertion error: ${msg} >>`;
-    throw new Error(m);
-  }
-}
-
 
 
 /* ****************************************************************
+ *  OLD APPROACH: we might want this again
  *  These are wrappers to handle both browser and node targets
  *  with the same code. The 'process.browser' value is replaced
  *  by rollup and this whole library is then tree-shaken so
@@ -146,188 +35,16 @@ function _sb_assert(val, msg) {
  *  is retained, into 'index.mjs' and 'browser.mjs' respectively.
  * ****************************************************************/
 
-let _crypto, _fs, _path, _ws;
-_crypto = crypto;
-_ws = WebSocket;
-
-/** 
- * Fills buffer with random data
- */
-function getRandomValues(buffer) {
-  return _crypto.getRandomValues(buffer);
-}
-
 /**
  * Returns 'true' if (and only if) object is of type 'Uint8Array'.
  * Works same on browsers and nodejs.
  */
-function _assertUint8Array(obj) {
-  if (typeof obj === 'object') if (Object.prototype.toString.call(obj) === '[object Uint8Array]') return true;
-  return false;
-}
 
-const b64_regex = new RegExp('^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$');
-
-/**
- * Returns 'true' if (and only if) string is well-formed base64.
- * Works same on browsers and nodejs.
- */
-function _assertBase64(base64) {
-  /* webpack 4 doesn't support optional chaining, requires webpack 5;
-     since wp 5 is pretty recent (2020-10-10), we'll avoid using
-     optional chaining in this library for a while */
-  // return (b64_regex.exec(base64)?.[0] === base64);
-  const z = b64_regex.exec(base64);
-  if (z) return (z[0] === base64); else return false;
-}
-
-/**
- * Standardized 'str2ab()' function, string to array buffer.
- * This assumes on byte per character.
- *
- * @param {string} string
- * @return {Uint8Array} buffer
- */
-function str2ab(string) {
-  const length = string.length;
-  const buffer = new Uint8Array(length);
-  for (let i = 0; i < length; i++) buffer[i] = string.charCodeAt(i);
-  return buffer;
-}
-
-/**
- * Standardized 'ab2str()' function, array buffer to string.
- * This assumes one byte per character.
- *
- * @param {string} string
- * @return {Uint8Array} buffer
- *
- */
-function ab2str(buffer) {
-  if (!_assertUint8Array(buffer)) _sb_exception('ab2str()', 'parameter is not a Uint8Array buffer'); // this will throw
-  return String.fromCharCode.apply(null, new Uint8Array(buffer));
-}
-
-/* ****************************************************************
- *  TODO functions - look for duplicates
- * ****************************************************************/
-
-/* TODO
-export function verifyCookie(request, env) {
-  // room.mjs uses without env, storage with env
-}
-*/
-
-// the publicKeyPEM paramater below needs to look like this:
-const defaultPublicKeyPEM = `-----BEGIN PUBLIC KEY-----
-MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtVedzwPq7OIl84xx9ruV
-TAkv+sUPUYeQJ3PtFOJkBSrMyGPErVxjXQQ6nvb+OevQ2t7EhimyQ3bnP7PdeAU2
-mWQX6V8LfhJj0ox8Envtw9DF7nEED5aLwnimTjox906j7itXO2xDdJCRuAfpar3u
-Tj3d0EAKWFXTBHrorKI0pHCg1opIRsqNjpVnetZn1SweCtArE7YymNRQmoi8XWzj
-yCt41fGFoFcmVeE87hiq41NJkE0iMfrmf6QqE91Fp1BSSTD75KEbKPXepS/jl3nV
-VFe4tWrHypcT+Uk7I2UBqHnR+AnODVrSxZMzoVnXoYbhDAdReTQ81MrSQ+LW7yZV
-rTxa5uYVPIRB6l58dpBEhIGcvEz376fvEwdhEqw9iXm7FchbqX3FQpwDVKvguj+w
-jIaV60/hyBaRPO2oD9IhByvL3F+Gq+iwQRXbEgvI8QvkJ1w/WcelytljcwUoYbC5
-7VS7EvnoNvMQT+r5RJfoPVPbwsCOFAQCVnzyOPAMZyUn69ycK+rONvrVxkM+c8Q2
-8w7do2MDeRWJRf4Va0XceXsN+YcK7g9bqBWrBYJIWzeRiAQ3R6kyaxxbdEhyY3Hl
-OlY876IbVmwlWAQ82l9r7ECjBL2nGMjDFm5Lv8TXKC5NHWHwY1b2vfvl6cyGtG1I
-OTJj8TMRI6y3Omop3kIfpgUCAwEAAQ==
------END PUBLIC KEY-----`;
-
-/**
- * Import a PEM encoded RSA public key, to use for RSA-OAEP
- * encryption.  Takes a string containing the PEM encoded key, and
- * returns a Promise that will resolve to a CryptoKey representing
- * the public key.
- *
- * @param {PEM} RSA public key, string, PEM format
- * @return {cryptoKey} RSA-OAEP key
- *
- */
-function importPublicKey(pem) {
-  if (!pem) pem = defaultPublicKeyPEM;
-  // fetch the part of the PEM string between header and footer
-  const pemHeader = '-----BEGIN PUBLIC KEY-----';
-  const pemFooter = '-----END PUBLIC KEY-----';
-  const start = pem.indexOf(pemHeader);
-  const end = pem.indexOf(pemFooter);
-  if ((start < 0) || (end < 0)) _sb_exception('importPublicKey()', 'fail to find BEGIN and/or END string in RSA (PEM) key');
-  const pemContents = pem.slice(start + pemHeader.length, end);
-  // const pemContents = pem.substring(pemHeader.length, pem.length - pemFooter.length);
-  const binaryDer = base64ToArrayBuffer(pemContents);
-  return _crypto.subtle.importKey('spki', binaryDer, {name: 'RSA-OAEP', hash: 'SHA-256'}, true, ['encrypt']);
-}
-
-/**
- * Returns random number
- *
- * @return {int} integer 0..255
- *
- */
-export function simpleRand256() {
-  return _crypto.getRandomValues(new Uint8Array(1))[0];
-}
-
-
-const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
-
-/**
- * Returns a random string in requested encoding
- *
- * @param {n} number of characters
- * @param {code} encoding, supported types: 'base32mi'
- * @return {string} random string
- *
- * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
- */
-export function simpleRandomString(n, code) {
-  if (code == 'base32mi') {
-    // yeah of course we need to add base64 etc
-    const z = _crypto.getRandomValues(new Uint8Array(n));
-    let r = '';
-    for (let i = 0; i < n; i++) r += base32mi[z[i] & 31];
-    return r;
-  }
-  _sb_exception('simpleRandomString', 'code ' + code + ' not supported');
-}
-
-/**
- * Disambiguates strings that are known to be 'base32mi' type
- * 
- * ::
- *
- *     'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
- * 
- * This is the base32mi disambiguation table ::
- * 
- *     [OoQD] -> '0'  
- *     [lIiJ] -> '1'  
- *     [Zz] -> '2'  
- *     [A] -> '4'  
- *     [Ss] -> '5'  
- *     [G] -> '6'  
- *     [t] -> '7'  
- *     [B] -> '8'  
- *     [gq] -> '9'  
- *     [C] -> 'c'  
- *     [Y] -> 'y'  
- *     [KxX] -> 'k'  
- *     [M] -> 'm'  
- *     [n] -> 'N'  
- *     [P] -> 'p'  
- *     [uvV] -> 'U'  
- *     [w] -> 'W'  
- * 
- * Another way to think of it is that this, becomes this ('.' means no change): ::
- *
- *     0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
- *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
- * 
- */
-export function cleanBase32mi(s) {
-  // this of course is not the most efficient
-  return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
-}
+// REMOVED: moving to typescript, not needed
+// function _assertUint8Array(obj) {
+//   if (typeof obj === 'object') if (Object.prototype.toString.call(obj) === '[object Uint8Array]') return true;
+//   return false;
+// }
 
 
 /**
@@ -378,6 +95,7 @@ export function packageEncryptDict(dict, publicKeyPEM, callback) {
     });
   });
 } // packageEncrypt()
+
 
 /**
  * Partition
