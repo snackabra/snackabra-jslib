@@ -16,7 +16,7 @@
     "rules": {
       "tags": ["recommended"],
       "include": ["ban-untagged-todo"],
-      "exclude": ["no-unused-vars"]
+      "exclude": ["no-unused-vars", "no-async-promise-executor", "no-this-alias"]
     }
   },
   "fmt": {
