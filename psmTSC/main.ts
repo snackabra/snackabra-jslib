@@ -1351,6 +1351,8 @@ class SBFile {
       // TODO: the entire readPhoto stuff is replaced by SBImage
       // @ts-ignore
       reader.onload = (e) => resolve(e.target?.result);
+      // TODO: ditto
+      // @ts-ignore
       reader.readAsDataURL(photo);
     });
     await new Promise((resolve) => {
