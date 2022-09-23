@@ -1,6 +1,9 @@
 
 This is the "web" point of view.
 
+This will need both channel server and storage server running locally
+(eg miniflare).
+
 Just do something like:
 
 $ python3 -m http.server --bind 127.0.0.1
