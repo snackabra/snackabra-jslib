@@ -1,3 +1,9 @@
+/*
+  NOTE: THIS IS IN PROGRESS PURE BROWSER TYPESCRIPT
+
+  As things are migrated out they will be moved to "main.NN.ts"
+
+  */
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
     return new (P || (P = Promise))(function (resolve, reject) {
@@ -19,16 +25,61 @@ var __classPrivateFieldSet = (this && this.__classPrivateFieldSet) || function (
     return (kind === "a" ? f.call(receiver, value) : f ? f.value = value : state.set(receiver, value)), value;
 };
 var _Identity_instances, _Identity_mintKeys, _Identity_mountKeys, _SBFile_instances, _SBFile_asImage, _SBFile_getFileData, _SBFile_padImage, _SBFile_restrictPhoto, _SBFile_scaleCanvas, _SBFile_generateImageHash, _SBFile_readPhoto, _Channel_keys, _Channel_api, _Channel_socket, _ChannelSocket_channel, _ChannelSocket_identity, _ChannelSocket_payload, _ChannelSocket_queue, _StorageApi_instances, _StorageApi_channel, _StorageApi_identity, _StorageApi_getFileKey, _StorageApi_unpadData, _ChannelApi_identity, _ChannelApi_channel, _ChannelApi_channelApi, _ChannelApi_channelServer, _ChannelApi_payload, _FileSystemDB_instances, _FileSystemDB_useDatabase, _FileSystemDB_serialize, _FileSystemDB_serializeConstructor, _FileSystemDB_unserialize, _FileSystemDB_unserializeConstructor, _FileSystemDB_serializeKey, _IndexedKV_instances, _IndexedKV_useDatabase, _Snackabra_instances, _Snackabra_channel, _Snackabra_storage, _Snackabra_identity, _Snackabra_queue, _Snackabra_generateRoomId;
-import { ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, _appendBuffer, _sb_exception, getRandomValues, SB_libraryVersion } from './main.01.ts';
+import { ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, _appendBuffer, _sb_exception, getRandomValues, SB_libraryVersion
+// @ts-ignore
+ } from './main.01.ts';
 import { MessageBus, _sb_resolve, _sb_assert, importPublicKey } from './main.02.ts';
+/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
+/* Distributed under GPL-v03, see 'LICENSE' file for details */
+/* eslint-disable no-trailing-spaces */
+/**
+ * @fileoverview Main file for snackabra javascript utilities.
+ *               See https://snackabra.io for details.
+ * @package
+ */
+/* TODO - list of modules that main.js can now fully support:
+          (note: some MI-internal references)
+   m042/src/scripts/components/FormSubmission.js
+*/
+/* ****************************************************************
+ *  OLD APPROACH: we might want this again
+ *  These are wrappers to handle both browser and node targets
+ *  with the same code. The 'process.browser' value is replaced
+ *  by rollup and this whole library is then tree-shaken so
+ *  that only either the node-specific or browser-specific code
+ *  is retained, into 'index.mjs' and 'browser.mjs' respectively.
+ * ****************************************************************/
+/**
+ * Returns 'true' if (and only if) object is of type 'Uint8Array'.
+ * Works same on browsers and nodejs.
+ */
+// REMOVED: moving to typescript, not needed
+// function _assertUint8Array(obj) {
+//   if (typeof obj === 'object') if (Object.prototype.toString.call(obj) === '[object Uint8Array]') return true;
+//   return false;
+// }
+/**
+ * Takes an arbitrary dict object, a public key in PEM
+ * format, and a callback function: generates a random AES key,
+ * wraps that in (RSA) key, and when all done will call the
+ * callback function with the results
+ *
+ * @param {dict} dictionary (payload)
+ * @param {publicKeyPEM} public key (PEM format)
+ * @param {callback} callback function, called with results
+ *
+ */
 export function packageEncryptDict(dict, publicKeyPEM, callback) {
     const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
     const aesAlgorithmKeyGen = { name: 'AES-GCM', length: 256 };
     const aesAlgorithmEncrypt = { name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(16)) };
+    // if (!publicKeyPEM) publicKeyPEM = defaultPublicKeyPEM;
     if (!publicKeyPEM) {
         _sb_exception('packageEncryptDict()', 'invalid PEM');
     }
+    // Create a key generator to produce a one-time-use AES key to encrypt some data
     crypto.subtle.generateKey(aesAlgorithmKeyGen, true, ['encrypt']).then((aesKey) => {
+        // we are exporting the symmetric AES key so we can encrypt it using pub key
         crypto.subtle.exportKey('raw', aesKey).then((theKey) => {
             const rsaAlgorithmEncrypt = { name: 'RSA-OAEP' };
             importPublicKey(publicKeyPEM).then((publicKey) => {
@@ -39,6 +90,7 @@ export function packageEncryptDict(dict, publicKeyPEM, callback) {
             }).then((encAesKey) => {
                 return Promise.all([crypto.subtle.encrypt(aesAlgorithmEncrypt, aesKey, clearDataArrayBufferView), encAesKey]);
             }).then((arr) => {
+                // arr[0] is the encrypted dict in raw format, arr[1] is the aes key encrypted with rsa public key
                 const encryptedData = arrayBufferToBase64(new Uint8Array(arr[0]));
                 const postableEncryptedAesKey = arr[1];
                 const theContent = encodeURIComponent(encryptedData);
@@ -57,7 +109,10 @@ export function packageEncryptDict(dict, publicKeyPEM, callback) {
             });
         });
     });
-}
+} // packageEncrypt()
+/**
+ * Partition
+ */
 export function partition(str, n) {
     const returnArr = [];
     let i, l;
@@ -66,13 +121,24 @@ export function partition(str, n) {
     }
     return returnArr;
 }
+/**
+ * There are o many problems with JSON parsing, adding a wrapper to capture more info.
+ * The 'loc' parameter should be a (unique) string that allows you to find the usage
+ * in the code; one approach is the line number in the file (at some point).
+ */
 export function jsonParseWrapper(str, loc) {
     var _a;
     try {
         return JSON.parse(str);
     }
     catch (error) {
+        // sometimes it's an embedded string
         try {
+            // This would be simple: 'return JSON.parse(eval(str));'
+            // But eval() not safe. Instead we iteratively strip possible wrapping
+            // single or double quotation marks. There are various cases where this
+            // will not be enough, but we'll add "unwrapping" logic as we find
+            // the examples.
             let s2 = '';
             let s3 = '';
             while (str != (s3 = s2, s2 = str, str = (_a = str === null || str === void 0 ? void 0 : str.match(/^(['"])(.*)\1$/m)) === null || _a === void 0 ? void 0 : _a[2]))
@@ -80,15 +146,20 @@ export function jsonParseWrapper(str, loc) {
             return JSON.parse(`'${s3}'`);
         }
         catch (_b) {
+            // let's try one more thing
             try {
                 return JSON.parse(str.slice(1, -1));
             }
             catch (_d) {
+                // we'll throw the original error
                 throw new Error('JSON.parse() error at ' + loc + ' (tried eval and slice): ' + error.message + '\nString was: ' + str);
             }
         }
     }
 }
+/**
+ * Extract payload
+ */
 function extractPayloadV1(payload) {
     try {
         const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
@@ -109,6 +180,9 @@ function extractPayloadV1(payload) {
         return {};
     }
 }
+/**
+ * Assemble payload
+ */
 function assemblePayload(data) {
     try {
         const metadata = [];
@@ -138,6 +212,9 @@ function assemblePayload(data) {
         return {};
     }
 }
+/**
+ * Extract payload (latest version)
+ */
 function extractPayload(payload) {
     try {
         const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
@@ -174,11 +251,18 @@ function extractPayload(payload) {
         throw new Error('extractPayload() exception (' + e.message + ')');
     }
 }
+/**
+ * Encode into b64 URL
+ */
 function encodeB64Url(input) {
     return input.replaceAll('+', '-').replaceAll('/', '_');
 }
+/**
+ * Decode b64 URL
+ */
 function decodeB64Url(input) {
     input = input.replaceAll('-', '+').replaceAll('_', '/');
+    // Pad out with standard base64 required padding characters
     const pad = input.length % 4;
     if (pad) {
         if (pad === 1) {
@@ -196,7 +280,17 @@ class EventEmitter extends EventTarget {
         new Event(type, data);
     }
 }
+/**
+ * Crypto is a class that contains all the SB specific crypto functions
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class Crypto {
+    /**
+     * Extracts (generates) public key from a private key.
+     */
     extractPubKey(privateKey) {
         try {
             const pubKey = Object.assign({}, privateKey);
@@ -213,6 +307,9 @@ class Crypto {
             return {};
         }
     }
+    /**
+     * Generates standard ``ECDH`` keys using ``P-384``.
+     */
     generateKeys() {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
@@ -225,6 +322,9 @@ class Crypto {
             }
         }));
     }
+    /**
+     * Import keys
+     */
     importKey(format, key, type, extractable, keyUsages) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             const keyAlgorithms = {
@@ -244,6 +344,9 @@ class Crypto {
             }
         }));
     }
+    /**
+     * Derive key.
+     */
     deriveKey(privateKey, publicKey, type, extractable, keyUsages) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             const keyAlgorithms = {
@@ -264,15 +367,20 @@ class Crypto {
             }
         }));
     }
+    /**
+     * Get file key
+     */
     getFileKey(fileHash, _salt) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const keyMaterial = yield this.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+                // TODO - Support deriving from PBKDF2 in deriveKey function
                 const key = yield crypto.subtle.deriveKey({
                     'name': 'PBKDF2',
                     'salt': _salt, 'iterations': 100000,
                     'hash': 'SHA-256'
                 }, keyMaterial, { 'name': 'AES-GCM', 'length': 256 }, true, ['encrypt', 'decrypt']);
+                // return key;
                 resolve(key);
             }
             catch (e) {
@@ -280,6 +388,9 @@ class Crypto {
             }
         }));
     }
+    /**
+     * Encrypt
+     */
     encrypt(contents, secret_key = null, outputType = 'string', _iv = null) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
@@ -313,6 +424,9 @@ class Crypto {
             }
         }));
     }
+    /**
+     * Decrypt
+     */
     decrypt(secretKey, contents, outputType = 'string') {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
@@ -331,6 +445,9 @@ class Crypto {
             }
         }));
     }
+    /**
+     * Sign
+     */
     sign(secretKey, contents) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
@@ -350,6 +467,9 @@ class Crypto {
             }
         }));
     }
+    /**
+     * Verify
+     */
     verify(secretKey, sign, contents) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
@@ -369,6 +489,9 @@ class Crypto {
             }
         }));
     }
+    /**
+     * Compare keys
+     */
     areKeysSame(key1, key2) {
         if (key1 != null && key2 != null && typeof key1 === 'object' && typeof key2 === 'object') {
             return key1['x'] === key2['x'] && key1['y'] === key2['y'];
@@ -377,6 +500,12 @@ class Crypto {
     }
 }
 const SB_Crypto = new Crypto();
+/**
+ * Identity (key for use in SB)
+ * @class
+ * @constructor
+ * @public
+ */
 class Identity {
     constructor(key) {
         _Identity_instances.add(this);
@@ -425,11 +554,18 @@ _Identity_instances = new WeakSet(), _Identity_mintKeys = function _Identity_min
         }
     }));
 };
+/**
+ * SBMessage
+ * @class
+ * @constructor
+ * @public
+ */
 class SBMessage {
     constructor(contents, signKey, key) {
         this.encrypted = false;
         this.image = '';
         return new Promise((resolve) => __awaiter(this, void 0, void 0, function* () {
+            // eslint-disable-next-line prefer-const
             let imgId = '', previewId = '', imgKey = '', previewKey = '';
             this.contents = contents;
             this.sender_pubKey = key;
@@ -446,7 +582,14 @@ class SBMessage {
         }));
     }
 }
+/**
+ * SBFile
+ * @class
+ * @constructor
+ * @public
+ */
 class SBFile {
+    // file is an instance of File
     constructor(file, signKey, key) {
         _SBFile_instances.add(this);
         this.encrypted = false;
@@ -508,9 +651,10 @@ _SBFile_instances = new WeakSet(), _SBFile_asImage = function _SBFile_asImage(im
         }
     });
 }, _SBFile_padImage = function _SBFile_padImage(image_buffer) {
-    let _sizes = [128, 256, 512, 1024, 2048, 4096];
+    let _sizes = [128, 256, 512, 1024, 2048, 4096]; // in KB
     _sizes = _sizes.map((size) => size * 1024);
     const image_size = image_buffer.byteLength;
+    // console.log('BEFORE PADDING: ', image_size)
     let _target;
     if (image_size < _sizes[_sizes.length - 1]) {
         for (let i = 0; i < _sizes.length; i++) {
@@ -528,24 +672,38 @@ _SBFile_instances = new WeakSet(), _SBFile_asImage = function _SBFile_asImage(im
     }
     const _padding_array = [128];
     _target = _target - image_size - 21;
+    // We will finally convert to Uint32Array where each element is 4 bytes
+    // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
+    // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
     for (let i = 0; i < _target; i++) {
         _padding_array.push(0);
     }
+    // _padding_array.push(image_size);
     const _padding = new Uint8Array(_padding_array).buffer;
+    // console.log('Padding size: ', _padding.byteLength)
     let final_data = _appendBuffer(image_buffer, _padding);
     final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
+    // console.log('AFTER PADDING: ', final_data.byteLength)
     return final_data;
 }, _SBFile_restrictPhoto = function _SBFile_restrictPhoto(photo, maxSize, imageType, qualityArgument) {
     return __awaiter(this, void 0, void 0, function* () {
-        maxSize = maxSize * 1024;
+        // imageType default should be 'image/jpeg'
+        // qualityArgument should be 0.92 for jpeg and 0.8 for png (MDN default)
+        maxSize = maxSize * 1024; // KB
+        // console.log(`Target size is ${maxSize} bytes`);
         let _c = yield __classPrivateFieldGet(this, _SBFile_instances, "m", _SBFile_readPhoto).call(this, photo);
         let _b1 = yield new Promise((resolve) => {
             _c.toBlob(resolve, imageType, qualityArgument);
         });
+        // workingDots();
+        // console.log(`start canvas W ${_c.width} x H ${_c.height}`)
         let _size = _b1.size;
         if (_size <= maxSize) {
+            // console.log(`Starting size ${_size} is fine`);
             return _b1;
         }
+        // console.log(`Starting size ${_size} too large, start by reducing image size`);
+        // compression wasn't enough, so let's resize until we're getting close
         let _old_size;
         let _old_c;
         while (_size > maxSize) {
@@ -556,26 +714,39 @@ _SBFile_instances = new WeakSet(), _SBFile_asImage = function _SBFile_asImage(im
             });
             _old_size = _size;
             _size = _b1.size;
+            // workingDots();
+            // console.log(`... reduced to W ${_c.width} x H ${_c.height} (to size ${_size})`);
         }
+        // we assume that within this width interval, storage is roughly prop to area,
+        // with a little tuning downwards
         let _ratio = maxSize / _old_size;
-        let _maxIteration = 12;
+        let _maxIteration = 12; // to be safe
+        // console.log(`... stepping back up to W ${_old_c.width} x H ${_old_c.height} and will then try scale ${_ratio.toFixed(4)}`);
         let _final_c;
         do {
-            _final_c = __classPrivateFieldGet(this, _SBFile_instances, "m", _SBFile_scaleCanvas).call(this, _old_c, Math.sqrt(_ratio) * 0.99);
+            _final_c = __classPrivateFieldGet(this, _SBFile_instances, "m", _SBFile_scaleCanvas).call(this, _old_c, Math.sqrt(_ratio) * 0.99); // we're targeting within 1%
             _b1 = yield new Promise((resolve) => {
                 _final_c.toBlob(resolve, imageType, qualityArgument);
+                // console.log(`(generating blob of requested type ${imageType})`);
             });
+            // workingDots();
+            // console.log(`... fine-tuning to W ${_final_c.width} x H ${_final_c.height} (size ${_b1.size})`);
             _ratio *= (maxSize / _b1.size);
-        } while (((_b1.size > maxSize) || ((Math.abs(_b1.size - maxSize) / maxSize) > 0.02)) && (--_maxIteration > 0));
+        } while (((_b1.size > maxSize) || ((Math.abs(_b1.size - maxSize) / maxSize) > 0.02)) && (--_maxIteration > 0)); // it's ok within 2%
+        // workingDots();
+        // console.log(`... ok looks like we're good now ... final size is ${_b1.size} (which is ${((_b1.size * 100) / maxSize).toFixed(2)}% of cap)`);
+        // document.getElementById('the-original-image').width = _final_c.width;  // a bit of a hack
         return _b1;
     });
 }, _SBFile_scaleCanvas = function _SBFile_scaleCanvas(canvas, scale) {
     const scaledCanvas = document.createElement('canvas');
     scaledCanvas.width = canvas.width * scale;
     scaledCanvas.height = canvas.height * scale;
+    // console.log(`#### scaledCanvas target W ${scaledCanvas.width} x H ${scaledCanvas.height}`);
     scaledCanvas
         .getContext('2d')
         .drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
+    // console.log(`#### scaledCanvas actual W ${scaledCanvas.width} x H ${scaledCanvas.height}`);
     return scaledCanvas;
 }, _SBFile_generateImageHash = function _SBFile_generateImageHash(image) {
     return __awaiter(this, void 0, void 0, function* () {
@@ -597,6 +768,7 @@ _SBFile_instances = new WeakSet(), _SBFile_asImage = function _SBFile_asImage(im
     return __awaiter(this, void 0, void 0, function* () {
         const canvas = document.createElement('canvas');
         const img = document.createElement('img');
+        // create img element from File object
         img.src = yield new Promise((resolve) => {
             const reader = new FileReader();
             reader.onload = (e) => resolve(e.target.result);
@@ -605,13 +777,25 @@ _SBFile_instances = new WeakSet(), _SBFile_asImage = function _SBFile_asImage(im
         yield new Promise((resolve) => {
             img.onload = resolve;
         });
+        // console.log("img object");
+        // console.log(img);
+        // console.log("canvas object");
+        // console.log(canvas);
+        // draw image in canvas element
         canvas.width = img.width;
         canvas.height = img.height;
         canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
         return canvas;
     });
 };
+/**
+ * Takes a message object and turns it into a payload to be
+ * used by SB protocol
+ */
 class Payload {
+    /**
+     * wrap
+     */
     wrap(contents, key) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
@@ -624,6 +808,9 @@ class Payload {
             }
         }));
     }
+    /**
+     * unwrap
+     */
     unwrap(payload, key) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
@@ -639,6 +826,12 @@ class Payload {
         });
     }
 }
+/**
+ * mtg: Protocol code that we wrap our WebSocket in
+ * I will be updating this to send messages and remove
+ * the wait to send messages only when ack received
+ * The benefit is reduced latency in communication protocol
+ */
 class WS_Protocol {
     constructor(options) {
         this.events = new MessageBus();
@@ -680,9 +873,15 @@ class WS_Protocol {
         this.options = Object.assign(this.options, options);
         this.join();
     }
+    /**
+     * Get options
+     */
     get options() {
         return this.options;
     }
+    /**
+     * join
+     */
     join() {
         return new Promise((resolve, reject) => {
             try {
@@ -699,9 +898,15 @@ class WS_Protocol {
             }
         });
     }
+    /**
+     * close
+     */
     close() {
         this.currentWebSocket.close();
     }
+    /**
+     * onError
+     */
     onError() {
         return __awaiter(this, void 0, void 0, function* () {
             this.currentWebSocket.addEventListener('error', (event) => {
@@ -712,6 +917,9 @@ class WS_Protocol {
             });
         });
     }
+    /**
+     * onClose
+     */
     onClose() {
         return __awaiter(this, void 0, void 0, function* () {
             this.currentWebSocket.addEventListener('close', (event) => {
@@ -722,6 +930,9 @@ class WS_Protocol {
             });
         });
     }
+    /**
+     * onMessage
+     */
     onMessage() {
         return __awaiter(this, void 0, void 0, function* () {
             this.currentWebSocket.addEventListener('message', (event) => __awaiter(this, void 0, void 0, function* () {
@@ -741,9 +952,15 @@ class WS_Protocol {
             }));
         });
     }
+    /**
+     * readyState
+     */
     get readyState() {
         return this.currentWebSocket.readyState;
     }
+    /**
+     * onOpen
+     */
     onOpen() {
         return __awaiter(this, void 0, void 0, function* () {
             this.currentWebSocket.addEventListener('open', (event) => __awaiter(this, void 0, void 0, function* () {
@@ -754,6 +971,12 @@ class WS_Protocol {
         });
     }
 }
+/**
+ * Channel
+ * @class
+ * @constructor
+ * @public
+ */
 class Channel {
     constructor(https, wss, identity, channel_id = null) {
         this.metaData = {};
@@ -787,7 +1010,12 @@ class Channel {
                 }
                 const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
                 let isAdmin;
+                // TODO .. hardcoded i don't know what this does ...
+                // if (process.browser) {
                 isAdmin = (document.cookie.split('; ').find((row) => row.startsWith('token_' + this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
+                // } else {
+                //   isAdmin = (process.env.REACT_APP_ROOM_SERVER !== 's_socket.privacy.app' && isOwner);
+                // }
                 if (!isOwner && !isAdmin) {
                     if (_exportable_verifiedGuest_pubKey === null) {
                         this.api.postPubKey(_exportable_pubKey);
@@ -807,7 +1035,11 @@ class Channel {
                     _shared_key = yield SB_Crypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
                 }
                 let _locked_key = null, _exportable_locked_key;
+                // if (process.browser) {
                 _exportable_locked_key = localStorage.getItem(this._id + '_lockedKey');
+                // } else {
+                //   _exportable_locked_key = await localStorage.getItem(this._id + '_lockedKey');
+                // }
                 if (_exportable_locked_key !== null) {
                     _locked_key = yield SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
                 }
@@ -844,6 +1076,9 @@ class Channel {
             }
         });
     }
+    /**
+     * Join channel, channel_id is the :term:`Channel Name`.
+     */
     join(channel_id) {
         return new Promise((resolve) => {
             if (channel_id === null) {
@@ -864,17 +1099,32 @@ class Channel {
             });
         });
     }
+    /**
+     * Return keys
+     */
     get keys() {
         return __classPrivateFieldGet(this, _Channel_keys, "f");
     }
+    /**
+     * Return API
+     */
     get api() {
         return __classPrivateFieldGet(this, _Channel_api, "f");
     }
+    /**
+     * Return socket
+     */
     get socket() {
         return __classPrivateFieldGet(this, _Channel_socket, "f");
     }
 }
 _Channel_keys = new WeakMap(), _Channel_api = new WeakMap(), _Channel_socket = new WeakMap();
+/**
+ * Channel Socket
+ * @class
+ * @constructor
+ * @public
+ */
 class ChannelSocket {
     constructor(wsUrl, channel, identity) {
         _ChannelSocket_channel.set(this, void 0);
@@ -889,9 +1139,15 @@ class ChannelSocket {
         __classPrivateFieldSet(this, _ChannelSocket_payload, new Payload(), "f");
         this.open();
     }
+    /**
+     * setKeys
+     */
     setKeys(_keys) {
         __classPrivateFieldGet(this, _ChannelSocket_channel, "f").loadKeys(_keys);
     }
+    /**
+     * open
+     */
     open() {
         const options = {
             url: this.url + '/api/room/' + this.channelId + '/websocket',
@@ -936,9 +1192,15 @@ class ChannelSocket {
         };
         this.socket = new WS_Protocol(options);
     }
+    /**
+     * close
+     */
     close() {
         this.socket.close();
     }
+    /**
+     * isReady
+     */
     isReady() {
         console.info('SB Socket ready');
         this.ready = true;
@@ -948,6 +1210,9 @@ class ChannelSocket {
             });
         }
     }
+    /**
+     * Send message on channel socket
+     */
     send(message) {
         return __awaiter(this, void 0, void 0, function* () {
             if (this.ready) {
@@ -965,6 +1230,9 @@ class ChannelSocket {
             }
         });
     }
+    /**
+     * Send SB object (file) on channel socket
+     */
     sendSbObject(file) {
         return __awaiter(this, void 0, void 0, function* () {
             if (this.ready) {
@@ -976,6 +1244,9 @@ class ChannelSocket {
             }
         });
     }
+    /**
+     * Receive message on channel socket
+     */
     receive(message) {
         return __awaiter(this, void 0, void 0, function* () {
             try {
@@ -1006,6 +1277,12 @@ class ChannelSocket {
     }
 }
 _ChannelSocket_channel = new WeakMap(), _ChannelSocket_identity = new WeakMap(), _ChannelSocket_payload = new WeakMap(), _ChannelSocket_queue = new WeakMap();
+/**
+ * Storage API
+ * @class
+ * @constructor
+ * @public
+ */
 class StorageApi {
     constructor(server, channel, identity) {
         _StorageApi_instances.add(this);
@@ -1015,6 +1292,9 @@ class StorageApi {
         __classPrivateFieldSet(this, _StorageApi_channel, channel, "f");
         __classPrivateFieldSet(this, _StorageApi_identity, identity, "f");
     }
+    /**
+     * saveFile
+     */
     saveFile(file) {
         return __awaiter(this, void 0, void 0, function* () {
             if (file instanceof File) {
@@ -1034,6 +1314,9 @@ class StorageApi {
             }
         });
     }
+    /**
+     * storeRequest
+     */
     storeRequest(fileId) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(this.server + '/storeRequest?name=' + fileId)
@@ -1050,6 +1333,9 @@ class StorageApi {
             });
         }));
     }
+    /**
+     * storeData
+     */
     storeData(type, fileId, encrypt_data, storageToken, data) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
@@ -1074,6 +1360,9 @@ class StorageApi {
             });
         }));
     }
+    /**
+     * storeImage
+     */
     storeImage(image, image_id, keyData, type) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             const storeReqResp = yield this.storeRequest(image_id);
@@ -1092,6 +1381,9 @@ class StorageApi {
             resolve({ verificationToken: resp_json.verification_token, id: resp_json.image_id, type: type });
         }));
     }
+    /**
+     * fetchData
+     */
     fetchData(msgId, verificationToken) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(this.server + '/fetchData?id=' + encodeURIComponent(msgId) + '&verification_token=' + verificationToken, {
@@ -1110,6 +1402,9 @@ class StorageApi {
             });
         }));
     }
+    /**
+     * retrieveData
+     */
     retrieveData(msgId, messages, controlMessages) {
         return __awaiter(this, void 0, void 0, function* () {
             const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
@@ -1133,6 +1428,9 @@ class StorageApi {
             return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
         });
     }
+    /**
+     * retrieveDataFromMessage
+     */
     retrieveDataFromMessage(message, controlMessages) {
         return __awaiter(this, void 0, void 0, function* () {
             const imageMetaData = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData;
@@ -1160,18 +1458,26 @@ class StorageApi {
 _StorageApi_channel = new WeakMap(), _StorageApi_identity = new WeakMap(), _StorageApi_instances = new WeakSet(), _StorageApi_getFileKey = function _StorageApi_getFileKey(fileHash, _salt) {
     return __awaiter(this, void 0, void 0, function* () {
         const keyMaterial = yield SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+        // TODO - Support deriving from PBKDF2 in deriveKey function
         const key = yield crypto.subtle.deriveKey({
             'name': 'PBKDF2',
             'salt': _salt,
             'iterations': 100000,
             'hash': 'SHA-256'
         }, keyMaterial, { 'name': 'AES-GCM', 'length': 256 }, true, ['encrypt', 'decrypt']);
+        // return key;
         return key;
     });
 }, _StorageApi_unpadData = function _StorageApi_unpadData(data_buffer) {
     const _size = new Uint32Array(data_buffer.slice(-4))[0];
     return data_buffer.slice(0, _size);
 };
+/**
+ * Channel API
+ * @class
+ * @constructor
+ * @public
+ */
 class ChannelApi {
     constructor(server, channel, identity) {
         _ChannelApi_identity.set(this, void 0);
@@ -1186,6 +1492,9 @@ class ChannelApi {
         __classPrivateFieldSet(this, _ChannelApi_channelServer, server + '/api/room/', "f");
         __classPrivateFieldSet(this, _ChannelApi_identity, identity, "f");
     }
+    /**
+     * getLastMessageTimes
+     */
     getLastMessageTimes() {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(__classPrivateFieldGet(this, _ChannelApi_channelApi, "f") + '/getLastMessageTimes', {
@@ -1202,6 +1511,9 @@ class ChannelApi {
             });
         }));
     }
+    /**
+     * getOldMessages
+     */
     getOldMessages(currentMessagesLength) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(__classPrivateFieldGet(this, _ChannelApi_channelServer, "f") + __classPrivateFieldGet(this, _ChannelApi_channel, "f")._id + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
@@ -1218,6 +1530,9 @@ class ChannelApi {
             });
         }));
     }
+    /**
+     * updateCapacity
+     */
     updateCapacity(capacity) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(__classPrivateFieldGet(this, _ChannelApi_channelServer, "f") + __classPrivateFieldGet(this, _ChannelApi_channel, "f")._id + '/updateRoomCapacity?capacity=' + capacity, {
@@ -1234,6 +1549,9 @@ class ChannelApi {
             });
         }));
     }
+    /**
+     * getCapacity
+     */
     getCapacity() {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(__classPrivateFieldGet(this, _ChannelApi_channelServer, "f") + __classPrivateFieldGet(this, _ChannelApi_channel, "f")._id + '/getRoomCapacity', {
@@ -1250,6 +1568,9 @@ class ChannelApi {
             });
         }));
     }
+    /**
+     * getJoinRequests
+     */
     getJoinRequests() {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(__classPrivateFieldGet(this, _ChannelApi_channelServer, "f") + __classPrivateFieldGet(this, _ChannelApi_channel, "f")._id + '/getJoinRequests', {
@@ -1271,6 +1592,9 @@ class ChannelApi {
             });
         }));
     }
+    /**
+     * isLocked
+     */
     isLocked() {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(__classPrivateFieldGet(this, _ChannelApi_channelServer, "f") + __classPrivateFieldGet(this, _ChannelApi_channel, "f")._id + '/roomLocked', {
@@ -1289,9 +1613,13 @@ class ChannelApi {
             });
         }));
     }
+    /**
+     * Set message of the day
+     */
     setMOTD(motd) {
         console.log(motd);
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
+            //if (this.#channel.owner) {
             fetch(__classPrivateFieldGet(this, _ChannelApi_channelServer, "f") + __classPrivateFieldGet(this, _ChannelApi_channel, "f")._id + '/motd', {
                 method: 'POST', body: JSON.stringify({ motd: motd }), headers: {
                     'Content-Type': 'application/json'
@@ -1308,10 +1636,17 @@ class ChannelApi {
             }).catch((error) => {
                 reject(error);
             });
+            //} else {
+            //  reject(new Error('Must be chann el owner to get admin data'));
+            //}
         }));
     }
+    /**
+     * getAdminData
+     */
     getAdminData() {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
+            //if (this.#channel.owner) {
             const token_data = new Date().getTime().toString();
             const token_sign = yield SB_Crypto.sign(__classPrivateFieldGet(this, _ChannelApi_identity, "f").personal_signKey, token_data);
             fetch(__classPrivateFieldGet(this, _ChannelApi_channelServer, "f") + __classPrivateFieldGet(this, _ChannelApi_channel, "f")._id + '/getAdminData', {
@@ -1333,8 +1668,14 @@ class ChannelApi {
             }).catch((error) => {
                 reject(error);
             });
+            ///} else {
+            ///  reject(new Error('Must be channel owner to get admin data'));
+            //}
         }));
     }
+    /**
+     * downloadData
+     */
     downloadData() {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             fetch(__classPrivateFieldGet(this, _ChannelApi_channelServer, "f") + __classPrivateFieldGet(this, _ChannelApi_channel, "f")._id + '/downloadData', {
@@ -1507,31 +1848,47 @@ class ChannelApi {
             });
         }));
     }
+    // unused
     notifications() {
     }
+    //unused
     getPubKeys() {
     }
+    // unused
     ownerUnread() {
     }
+    // unused
     registerDevice() {
     }
 }
 _ChannelApi_identity = new WeakMap(), _ChannelApi_channel = new WeakMap(), _ChannelApi_channelApi = new WeakMap(), _ChannelApi_channelServer = new WeakMap(), _ChannelApi_payload = new WeakMap();
+/**
+ * KV
+ * @class
+ * @constructor
+ * @public
+ */
 class KV {
     constructor(options) {
         this.events = new EventEmitter();
+        // if (!process.browser) {
+        //   this.db = new FileSystemDB(options);
+        // } else {
         if (!window.indexedDB) {
             throw new Error('Your browser doesn\'t support a stable version of IndexedDB.');
         }
         this.db = new IndexedKV(options);
+        // }
     }
     openCursor(match, callback) {
         return this.db.openCursor(match, callback);
     }
+    // Set item will insert or replace
     setItem(key, value) {
         return this.db.setItem(key, value);
     }
     ;
+    //Add item but not replace
     add(key, value) {
         return this.db.add(key, value);
     }
@@ -1545,6 +1902,13 @@ class KV {
     }
     ;
 }
+/**
+ * FileSystemDB
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class FileSystemDB {
     constructor(options) {
         _FileSystemDB_instances.add(this);
@@ -1579,6 +1943,7 @@ class FileSystemDB {
                 console.info('Created directory for FileSystemDB');
             }
         });
+        // Set item will insert or replace
         this.setItem = (key, value) => {
             return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
                 try {
@@ -1590,6 +1955,7 @@ class FileSystemDB {
                 }
             }));
         };
+        //Add item but not replace
         this.add = (key, value) => {
             return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
                 try {
@@ -1714,6 +2080,14 @@ _FileSystemDB_useDatabase = new WeakMap(), _FileSystemDB_instances = new WeakSet
 }, _FileSystemDB_serializeKey = function _FileSystemDB_serializeKey(key) {
     return (key.replace(/[ &\/\\#,+()$~%.'":*?<>{}]/g, ''));
 };
+/**
+ * Augments IndexedDB to be used as a KV to easily
+ * replace localStorage for larger and more complex datasets
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class IndexedKV {
     constructor(options) {
         _IndexedKV_instances.add(this);
@@ -1727,11 +2101,15 @@ class IndexedKV {
                 this.options.onReady(e);
             });
         }
+        // if (!process.browser) {
+        //   this.indexedDB = global.indexedDB;
+        // } else {
         if (!window.indexedDB) {
             console.error('Your browser doesn\'t support a stable version of IndexedDB.');
             return;
         }
         this.indexedDB = window.indexedDB;
+        // }
         const openReq = this.indexedDB.open(this.options.db);
         openReq.onerror = (event) => {
             console.error(event);
@@ -1776,6 +2154,7 @@ class IndexedKV {
     }
     ;
     ;
+    // Set item will insert or replace
     setItem(key, value) {
         return new Promise((resolve, reject) => {
             const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
@@ -1810,6 +2189,7 @@ class IndexedKV {
         });
     }
     ;
+    //Add item but not replace
     add(key, value) {
         return new Promise((resolve, reject) => {
             const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
@@ -1878,6 +2258,16 @@ _IndexedKV_instances = new WeakSet(), _IndexedKV_useDatabase = function _Indexed
         console.info('A new version of this page is ready. Please reload or close this tab!');
     };
 };
+// if (!process.browser) {
+//   global.localStorage = new KV({db: 'localStorage', table: 'items'});
+// }
+/**
+ * QueueItem class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class QueueItem {
     constructor(body, action) {
         this.timestamp = Date.now();
@@ -1895,7 +2285,15 @@ class QueueItem {
         }));
     }
 }
+/**
+ * Queue Class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 class Queue {
+    // Needs to run from the
     constructor(options) {
         this.lastProcessed = Date.now();
         this.events = new MessageBus();
@@ -2018,10 +2416,25 @@ class Queue {
         this.cacheDb = new KV({ db: 'offline_queue', table: 'items', onReady: this.init });
     }
 }
+/**
+ * Constructor expects an object with the names of the matching servers, for example
+ * (this shows the miniflare local dev config):
+ * ::
+ *
+ *     {
+ *       channel_server: 'http://127.0.0.1:4001',
+ *       channel_ws: 'ws://127.0.0.1:4001',
+ *       storage_server: 'http://127.0.0.1:4000'
+ *     }
+ *
+ */
 class Snackabra {
+    /**
+     */
     constructor(args) {
         _Snackabra_instances.add(this);
         this.MessageBus = MessageBus;
+        // PSM: i think these two are on a per-channel object basis?
         _Snackabra_channel.set(this, Channel);
         _Snackabra_storage.set(this, StorageApi);
         _Snackabra_identity.set(this, Identity);
@@ -2063,11 +2476,16 @@ class Snackabra {
             }
         }));
     }
+    /**
+     * Connects to :term:`Channel Name` on this SB config.
+     * Returns a (promise to a) channel object
+     */
     connect(channel_id) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {
                 const _self = this;
                 if (!__classPrivateFieldGet(_self, _Snackabra_identity, "f").exportable_pubKey) {
+                    // TODO: does it?
                     reject(new Error('setIdentity must be called before connecting'));
                 }
                 __classPrivateFieldSet(_self, _Snackabra_queue, new Queue({ processor: true }), "f");
@@ -2085,6 +2503,11 @@ class Snackabra {
             }
         }));
     }
+    /**
+     * Creates a channel. Currently uses trivial authentication.
+     * Returns the :term:`Channel Name`.
+     * (TODO: token-based approval of storage spend)
+     */
     create(serverSecret) {
         return new Promise((resolve, reject) => __awaiter(this, void 0, void 0, function* () {
             try {

@@ -76,7 +76,7 @@ function SB_libraryVersion() {
  * SB simple events (mesage bus) class
  */
 class MessageBus {
-  bus: Dictionary = {};
+  bus: Dictionary = {}
 
   /**
    * Safely returns handler for any event
