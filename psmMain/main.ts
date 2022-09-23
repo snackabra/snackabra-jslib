@@ -2,7 +2,7 @@
   COMPILE WITH (for now):
   
   tsc -lib dom,es5,es6,es2021 -t es6 --pretty false --strict ./main.ts
- xc
+
 */
 
 /*
@@ -882,7 +882,7 @@ class Crypto {
    * Import keys
    */
   importKey(format: 'raw' | 'pkcs8' | 'spki' | 'jwk',
-	    key: BufferSource,
+	    key: BufferSource | JsonWebKey,
 	    type: 'ECDH' | 'AES' | 'PBKDF2',
 	    extractable: boolean,
 	    keyUsages: KeyUsage[]): Promise<CryptoKey> {
@@ -896,7 +896,8 @@ class Crypto {
       };
       try {
 	// ok stuck here ... importKey() is *supposed* to accept 'jwk' but the prototype does not
-        const response = await crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
+	// @ts-ignore
+        const response = await window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
         resolve(response);
       } catch (e) {
         console.error(format, key, type, extractable, keyUsages);
@@ -991,7 +992,7 @@ class Crypto {
   /**
    * Decrypt
    */
-  decrypt(secretKey: CryptoKey, contents: Dictionary, outputType = 'string'): Promise<string> {
+  decrypt(secretKey: CryptoKey, contents: Dictionary, outputType = 'string'): Promise<string | Dictionary> {
     return new Promise(async (resolve, reject) => {
       try {
         const ciphertext: BufferSource = typeof contents.content === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.content)) : contents.content;
@@ -1126,15 +1127,15 @@ class Identity implements SnackabraKeys {
  */
 class SBMessage {
   encrypted = false;
-  contents: string;
+  contents: string
   sender_pubKey: CryptoKey;
-  sign: ArrayBuffer;
+  sign: string;
   image = '';
-  image_sign: ArrayBuffer;
-  imageMetaData: Dictionary;
-  imageMetadata_sign: ArrayBuffer;
+  image_sign: string;
+  imageMetaData: string;
+  imageMetadata_sign: string;
 
-  constructor(contents: Dictionary, signKey: CryptoKey, key: CryptoKey) {
+  constructor(contents: string, signKey: CryptoKey, key: CryptoKey) {
     return new Promise(async (resolve) => {
       // eslint-disable-next-line prefer-const
       const imgId = '', previewId = '', imgKey = '', previewKey = '';
@@ -1164,7 +1165,7 @@ class SBFile {
   encrypted = false;
   contents: string;
   sender_pubKey: CryptoKey;
-  sign: ArrayBuffer;
+  sign: string;
   data: Dictionary = {
     previewImage: '',
     fullImage: ''

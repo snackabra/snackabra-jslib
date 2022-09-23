@@ -2,7 +2,7 @@
   COMPILE WITH (for now):
   
   tsc -lib dom,es5,es6,es2021 -t es6 --pretty false --strict ./main.ts
- xc
+
 */
 var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, generator) {
     function adopt(value) { return value instanceof P ? value : new P(function (resolve) { resolve(value); }); }
@@ -793,7 +793,8 @@ class Crypto {
             };
             try {
                 // ok stuck here ... importKey() is *supposed* to accept 'jwk' but the prototype does not
-                const response = yield crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
+                // @ts-ignore
+                const response = yield window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
                 resolve(response);
             }
             catch (e) {
