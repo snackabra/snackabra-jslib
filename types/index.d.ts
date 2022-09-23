@@ -20,4 +20,23 @@ interface IndexedKVOptions {
   onReady: null | function,
 }
 
+interface FileSystemDBOptions {
+  db: string,
+  table: string,
+  onReady: null | function,
+}
+
 type StorableDataType = string | number | bigint | boolean | symbol | object
+
+interface Dictionary {
+  [index: string]: any;
+}
+
+interface ChannelData {
+  roomId?: string;
+  channelId?: string;
+  ownerKey: string;
+  encryptionKey: string;
+  signKey: string;
+  SERVER_SECRET: string;
+}
