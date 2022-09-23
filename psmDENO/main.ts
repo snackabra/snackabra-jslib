@@ -1,1 +1,1 @@
-../psmTSC/main.ts
+../psmSRC/main.ts
