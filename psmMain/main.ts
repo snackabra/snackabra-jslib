@@ -1468,7 +1468,7 @@ class WS_Protocol {
   join(): Promise<boolean> {
     return new Promise((resolve, reject) => {
       try {
-        this.currentWebSocket = new Websocket(this.options.url);
+        this.currentWebSocket = new WebSocket(this.options.url);
         this.onError();
         this.onClose();
         this.onOpen();
