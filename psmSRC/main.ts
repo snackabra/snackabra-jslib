@@ -39,9 +39,9 @@ interface SnackabraOptions {
 }
 
 interface SnackabraKeys {
-  exportable_pubKey: JsonWebKey | Promise<JsonWebKey>
-  exportable_privateKey: JsonWebKey | Promise<JsonWebKey>
-  privateKey: CryptoKey | Promise<CryptoKey>,
+  exportable_pubKey: JsonWebKey | Promise<JsonWebKey | null>
+  exportable_privateKey: JsonWebKey | Promise<JsonWebKey | null>
+  privateKey: CryptoKey | Promise<CryptoKey | null >,
 }
 
 interface IndexedKVOptions {
@@ -90,7 +90,7 @@ interface ChannelKeys {
 }
 
 /* Zen Master: "um" */
-function SB_libraryVersion() {
+export function SB_libraryVersion() {
   return('THIS IS NEITHER BROWSER NOR NODE THIS IS SPARTA!')
 }
 
@@ -193,7 +193,7 @@ export class MessageBus {
 // }
 // throw new RethrownError(`Oh no a "${error.message}" error`, error)
 
-function _sb_exception(loc: string, msg: string) {
+export function _sb_exception(loc: string, msg: string) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
   // for now disabling this to keep node testing less noisy
   // console.error(m);
@@ -203,7 +203,7 @@ function _sb_exception(loc: string, msg: string) {
 // internal - general handling of paramaters that might be promises
 // (basically the "anti" of resolve, if it's *not* a promise then
 // it becomes one
-function _sb_resolve(val: any) {
+export function _sb_resolve(val: any) {
   if (val.then) {
     // it's already a promise
     // console.log('it is a promise')
@@ -215,7 +215,7 @@ function _sb_resolve(val: any) {
 }
 
 // internal - handle assertions
-function _sb_assert(val: unknown, msg: string) {
+export function _sb_assert(val: unknown, msg: string) {
   if (!(val)) {
     const m = `<< SB assertion error: ${msg} >>`;
     throw new Error(m);
@@ -234,7 +234,7 @@ function _sb_assert(val: unknown, msg: string) {
 /**
  * Fills buffer with random data
  */
-function getRandomValues(buffer: Uint8Array) {
+export function getRandomValues(buffer: Uint8Array) {
   return crypto.getRandomValues(buffer);
 }
 
@@ -247,7 +247,7 @@ const b64_regex = /^([A-Za-z0-9+/_\-=]*)$/;
  * Returns 'true' if (and only if) string is well-formed base64.
  * Works same on browsers and nodejs.
  */
-function _assertBase64(base64: string) {
+export function _assertBase64(base64: string) {
   // return (b64_regex.exec(base64)?.[0] === base64);
   const z = b64_regex.exec(base64);
   if (z) return (z[0] === base64); else return false;
@@ -260,7 +260,7 @@ function _assertBase64(base64: string) {
  * @param {string} string
  * @return {Uint8Array} buffer
  */
-function str2ab(string: string) {
+export function str2ab(string: string) {
   return new TextEncoder().encode(string);
 }
 
@@ -272,7 +272,7 @@ function str2ab(string: string) {
  *
  * @param buffer
  */
-function ab2str(buffer: Uint8Array) {
+export function ab2str(buffer: Uint8Array) {
   return new TextDecoder('utf-8').decode(buffer);
 }
 
@@ -318,7 +318,7 @@ function _byteLength(validLen: number, placeHoldersLen: number) {
  * @param {str} base64 string in either regular or URL-friendly representation.
  * @return {Uint8Array} returns decoded binary result
  */
-function base64ToArrayBuffer(str: string): Uint8Array {
+export function base64ToArrayBuffer(str: string): Uint8Array {
   if (!_assertBase64(str)) throw new Error('invalid character');
   let tmp: number;
   switch (str.length % 4) {
@@ -424,7 +424,7 @@ function encodeChunk(lookup: string[], view: DataView, start: number, end: numbe
  * @param {bufferSource} ArrayBuffer buffer
  * @return {string} base64 string
  */
-function arrayBufferToBase64(buffer: ArrayBuffer): string {
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   // const view = bs2dv(bufferSource)
   // const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
   const view = new DataView(buffer)
@@ -489,7 +489,7 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
 //   }
 // }
 
-function _appendBuffer(buffer1: Uint8Array | ArrayBuffer, buffer2: Uint8Array | ArrayBuffer): ArrayBuffer {
+export function _appendBuffer(buffer1: Uint8Array | ArrayBuffer, buffer2: Uint8Array | ArrayBuffer): ArrayBuffer {
   const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
   tmp.set(new Uint8Array(buffer1), 0);
   tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
@@ -533,7 +533,7 @@ OTJj8TMRI6y3Omop3kIfpgUCAwEAAQ==
  * @return {cryptoKey} RSA-OAEP key
  *
  */
-function importPublicKey(pem?: string) {
+export function importPublicKey(pem?: string) {
   if (typeof pem == 'undefined') pem = defaultPublicKeyPEM;
   // fetch the part of the PEM string between header and footer
   const pemHeader = '-----BEGIN PUBLIC KEY-----';
@@ -554,7 +554,7 @@ function importPublicKey(pem?: string) {
  * @return {int} integer 0..255
  *
  */
-function simpleRand256() {
+export function simpleRand256() {
   return crypto.getRandomValues(new Uint8Array(1))[0];
 }
 
@@ -569,7 +569,7 @@ const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
  *
  * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
  */
-function simpleRandomString(n: number, code: string): string {
+export function simpleRandomString(n: number, code: string): string {
   if (code == 'base32mi') {
     // yeah, of course we need to add base64 etc
     const z = crypto.getRandomValues(new Uint8Array(n));
@@ -614,7 +614,7 @@ function simpleRandomString(n: number, code: string): string {
  *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
  *
  */
-function cleanBase32mi(s: string) {
+export function cleanBase32mi(s: string) {
   // this of course is not the most efficient
   return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
 }
@@ -631,7 +631,7 @@ function cleanBase32mi(s: string) {
  * @param {callback} callback function, called with results
  *
  */
-function packageEncryptDict(dict: Dictionary, publicKeyPEM: string, callback: CallableFunction) {
+export function packageEncryptDict(dict: Dictionary, publicKeyPEM: string, callback: CallableFunction) {
   const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
   const aesAlgorithmKeyGen = {name: 'AES-GCM', length: 256};
   const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(16))};
@@ -672,7 +672,7 @@ function packageEncryptDict(dict: Dictionary, publicKeyPEM: string, callback: Ca
 /**
  * Partition
  */
-function partition(str: string, n: number) {
+export function partition(str: string, n: number) {
   const returnArr = [];
   let i, l;
   for (i = 0, l = str.length; i < l; i += n) {
@@ -721,7 +721,7 @@ export function jsonParseWrapper(str: string, loc: string) {
 /**
  * Extract payload
  */
-function extractPayloadV1(payload: ArrayBuffer) {
+export function extractPayloadV1(payload: ArrayBuffer) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
@@ -744,7 +744,7 @@ function extractPayloadV1(payload: ArrayBuffer) {
 /**
  * Assemble payload
  */
-function assemblePayload(data: Dictionary) {
+export function assemblePayload(data: Dictionary) {
   try {
     const metadata: Dictionary = {};
     metadata['version'] = '002';
@@ -777,7 +777,7 @@ function assemblePayload(data: Dictionary) {
 /**
  * Extract payload (latest version)
  */
-function extractPayload(payload: ArrayBuffer): Dictionary {
+export function extractPayload(payload: ArrayBuffer): Dictionary {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
@@ -820,14 +820,14 @@ function extractPayload(payload: ArrayBuffer): Dictionary {
 /**
  * Encode into b64 URL
  */
-function encodeB64Url(input: string) {
+export function encodeB64Url(input: string) {
   return input.replaceAll('+', '-').replaceAll('/', '_');
 }
 
 /**
  * Decode b64 URL
  */
-function decodeB64Url(input: string) {
+export function decodeB64Url(input: string) {
   input = input.replaceAll('-', '+').replaceAll('_', '/');
 
   // Pad out with standard base64 required padding characters
@@ -862,9 +862,9 @@ class Crypto {
   /**
    * Extracts (generates) public key from a private key.
    */
-  extractPubKey(privateKey: Dictionary) {
+  extractPubKey(privateKey: JsonWebKey): JsonWebKey | null {
     try {
-      const pubKey = {...privateKey};
+      const pubKey: JsonWebKey = {...privateKey};
       delete pubKey.d;
       delete pubKey.dp;
       delete pubKey.dq;
@@ -874,7 +874,7 @@ class Crypto {
       return pubKey;
     } catch (e) {
       console.error(e);
-      return {};
+      return null;
     }
   }
 
@@ -1008,7 +1008,7 @@ class Crypto {
   /**
    * Decrypt
    */
-  decrypt(secretKey: CryptoKey, contents: Dictionary, outputType = 'string'): Promise<string | Dictionary> {
+  decrypt(secretKey: CryptoKey, contents: Dictionary, outputType = 'string'): Promise<string> {
     return new Promise(async (resolve, reject) => {
       try {
         const ciphertext: BufferSource = typeof contents.content === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.content)) : contents.content;
@@ -1085,13 +1085,13 @@ const SB_Crypto = new Crypto();
  * @public
  */
 class Identity implements SnackabraKeys {
-  resolve_exportable_pubKey: (arg0: JsonWebKey) => void = (() => { throw new Error('uninit prom called'); })
-  resolve_exportable_privateKey:  (arg0: JsonWebKey) => void = (() => { throw new Error('uninit prom called'); })
-  resolve_privateKey: (arg0: CryptoKey) => void = (() => { throw new Error('uninit prom called'); })
+  resolve_exportable_pubKey: (arg0: JsonWebKey | null) => void = (() => { throw new Error('uninit prom called'); })
+  resolve_exportable_privateKey:  (arg0: JsonWebKey | null) => void = (() => { throw new Error('uninit prom called'); })
+  resolve_privateKey: (arg0: CryptoKey | null) => void = (() => { throw new Error('uninit prom called'); })
 
-  exportable_pubKey = new Promise<JsonWebKey>((resolve) => this.resolve_exportable_pubKey = resolve)
-  exportable_privateKey = new Promise<JsonWebKey>((resolve) => this.resolve_exportable_privateKey = resolve)
-  privateKey = new Promise<CryptoKey>((resolve) => this.resolve_privateKey = resolve)
+  exportable_pubKey = new Promise<JsonWebKey | null>((resolve) => this.resolve_exportable_pubKey = resolve)
+  exportable_privateKey = new Promise<JsonWebKey | null>((resolve) => this.resolve_exportable_privateKey = resolve)
+  privateKey = new Promise<CryptoKey | null>((resolve) => this.resolve_privateKey = resolve)
 
   /**
    * Mint keys
@@ -1145,31 +1145,21 @@ class SBMessage {
   encrypted = false;
   contents: string
   sender_pubKey: CryptoKey;
-  sign: string;
+  sign: Promise<string>
   image = '';
-  image_sign: string;
-  imageMetaData: string;
-  imageMetadata_sign: string;
+  image_sign: Promise<string>
+  imageMetaData: string
+  imageMetadata_sign: Promise<string>
 
   constructor(contents: string, signKey: CryptoKey, key: CryptoKey) {
-    // TODO: does it work to return a promise as a class instance?
-    // @ts-ignore
-    return new Promise(async (resolve) => {
-      // eslint-disable-next-line prefer-const
-      const imgId = '', previewId = '', imgKey = '', previewKey = '';
-      this.contents = contents;
-      this.sender_pubKey = key;
-      this.sign = await SB_Crypto.sign(signKey, contents);
-      this.image_sign = await SB_Crypto.sign(signKey, this.image);
-      this.imageMetaData = JSON.stringify({
-        imageId: imgId,
-        previewId: previewId,
-        imageKey: imgKey,
-        previewKey: previewKey
-      });
-      this.imageMetadata_sign = await SB_Crypto.sign(signKey, this.imageMetaData);
-      resolve(this);
-    });
+    this.contents = contents;
+    this.sender_pubKey = key;
+    this.imageMetaData = JSON.stringify({imageId: '', previewId: '', imageKey: '', previewKey: ''})
+    // psm: setting the rest to be promises, need to follow through in rest of code
+    //      ... though i'm not sure why we need these hoops for a non-image
+    this.sign = SB_Crypto.sign(signKey, contents);
+    this.image_sign = SB_Crypto.sign(signKey, this.image);
+    this.imageMetadata_sign = SB_Crypto.sign(signKey, this.imageMetaData);
   }
 }
 
@@ -1181,58 +1171,54 @@ class SBMessage {
  */
 class SBFile {
   encrypted = false;
-  contents: string;
+  contents: string = ''
   sender_pubKey: CryptoKey;
-  sign: string;
+  sign: Promise<string>;
   data: Dictionary = {
     previewImage: '',
     fullImage: ''
   };
+  // psm: this should all be done in a class manner, no?
+  //      e.g. SBFileImage inherits from SBFile?
   image = '';
-  image_sign: string;
-  imageMetaData: string;
-  imageMetadata_sign: string;
+  image_sign: string = '';
+  imageMetaData: string = '';
+  imageMetadata_sign: string = '';
 
   // file is an instance of File
-  constructor(file, signKey, key) {
-    // TODO: does it work to return a promise as a class instance?
-    // @ts-ignore
-    return new Promise(async (resolve, reject) => {
-      this.contents = '';
-      this.sender_pubKey = key;
-      this.sign = await SB_Crypto.sign(signKey, this.contents);
-      if (file.type.match(/^image/i)) {
-        this.#asImage(file, signKey).then(() => {
-          resolve(this);
-        });
-      } else {
-        reject(new Error('Unsupported file type: ' + file.type));
-      }
-    });
+  constructor(file: File, signKey: CryptoKey, key: CryptoKey) {
+    this.sender_pubKey = key;
+    // psm: again, why are we signing empty contents?
+    this.sign = SB_Crypto.sign(signKey, this.contents);
+    if (file.type.match(/^image/i)) {
+      this.#asImage(file, signKey)
+    } else {
+      throw new Error('Unsupported file type: ' + file.type);
+    }
   }
 
   /**
    * asImage
    */
-  #asImage(image: ArrayBuffer, signKey: CryptoKey) {
-    return new Promise(async (resolve) => {
-      this.data.previewImage = this.#padImage(await (await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
-      const previewHash: Dictionary = await this.#generateImageHash(this.data.previewImage);
-      this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await (await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
-      const fullHash: Dictionary = await this.#generateImageHash(this.data.fullImage);
-      // psm: not sure what this does next, but the new SBImage class should do all this for you
-      // @ts-ignore
-      this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
-      this.image_sign = await SB_Crypto.sign(signKey, this.image);
-      this.imageMetaData = JSON.stringify({
-        imageId: fullHash.id,
-        previewId: previewHash.id,
-        imageKey: fullHash.key,
-        previewKey: previewHash.key
-      });
-      this.imageMetadata_sign = await SB_Crypto.sign(signKey, this.imageMetaData);
-      resolve(this);
-    });
+  #asImage(image: File, signKey: CryptoKey) {
+    // psm: this should all be replaced by SBImage
+    throw new Error('#asImage() needs carryover from SBImage etc')
+
+    // this.data.previewImage = this.#padImage(await (await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
+    // const previewHash: Dictionary = await this.#generateImageHash(this.data.previewImage);
+    // this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await (await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
+    // const fullHash: Dictionary = await this.#generateImageHash(this.data.fullImage);
+    // // psm: not sure what this does next, but the new SBImage class should do all this for you
+    // // @ts-ignore
+    // this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
+    // this.image_sign = await SB_Crypto.sign(signKey, this.image);
+    // this.imageMetaData = JSON.stringify({
+    //   imageId: fullHash.id,
+    //   previewId: previewHash.id,
+    //   imageKey: fullHash.key,
+    //   previewKey: previewHash.key
+    // });
+    // this.imageMetadata_sign = await SB_Crypto.sign(signKey, this.imageMetaData)
   }
 
   /**
@@ -1265,7 +1251,7 @@ class SBFile {
     _sizes = _sizes.map((size) => size * 1024);
     const image_size: number = image_buffer.byteLength;
     // console.log('BEFORE PADDING: ', image_size)
-    let _target: number | null;
+    let _target: number | null = 0
     if (image_size < _sizes[_sizes.length - 1]) {
       for (let i = 0; i < _sizes.length; i++) {
         if (image_size + 21 < _sizes[i]) {
@@ -1302,7 +1288,7 @@ class SBFile {
   async #restrictPhoto(photo: ArrayBuffer,
 		       maxSize: number, // in KB
 		       imageType: 'image/jpeg',
-		       qualityArgument: number): Promise<Blob> | null
+		       qualityArgument: number): Promise<Blob | null>
   {
     // latest and greatest JS version is in:
     // 384-snackabra-webclient/src/utils/ImageProcessor.js
@@ -1322,8 +1308,8 @@ class SBFile {
     scaledCanvas.width = canvas.width * scale;
     scaledCanvas.height = canvas.height * scale;
     // console.log(`#### scaledCanvas target W ${scaledCanvas.width} x H ${scaledCanvas.height}`);
-    scaledCanvas
-      .getContext('2d')
+    scaledCanvas!
+      .getContext('2d')!
       .drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
     // console.log(`#### scaledCanvas actual W ${scaledCanvas.width} x H ${scaledCanvas.height}`);
     return scaledCanvas;
@@ -1332,7 +1318,7 @@ class SBFile {
   /**
    * generateImageHash
    */
-  async #generateImageHash(image: ArrayBuffer): Promise<{id: string, key: string}> | Promise<{}> {
+  async #generateImageHash(image: ArrayBuffer): Promise<{id: string, key: string} | {}> {
     // latest and greatest JS version is in:
     // 384-snackabra-webclient/src/utils/ImageProcessor.js
     throw new Error('generateImageHash() needs TS version')
@@ -1367,7 +1353,7 @@ class SBFile {
     // draw image in canvas element
     canvas.width = img.width;
     canvas.height = img.height;
-    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    canvas!.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
     return canvas;
   }
 }
@@ -1383,7 +1369,7 @@ class Payload {
   wrap(contents: Dictionary, key: CryptoKey): Promise<string> {
     return new Promise(async (resolve, reject) => {
       try {
-        const msg = {encrypted_contents: await SB_Crypto.encrypt(JSON.stringify(contents), key, 'string')};
+        const msg = {encrypted_contents: await SB_Crypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
         resolve(JSON.stringify(msg));
       } catch (e) {
         console.error(e);
@@ -1398,12 +1384,13 @@ class Payload {
   async unwrap(payload: Dictionary, key: CryptoKey) {
     try {
       const msg = await SB_Crypto.decrypt(key, payload.encrypted_contents);
-      if (msg.error) {
-        return {error: msg.error};
-      }
+      // psm: i think this throws in case of error
+      // if (msg['error']) {
+      //   return {error: msg['error']};
+      // }
       return msg;
     } catch (e) {
-      return {error: e.message};
+      return {error: `Error: ${e}`};
     }
   }
 }
@@ -1645,11 +1632,11 @@ class Channel {
       } catch (error) {
         reject(error);
       }
-      const _exportable_room_signKey: Dictionary = jsonParseWrapper(keys.signKey, 'L1470');
-      const _exportable_encryption_key: Dictionary = jsonParseWrapper(keys.encryptionKey, 'L1471');
-      let _exportable_verifiedGuest_pubKey: Dictionary = jsonParseWrapper(keys.guestKey || null, 'L1472');
-      const _exportable_pubKey: Dictionary = this.identity.exportable_pubKey;
-      const _privateKey: Dictionary = this.identity.privateKey;
+      const _exportable_room_signKey: JsonWebKey = jsonParseWrapper(keys.signKey, 'L1470');
+      const _exportable_encryption_key: JsonWebKey = jsonParseWrapper(keys.encryptionKey, 'L1471');
+      let _exportable_verifiedGuest_pubKey: JsonWebKey = jsonParseWrapper(keys.guestKey || null, 'L1472');
+      const _exportable_pubKey: JsonWebKey = await this.identity.exportable_pubKey.then();
+      const _privateKey: CryptoKey = await this.identity.privateKey.then();
       let isVerifiedGuest = false;
       const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
       const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
@@ -1675,9 +1662,9 @@ class Channel {
       const _encryption_key: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_encryption_key, 'AES', false, ['encrypt', 'decrypt']);
 
       const _room_privateSignKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signKey, 'ECDH', true, ['deriveKey']);
-      const _exportable_room_signPubKey: CryptoKey = SB_Crypto.extractPubKey(_exportable_room_signKey);
+      const _exportable_room_signPubKey: JsonWebKey | null = SB_Crypto.extractPubKey(_exportable_room_signKey);
 
-      const _room_signPubKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signPubKey, 'ECDH', true, []);
+      const _room_signPubKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signPubKey!, 'ECDH', true, []);
       const _personal_signKey: CryptoKey = await SB_Crypto.deriveKey(_privateKey, _room_signPubKey, 'HMAC', false, ['sign', 'verify']);
       let _shared_key: CryptoKey | null;
 
@@ -1685,18 +1672,20 @@ class Channel {
         _shared_key = await SB_Crypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
       }
 
-      let _locked_key, _exportable_locked_key;
+      let _locked_key
       // if (process.browser) {
-      _exportable_locked_key = _localStorage.getItem(this._id + '_lockedKey');
+      let _exportable_locked_key: string | null = await _localStorage.getItem(this._id + '_lockedKey');
       // } else {
       //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
       // }
       if (_exportable_locked_key !== null) {
-        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
+	// psm: punting
+	// @ts-ignore
+        _locked_key: CryptoKey = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
       } else if (keys.locked_key) {
-        const _string_locked_key = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
+        const _string_locked_key: string = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
         _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
-        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
+        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key!, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
       }
 
       this.#keys = {
@@ -1731,7 +1720,7 @@ class ChannelSocket {
   #channel: Channel;
   #identity: Identity;
   #payload: Payload;
-  #queue: Array<SBMessage | Dictionary> = [];
+  #queue: Array<SBMessage> = [];
   ready = false;
   onOpen!: CallableFunction;
   onJoin!: CallableFunction;
@@ -1749,12 +1738,12 @@ class ChannelSocket {
     this.open();
   }
 
-  /**
-   * setKeys
-   */
-  setKeys(_keys: Dictionary) {
-    this.#channel.loadKeys(_keys);
-  }
+  // /**
+  //  * setKeys
+  //  */
+  // setKeys(_keys: Dictionary) {
+  //   this.#channel.loadKeys(_keys);
+  // }
 
   /**
    * open
@@ -1825,22 +1814,13 @@ class ChannelSocket {
   /**
    * Send message on channel socket
    */
-  async send(message: SBMessage | Dictionary) {
+  async send(message: SBMessage) {
     if (this.ready) {
       let payload;
-
-      if (message instanceof SBMessage) {
-        payload = await this.#payload.wrap(
-          message,
-          this.#channel.keys.encryptionKey
-        );
-      } else {
-        payload = await this.#payload.wrap(
-          await new SBMessage(message, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey),
-          this.#channel.keys.encryptionKey
-        );
-      }
-      this.socket.send(payload);
+      this.#payload.wrap(
+        message,
+        this.#channel.keys.encryptionKey
+      ).then((payload) => { this.socket.send(payload) });
     } else {
       this.#queue.push(message);
     }
@@ -1849,37 +1829,44 @@ class ChannelSocket {
   /**
    * Send SB object (file) on channel socket
    */
-  async sendSbObject(file: SBMessage | Dictionary) {
+  async sendSbObject(file: SBMessage) {
     if (this.ready) {
-      const payload = await this.#payload.wrap(
+      this.#payload.wrap(
         file,
         this.#channel.keys.encryptionKey
-      );
-      this.socket.send(payload);
+      ).then((payload) => this.socket.send(payload));
     } else {
       this.#queue.push(file);
     }
   }
 
+
   /**
    * Receive message on channel socket
    */
-  async receive(message: Dictionary) {
+  async receive(message: Dictionary | string) {
     try {
       const id = Object.keys(message)[0];
-      let unwrapped: Dictionary;
-      if (message[id].encrypted_contents) {
-        try {
-          unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
-        } catch (e) {
-          console.warn(e);
-          unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
-        }
-      } else {
+      let unwrapped: string;
+      // psm: i don't get the error here 
+      // @ts-ignore
+      if (typeof message === 'string') {
         unwrapped = message;
+      } else {
+	if (message[id].encrypted_contents) {
+          try {
+            unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
+          } catch (e) {
+            console.warn(e);
+            unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
+          }
+	} else {
+	  throw new Error('received a message that is neither a dict nor a string');
+	}
       }
       unwrapped = jsonParseWrapper(unwrapped, 'L1702');
-      unwrapped._id = id;
+      // psm: TODO, i don't know what messages are really supposed to look like in all cases
+      // unwrapped._id = id;
       _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
       return JSON.stringify(unwrapped);
     } catch (e) {
@@ -1912,14 +1899,22 @@ class StorageApi {
    */
   async saveFile(file: File) {
     if (file instanceof File) {
-      const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
+      // psm: need to clean up these types
+      // @ts-ignore
+      const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey!);
       const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
       const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
       const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
       Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
+	// psm: need to clean up these types
+	// @ts-ignore
         results.forEach((controlData: Dictionary) => {
+	  // psm: need to clean up these types
+	  // @ts-ignore
           this.#channel.socket.sendSbObject({...controlData, control: true});
         });
+	// psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
+	// @ts-ignore
         this.#channel.socket.sendSbObject(sbFile);
       });
     } else {
@@ -1970,6 +1965,8 @@ class StorageApi {
   storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: Dictionary): Promise<Dictionary> {
     return new Promise((resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
+	// psm: need to clean up these types
+	// @ts-ignore
         method: 'POST', body: assemblePayload({
           iv: encrypt_data.iv,
           salt: encrypt_data.salt,
@@ -2026,7 +2023,7 @@ class StorageApi {
   /**
    * unpadData
    */
-  #unpadData(data_buffer: ArrayBuffer) {
+  #unpadData(data_buffer: ArrayBuffer): ArrayBuffer {
     const _size = new Uint32Array(data_buffer.slice(-4))[0];
     return data_buffer.slice(0, _size);
   }
@@ -2047,16 +2044,18 @@ class StorageApi {
     const salt: Uint8Array = data.salt;
     const image_key: CryptoKey = await this.#getFileKey(imageMetaData.previewKey, salt);
     const encrypted_image: string = data.image;
-    const padded_img: ArrayBuffer = await SB_Crypto.decrypt(image_key, {
+    const padded_img: ArrayBuffer = str2ab(await SB_Crypto.decrypt(image_key, {
       content: encrypted_image,
       iv: iv
-    }, 'arrayBuffer');
-    const img: Dictionary = this.#unpadData(padded_img);
+    }, 'arrayBuffer'));
+    const img: ArrayBuffer = this.#unpadData(padded_img);
 
-    if (img.error) {
-      console.error('(Image error: ' + img.error + ')');
-      throw new Error('Failed to fetch data - authentication or formatting error');
-    }
+    // psm: issues should throw i think
+    // if (img.error) {
+    //   console.error('(Image error: ' + img.error + ')');
+    //   throw new Error('Failed to fetch data - authentication or formatting error');
+    // }
+
     return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
   }
 
@@ -2076,16 +2075,17 @@ class StorageApi {
     const salt: Uint8Array = data.salt;
     const image_key: CryptoKey = await this.#getFileKey(imageMetaData.previewKey, salt);
     const encrypted_image: string = data.image;
-    const padded_img: ArrayBuffer = await SB_Crypto.decrypt(image_key, {
+    const padded_img: ArrayBuffer = str2ab(await SB_Crypto.decrypt(image_key, {
       content: encrypted_image,
       iv: iv
-    }, 'arrayBuffer');
-    const img: Dictionary = this.#unpadData(padded_img);
+    }, 'arrayBuffer'));
+    const img: ArrayBuffer = this.#unpadData(padded_img);
 
-    if (img.error) {
-      console.error('(Image error: ' + img.error + ')');
-      throw new Error('Failed to fetch data - authentication or formatting error');
-    }
+    // if (img.error) {
+    //   console.error('(Image error: ' + img.error + ')');
+    //   throw new Error('Failed to fetch data - authentication or formatting error');
+    // }
+
     return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
   }
 
@@ -2450,8 +2450,10 @@ class ChannelApi {
 
   acceptVisitor(pubKey: string) {
     return new Promise(async (resolve, reject) => {
-      const shared_key: CryptoKey = await SB_Crypto.deriveKey(this.#identity.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
-      const _encrypted_locked_key: Dictionary = await SB_Crypto.encrypt(JSON.stringify(this.#channel.keys.exportable_locked_key), shared_key, 'string');
+      // psm: need some "!"
+      // @ts-ignore
+      const shared_key: CryptoKey = await SB_Crypto.deriveKey(await this.#identity.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
+      const _encrypted_locked_key: Dictionary = await SB_Crypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.exportable_locked_key)), shared_key, 'string')
       fetch(this.#channelServer + this.#channel._id + '/acceptVisitor', {
         method: 'POST',
         body: JSON.stringify({pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key)}),
@@ -2538,8 +2540,10 @@ class IndexedKV {
     },
   };
 
-  constructor(options: IndexedKVOptions) {
-    this.options = Object.assign(this.options, options);
+  // psm: override doesn't seem to be used
+  constructor(/* options: IndexedKVOptions */) {
+    // psm: hm?
+    this.options = Object.assign(this.options, this.options);
     if (typeof this.options.onReady === 'function') {
       this.events.subscribe(`ready`, (e: Error) => {
         this.options.onReady(e);
@@ -2665,7 +2669,7 @@ class IndexedKV {
     });
   }
 
-  getItem(key: string) {
+  getItem(key: string): Promise<string | null> {
     return new Promise((resolve, reject) => {
       const objectStore = this.db.transaction([this.options.table]).objectStore(this.options.table);
       const request = objectStore.get(key);
@@ -2912,11 +2916,11 @@ class Snackabra {
         storage_server: args.storage_server
       };
     } catch (e) {
-      _sb_exception('Snackabra.constructor()', e);
+      _sb_exception('Snackabra.constructor()', `${e}`);
     }
   }
 
-  setIdentity(keys: SnackabraKeys) {
+  setIdentity(keys: JsonWebKey) {
     return new Promise(async (resolve, reject) => {
       try {
         await this.#identity.mountKeys(keys);
@@ -3054,14 +3058,20 @@ class Snackabra {
   }
 }
 
+// export {
+//   Snackabra,
+//   SBMessage,
+//   SBFile,
+//   SB_libraryVersion,
+//   ab2str,
+//   str2ab,
+//   base64ToArrayBuffer,
+//   arrayBufferToBase64,
+//   getRandomValues
+// };
+
 export {
   Snackabra,
   SBMessage,
   SBFile,
-  SB_libraryVersion,
-  ab2str,
-  str2ab,
-  base64ToArrayBuffer,
-  arrayBufferToBase64,
-  getRandomValues
 };

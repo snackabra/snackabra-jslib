@@ -2,10 +2,12 @@
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
 
 import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.156.0/testing/asserts.ts"
-
-/* eslint-disable no-trailing-spaces */
-import {indexedDB} from 'https://deno.land/x/indexeddb@v1.1.0/ponyfill.ts';
+import { indexedDB } from 'https://deno.land/x/indexeddb@v1.1.0/ponyfill.ts';
 import 'https://deno.land/x/indexeddb@1.3.4/polyfill.ts?doc';
+import * as canvas from "https://deno.land/x/canvas@v1.2.2/mod.ts";
+import { describe, beforeAll } from "https://deno.land/std@0.157.0/testing/bdd.ts";
+//import { User } from "https://deno.land/std@0.157.0/testing/
+
 
 import {
   ab2str,
@@ -22,7 +24,9 @@ import {
   importPublicKey,
   simpleRand256,
   simpleRandomString,
-  cleanBase32mi
+  cleanBase32mi,
+  // and starting to test this little guy!
+  Snackabra
 } from './main.ts'
 
 /* ================ */
@@ -225,4 +229,158 @@ Deno.test('generate unsupported random string', () => {
 })
 
 /* ================ */
+
+
+// const sb_config = {
+//   channel_server: 'http://r.somethingstuff.workers.dev',
+//   channel_ws: 'ws://r.somethingstuff.workers.dev',
+//   storage_server: 'http://s.somethingstuff.workers.dev'
+// };
+// const channel_id = 'Qs784CLbB8RF6O3sCOJQfUccRMOhcTBJFzkD--l7Ec10gMlMoiqLg8CrYCYDKXjL';
+
+const sb_config = {
+  channel_server: 'http://127.0.0.1:4001',
+  channel_ws: 'ws://127.0.0.1:4001',
+  storage_server: 'http://127.0.0.1:4000'
+};
+
+var channel_id_resolve: (arg0: string) => void
+var channel_id = new Promise((resolve) => { channel_id_resolve = resolve; }): string
+
+const key = {
+  key_ops: ['deriveKey'],
+  ext: true,
+  kty: 'EC',
+  x: '62RGlvpBrkrBTgscORtV5MmJqSS0N6aIELTLY1VdOEhrToUbnNPi2XbFucGhWey9',
+  y: '24kcejeniQMNGuYigc39fcsjzP6P9VqEYWieT6WYgSBlVsCR_DXTjlPRAQ4P8x1K',
+  crv: 'P-384',
+  d: '9sYVDOfUJ8YofRh4y_4dItXcXzTiiwYKI6pXU9thJyfMqMtaFhvUbCsHl14Wx37k'
+};
+
+describe('Snackabra Class --> identity', () => {
+  let SB: Snackabra
+  beforeAll(() => {
+    SB = new Snackabra(sb_config);
+    SB.setIdentity(key).then(async () => {
+      SB.create('password').then((c: string) => {
+        channel_id.then((channel_id) => {
+          channel_id_resolve(c);
+          console.log("Set up baseline channel: ", c);
+          return SB;
+        });
+      });
+    });
+  });
+
+  // test('Connect before configure', async () => {
+  //   expect(() => {
+  //     SB.connect(channel_id);
+  //   }).toThrow('setIdentity must be called before connecting');
+  // });
+
+  Deno.test('Connect after creating an identity', async () => {
+    await SB.setIdentity(key);
+    await channel_id;
+    await SB.connect(await channel_id);
+  });
+
+  Deno.test('Connect after configuring an identity', async () => {
+    await SB.setIdentity(key);
+    await channel_id;
+    await SB.connect(channel_id);
+  });
+
+});
+
+/* psm: added this stuff here, testing fetching messages */
+describe('Snackabra Class --> get messages', () => {
+  let SB;
+  beforeAll(async () => {
+    const w = new Promise(async (resolve, reject) => {
+      try {
+        SB = await new Snackabra(sb_config);
+        await SB.setIdentity(key);
+        SB.connect(await channel_id);
+        resolve(SB);
+      } catch (e) {
+        reject(e);
+      }
+    });
+    await w;
+  });
+
+  Deno.test('Fetch messages', async () => {
+    // console.log('... testing fetch messages ...');
+    // console.log(SB.channel.keys);
+    // console.log(JSON.stringify(SB.channel.api));
+    // let z = await SB.channel.api.getOldMessages(10);
+    // console.log('Fetching old messages:');
+    // console.log(z);
+    // done();
+  });
+
+});
+
+
+// describe('Snackabra Class > ChannelAPI', () => {
+//   let SB;
+//   beforeAll(async () => {
+//     SB = new Snackabra(sb_config);
+//     await SB.setIdentity(key);
+//     await SB.connect(channel_id);
+//     SB.onMessage = (event) => {
+//       console.log(event);
+//     };
+//     return SB;
+//   });
+
+//   test('Create', async () => {
+//     const channel = await SB.channel.api.create('password');
+//     //console.log(channel)
+//     //SB.connect(sb_config, channel);
+//     expect(typeof channel).toBe('string');
+//   });
+
+//   test('getLastMessageTimes', async () => {
+//     const res = await SB.channel.api.getLastMessageTimes();
+//     expect(typeof res).toBe('string');
+//   });
+
+//   test('getOldMessages', async () => {
+//     const res = await SB.channel.api.getOldMessages(10);
+//     expect(typeof res).toBe('object');
+//   });
+
+//   test('updateCapacity', async () => {
+//     const res = await SB.channel.api.updateCapacity(21);
+//     expect(res.capacity).toBe('21');
+//   });
+
+//   test('getCapacity', async () => {
+//     const capacity = await SB.channel.api.getCapacity();
+//     expect(capacity).toBe('21');
+//   });
+
+//   test('getJoinRequests', async () => {
+//     const joins = await SB.channel.api.getJoinRequests();
+//     expect(joins.join_requests).toStrictEqual([]);
+//   });
+
+//   test('isLocked', async () => {
+//     const locked = await SB.channel.api.isLocked();
+//     expect(locked).toStrictEqual(false);
+//   });
+
+//   test('setMOTD', async () => {
+//     const motd = await SB.channel.api.setMOTD('WOOOOOOT');
+//     console.log(motd);
+//     expect(motd).toStrictEqual({'motd': 'WOOOOOOT'});
+//   });
+
+//   test('getAdminData', async () => {
+//     const adminData = await SB.channel.api.getAdminData();
+//     console.log(adminData);
+//     expect(adminData).toStrictEqual({'motd': 'WOOOOOOT'});
+//   });
+// });
 
