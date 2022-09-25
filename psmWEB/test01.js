@@ -32,7 +32,7 @@ import {
   jsonParseWrapper,
   MessageBus,
   Snackabra
-} from './browser.mjs';
+} from './snackabra.js';
 
 
 const z = document.getElementById('testResults');

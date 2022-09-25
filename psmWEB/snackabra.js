@@ -19,7 +19,7 @@
 
 */
 /* Zen Master: "um" */
-function SB_libraryVersion() {
+export function SB_libraryVersion() {
     return ('THIS IS NEITHER BROWSER NOR NODE THIS IS SPARTA!');
 }
 /**
@@ -112,7 +112,7 @@ export class MessageBus {
 //   }
 // }
 // throw new RethrownError(`Oh no a "${error.message}" error`, error)
-function _sb_exception(loc, msg) {
+export function _sb_exception(loc, msg) {
     const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
     // for now disabling this to keep node testing less noisy
     // console.error(m);
@@ -121,7 +121,7 @@ function _sb_exception(loc, msg) {
 // internal - general handling of paramaters that might be promises
 // (basically the "anti" of resolve, if it's *not* a promise then
 // it becomes one
-function _sb_resolve(val) {
+export function _sb_resolve(val) {
     if (val.then) {
         // it's already a promise
         // console.log('it is a promise')
@@ -133,7 +133,7 @@ function _sb_resolve(val) {
     }
 }
 // internal - handle assertions
-function _sb_assert(val, msg) {
+export function _sb_assert(val, msg) {
     if (!(val)) {
         const m = `<< SB assertion error: ${msg} >>`;
         throw new Error(m);
@@ -149,7 +149,7 @@ function _sb_assert(val, msg) {
 /**
  * Fills buffer with random data
  */
-function getRandomValues(buffer) {
+export function getRandomValues(buffer) {
     return crypto.getRandomValues(buffer);
 }
 // Strict b64 check:
@@ -160,7 +160,7 @@ const b64_regex = /^([A-Za-z0-9+/_\-=]*)$/;
  * Returns 'true' if (and only if) string is well-formed base64.
  * Works same on browsers and nodejs.
  */
-function _assertBase64(base64) {
+export function _assertBase64(base64) {
     // return (b64_regex.exec(base64)?.[0] === base64);
     const z = b64_regex.exec(base64);
     if (z)
@@ -175,7 +175,7 @@ function _assertBase64(base64) {
  * @param {string} string
  * @return {Uint8Array} buffer
  */
-function str2ab(string) {
+export function str2ab(string) {
     return new TextEncoder().encode(string);
 }
 /**
@@ -186,7 +186,7 @@ function str2ab(string) {
  *
  * @param buffer
  */
-function ab2str(buffer) {
+export function ab2str(buffer) {
     return new TextDecoder('utf-8').decode(buffer);
 }
 /**
@@ -228,7 +228,7 @@ function _byteLength(validLen, placeHoldersLen) {
  * @param {str} base64 string in either regular or URL-friendly representation.
  * @return {Uint8Array} returns decoded binary result
  */
-function base64ToArrayBuffer(str) {
+export function base64ToArrayBuffer(str) {
     if (!_assertBase64(str))
         throw new Error('invalid character');
     let tmp;
@@ -326,7 +326,7 @@ function encodeChunk(lookup, view, start, end) {
  * @param {bufferSource} ArrayBuffer buffer
  * @return {string} base64 string
  */
-function arrayBufferToBase64(buffer) {
+export function arrayBufferToBase64(buffer) {
     // const view = bs2dv(bufferSource)
     // const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
     const view = new DataView(buffer);
@@ -379,7 +379,7 @@ function arrayBufferToBase64(buffer) {
 //     return Buffer.from(u8a).toString('base64');
 //   }
 // }
-function _appendBuffer(buffer1, buffer2) {
+export function _appendBuffer(buffer1, buffer2) {
     const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
     tmp.set(new Uint8Array(buffer1), 0);
     tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
@@ -419,7 +419,7 @@ OTJj8TMRI6y3Omop3kIfpgUCAwEAAQ==
  * @return {cryptoKey} RSA-OAEP key
  *
  */
-function importPublicKey(pem) {
+export function importPublicKey(pem) {
     if (typeof pem == 'undefined')
         pem = defaultPublicKeyPEM;
     // fetch the part of the PEM string between header and footer
@@ -441,7 +441,7 @@ function importPublicKey(pem) {
  * @return {int} integer 0..255
  *
  */
-function simpleRand256() {
+export function simpleRand256() {
     return crypto.getRandomValues(new Uint8Array(1))[0];
 }
 const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
@@ -454,7 +454,7 @@ const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
  *
  * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
  */
-function simpleRandomString(n, code) {
+export function simpleRandomString(n, code) {
     if (code == 'base32mi') {
         // yeah, of course we need to add base64 etc
         const z = crypto.getRandomValues(new Uint8Array(n));
@@ -499,7 +499,7 @@ function simpleRandomString(n, code) {
  *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
  *
  */
-function cleanBase32mi(s) {
+export function cleanBase32mi(s) {
     // this of course is not the most efficient
     return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
 }
@@ -514,7 +514,7 @@ function cleanBase32mi(s) {
  * @param {callback} callback function, called with results
  *
  */
-function packageEncryptDict(dict, publicKeyPEM, callback) {
+export function packageEncryptDict(dict, publicKeyPEM, callback) {
     const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
     const aesAlgorithmKeyGen = { name: 'AES-GCM', length: 256 };
     const aesAlgorithmEncrypt = { name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(16)) };
@@ -556,7 +556,7 @@ function packageEncryptDict(dict, publicKeyPEM, callback) {
 /**
  * Partition
  */
-function partition(str, n) {
+export function partition(str, n) {
     const returnArr = [];
     let i, l;
     for (i = 0, l = str.length; i < l; i += n) {
@@ -605,7 +605,7 @@ export function jsonParseWrapper(str, loc) {
 /**
  * Extract payload
  */
-function extractPayloadV1(payload) {
+export function extractPayloadV1(payload) {
     try {
         const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
         const decoder = new TextDecoder();
@@ -628,7 +628,7 @@ function extractPayloadV1(payload) {
 /**
  * Assemble payload
  */
-function assemblePayload(data) {
+export function assemblePayload(data) {
     try {
         const metadata = {};
         metadata['version'] = '002';
@@ -661,7 +661,7 @@ function assemblePayload(data) {
 /**
  * Extract payload (latest version)
  */
-function extractPayload(payload) {
+export function extractPayload(payload) {
     try {
         const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
         const decoder = new TextDecoder();
@@ -704,13 +704,13 @@ function extractPayload(payload) {
 /**
  * Encode into b64 URL
  */
-function encodeB64Url(input) {
+export function encodeB64Url(input) {
     return input.replaceAll('+', '-').replaceAll('/', '_');
 }
 /**
  * Decode b64 URL
  */
-function decodeB64Url(input) {
+export function decodeB64Url(input) {
     input = input.replaceAll('-', '+').replaceAll('_', '/');
     // Pad out with standard base64 required padding characters
     const pad = input.length % 4;
@@ -2778,5 +2778,16 @@ class Snackabra {
         this.storage.saveFile(file);
     }
 }
-export { Snackabra, SBMessage, SBFile, SB_libraryVersion, ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues };
-//# sourceMappingURL=main.js.map
+// export {
+//   Snackabra,
+//   SBMessage,
+//   SBFile,
+//   SB_libraryVersion,
+//   ab2str,
+//   str2ab,
+//   base64ToArrayBuffer,
+//   arrayBufferToBase64,
+//   getRandomValues
+// };
+export { Snackabra, SBMessage, SBFile, };
+//# sourceMappingURL=snackabra.js.map

@@ -1,1 +1,0 @@
-../psmTSC/main.js
