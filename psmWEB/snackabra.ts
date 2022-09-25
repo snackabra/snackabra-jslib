@@ -89,7 +89,87 @@ interface ChannelKeys {
   exportable_locked_key: Dictionary;
 }
 
-/* Zen Master: "um" */
+/*
+  format is a single string:
+  
+  dZbuNAeDnuMOLPYcfExi4RIUVPljFZUZLE3tUo3zl1-avzxmm9nBhtRPVOwu6kK4
+  011000001101110010110011101001000001101001
+*/
+const msgIdRegex = /^([A-Za-z0-9+/_\-=]{64})*([01]{42})$/;
+
+
+// scratch ... maybe we do a merge
+interface ChannelMessage0 {
+  type: 'ack' | 'invalid'
+  channelID?: string, // base64 - 64 chars (512 bits)
+  timestampPrefix?: string, // '0'/'1' - 42 of them
+  timestamp?: number,
+  _id?: string,
+  ready?: boolean,
+  system?: boolean,
+}
+
+interface ChannelMessage1 {
+  // currently we can't do a regex match here, and i can't figure
+  // out a more clever way of collapsing this.  TODO maybe we should
+  // change the message format
+  [key: string]: {
+    channelID: string,
+    timestamp: number,
+    _id: string,
+    ready?: boolean,
+    system?: boolean,
+    encrypted_contents?: string,
+  }
+}
+
+interface ChannelMessage2 {
+  ready: boolean,
+  keys: {
+    ownerKey: Dictionary,
+    encryptionKey: Dictionary,
+    signKey: Dictionary,
+  },
+  motd: string,
+  roomLocked: boolean,
+  system?: boolean,
+  encrypted_contents?: string,
+  _id?: string,
+}
+
+type ChannelMessage = ChannelMessage1 | ChannelMessage2
+
+// function dictToMessage(d:  Dictionary | undefined): ChannelMessage {
+//   let r: ChannelMessage = {type: 'invalid'} // default
+//   if (typeof d == 'undefined') return r
+//   try {
+//     console.log("dictionary:")
+//     console.log(d)
+//     console.log("first key:")
+//     console.log(Object.keys(d)[0])
+//     let m1 = msgIdRegex.exec(Object.keys(d)[0])
+//     if (m1) {
+//       console.log("regex hit:")
+//       console.log(m1[1])
+//       console.log(m1[2])
+//     }
+//     let m2 = msgIdRegex.exec("AeDnuMOLPYcfExi4RIUVPljFZUZLE3tUo3zl1-avzxmm9nBhtRPVOwu6kK401010101")
+//     if (!m2) console.log("correctly did not match");
+//     console.log(d[0])
+//     console.log("json:")
+//     console.log(JSON.stringify(d))
+//   } catch (e) {
+//     // any issues 
+//     console.info("dictToMessageId() failed to decode message:")
+//     console.info(d)
+//     console.info("Error:")
+//     console.info(e)
+//   }
+//   return r
+// }
+
+
+/* zen Master: "um" */
 export function SB_libraryVersion() {
   return('THIS IS NEITHER BROWSER NOR NODE THIS IS SPARTA!')
 }
@@ -242,6 +322,7 @@ export function getRandomValues(buffer: Uint8Array) {
 // const b64_regex = new RegExp('^(?:[A-Za-z0-9+/_\-]{4})*(?:[A-Za-z0-9+/_\-]{2}==|[A-Za-z0-9+/_\-]{3}=)?$')
 // But we will go (very) lenient:
 const b64_regex = /^([A-Za-z0-9+/_\-=]*)$/;
+
 
 /**
  * Returns 'true' if (and only if) string is well-formed base64.
@@ -412,9 +493,9 @@ function encodeChunk(lookup: string[], view: DataView, start: number, end: numbe
 // }
 
 
-// const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
-//   ? new DataView(bs)
-//   : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
+const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
+   ? new DataView(bs)
+   : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
 
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
@@ -427,7 +508,9 @@ function encodeChunk(lookup: string[], view: DataView, start: number, end: numbe
 export function arrayBufferToBase64(buffer: ArrayBuffer): string {
   // const view = bs2dv(bufferSource)
   // const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-  const view = new DataView(buffer)
+  console.log(buffer)
+  // const view = new DataView(buffer)
+  const view = bs2dv(buffer)
   const len = view.byteLength;
   const extraBytes = len % 3; // if we have 1 byte left, pad 2 bytes
   const len2 = len - extraBytes;
@@ -709,8 +792,8 @@ export function jsonParseWrapper(str: string, loc: string) {
       try {
         return JSON.parse(str.slice(1, -1));
       } catch {
-	// i am beginning to dislike TS .. ugh no simple way to get error message
-	// see: https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
+        // i am beginning to dislike TS .. ugh no simple way to get error message
+        // see: https://kentcdodds.com/blog/get-a-catch-block-error-message-with-typescript
         throw new Error(`JSON.parse() error at ${loc} (tried eval and slice)\nString was: ${str}`);
       }
     }
@@ -802,7 +885,7 @@ export function extractPayload(payload: ArrayBuffer): Dictionary {
             const propertyStartIndex: number = _metadata[_index]['start'];
             console.info(propertyStartIndex);
             const size: number = _metadata[_index]['size'];
-	    const entry: Dictionary = _metadata[_index]
+            const entry: Dictionary = _metadata[_index]
             data[entry['name']] = payload.slice(startIndex + propertyStartIndex, startIndex + propertyStartIndex + size);
           }
         }
@@ -898,26 +981,26 @@ class Crypto {
    * Import keys
    */
   importKey(format: 'raw' | 'pkcs8' | 'spki' | 'jwk',
-	    key: BufferSource | JsonWebKey,
-	    type: 'ECDH' | 'AES' | 'PBKDF2',
-	    extractable: boolean,
-	    keyUsages: KeyUsage[]): Promise<CryptoKey> {
+            key: BufferSource | JsonWebKey,
+            type: 'ECDH' | 'AES' | 'PBKDF2',
+            extractable: boolean,
+            keyUsages: KeyUsage[]): Promise<CryptoKey> {
     return new Promise(async (resolve, reject) => {
       const keyAlgorithms = {
-	ECDH: {
-	  name: 'ECDH', namedCurve: 'P-384'
-	}, AES: {
-	  name: 'AES-GCM'
-	}, PBKDF2: 'PBKDF2'
+        ECDH: {
+          name: 'ECDH', namedCurve: 'P-384'
+        }, AES: {
+          name: 'AES-GCM'
+        }, PBKDF2: 'PBKDF2'
       };
       try {
-	// TODO: correctly match differenct combinations of types in the above function declaration
-	// @ts-ignore
-	const response = await window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
-	resolve(response);
+        // TODO: correctly match differenct combinations of types in the above function declaration
+        // @ts-ignore
+        const response = await window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
+        resolve(response);
       } catch (e) {
-	console.error(format, key, type, extractable, keyUsages);
-	reject(e);
+        console.error(format, key, type, extractable, keyUsages);
+        reject(e);
       }
     })
   }
@@ -995,12 +1078,13 @@ class Crypto {
         }
         let encrypted: ArrayBuffer;
         encrypted = await crypto.subtle.encrypt(algorithm, key, data);
-	resolve((outputType === 'string') ? {
-	  content: encodeURIComponent(arrayBufferToBase64(encrypted)), iv: encodeURIComponent(arrayBufferToBase64(iv))
-	} : {content: encrypted, iv: iv});
+        console.log(encrypted)
+        resolve((outputType === 'string') ? {
+          content: encodeURIComponent(arrayBufferToBase64(encrypted)), iv: encodeURIComponent(arrayBufferToBase64(iv))
+        } : {content: encrypted, iv: iv});
       } catch (e) {
-	console.error(e);
-	reject(e);
+        console.error(e);
+        reject(e);
       }
     });
   }
@@ -1103,8 +1187,8 @@ class Identity implements SnackabraKeys {
           crypto.subtle.exportKey('jwk', keyPair.publicKey).then((k:JsonWebKey) => this.resolve_exportable_pubKey(k))
           crypto.subtle.exportKey('jwk', keyPair.privateKey).then((k:JsonWebKey) => this.resolve_exportable_privateKey(k))
           this.resolve_privateKey(keyPair.privateKey)
-	  Promise.all([this.resolve_exportable_pubKey, this.resolve_privateKey]).then(() => resolve(true))
-	})
+          Promise.all([this.resolve_exportable_pubKey, this.resolve_privateKey]).then(() => resolve(true))
+        })
       } catch (e) {
         reject(e);
       }
@@ -1119,10 +1203,10 @@ class Identity implements SnackabraKeys {
       try {
         this.resolve_exportable_privateKey(key)
         this.resolve_exportable_pubKey(SB_Crypto.extractPubKey(key))
-	SB_Crypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
-	  this.resolve_privateKey(k)
-	  resolve(true)
-	})
+        SB_Crypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
+          this.resolve_privateKey(k)
+          resolve(true)
+        })
       } catch (e) {
         reject(e);
       }
@@ -1142,18 +1226,20 @@ class Identity implements SnackabraKeys {
  * @public
  */
 class SBMessage {
-  encrypted = false;
+  encrypted = false
   contents: string
-  sender_pubKey: CryptoKey;
+  // sender_pubkey: JsonWebKey
   sign: Promise<string>
-  image = '';
+  image = ''
   image_sign: Promise<string>
   imageMetaData: string
   imageMetadata_sign: Promise<string>
 
-  constructor(contents: string, signKey: CryptoKey, key: CryptoKey) {
+  constructor(channel: Channel, contents: string) {
     this.contents = contents;
-    this.sender_pubKey = key;
+    // this.sender_pubkey = channel.keys.exportable_pubKey // need to get this from SB object
+    console.log(channel)
+    let signKey = channel.keys.personal_signKey
     this.imageMetaData = JSON.stringify({imageId: '', previewId: '', imageKey: '', previewKey: ''})
     // psm: setting the rest to be promises, need to follow through in rest of code
     //      ... though i'm not sure why we need these hoops for a non-image
@@ -1172,7 +1258,7 @@ class SBMessage {
 class SBFile {
   encrypted = false;
   contents: string = ''
-  sender_pubKey: CryptoKey;
+  senderPubKey: CryptoKey;
   sign: Promise<string>;
   data: Dictionary = {
     previewImage: '',
@@ -1187,7 +1273,7 @@ class SBFile {
 
   // file is an instance of File
   constructor(file: File, signKey: CryptoKey, key: CryptoKey) {
-    this.sender_pubKey = key;
+    this.senderPubKey = key;
     // psm: again, why are we signing empty contents?
     this.sign = SB_Crypto.sign(signKey, this.contents);
     if (file.type.match(/^image/i)) {
@@ -1286,9 +1372,9 @@ class SBFile {
    * restrictPhoto
    */
   async #restrictPhoto(photo: ArrayBuffer,
-		       maxSize: number, // in KB
-		       imageType: 'image/jpeg',
-		       qualityArgument: number): Promise<Blob | null>
+                       maxSize: number, // in KB
+                       imageType: 'image/jpeg',
+                       qualityArgument: number): Promise<Blob | null>
   {
     // latest and greatest JS version is in:
     // 384-snackabra-webclient/src/utils/ImageProcessor.js
@@ -1513,6 +1599,7 @@ class WS_Protocol {
   onMessage() {
     this.currentWebSocket.addEventListener('message', (event) => {
       const data = jsonParseWrapper(event.data, 'L1342');
+      // console.log(data)
       if (data.ack) {
         this.events.publish('ws_ack_' + data._id);
         return;
@@ -1586,7 +1673,7 @@ class Channel {
       this.#socket = new ChannelSocket(this.wss, this, this.identity);
       this.#socket.onJoin = (message: Dictionary) => {
         if (message?.ready) {
-          console.log(message);
+          // console.log(message);
           this.metaData = message;
           this.loadKeys(message.keys).then(() => {
             this.socket.isReady();
@@ -1679,8 +1766,8 @@ class Channel {
       //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
       // }
       if (_exportable_locked_key !== null) {
-	// psm: punting
-	// @ts-ignore
+        // psm: punting
+        // @ts-ignore
         _locked_key: CryptoKey = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
       } else if (keys.locked_key) {
         const _string_locked_key: string = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
@@ -1759,7 +1846,10 @@ class ChannelSocket {
           this.onOpen(event);
         }
       },
-      onMessage: async (event: Dictionary) => {
+      onMessage: async (event: ChannelMessage) => {
+	console.log("****** start: onMessage() *****")
+	console.log(event)
+	console.log("****** end: onMessage() *****")
         if (event?.ready) {
           if (typeof this.onJoin === 'function') {
             this.onJoin(event);
@@ -1840,41 +1930,36 @@ class ChannelSocket {
     }
   }
 
-
   /**
    * Receive message on channel socket
+   * psm: updating using new cool types
+   * (it will arrive mostly unwrapped)
    */
-  async receive(message: Dictionary | string) {
-    try {
-      const id = Object.keys(message)[0];
-      let unwrapped: string;
-      // psm: i don't get the error here 
-      // @ts-ignore
-      if (typeof message === 'string') {
-        unwrapped = message;
-      } else {
-	if (message[id].encrypted_contents) {
-          try {
-            unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
-          } catch (e) {
-            console.warn(e);
-            unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
-          }
-	} else {
-	  throw new Error('received a message that is neither a dict nor a string');
-	}
-      }
-      unwrapped = jsonParseWrapper(unwrapped, 'L1702');
+  async receive(message: ChannelMessage) {
+    // const id = Object.keys(message)[0];
+    if (message.encrypted_contents) {
+      throw new Error('add decryption');
+      // try {
+      //   unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey,
+      // 				      message[id].encrypted_contents, 'string');
+      // } catch (e) {
+      //   console.warn(e);
+      //   unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key,
+      // 				      message[id].encrypted_contents, 'string');
+      // }
+    } else {
+      // unwrapped = jsonParseWrapper(unwrapped, 'L1702');
       // psm: TODO, i don't know what messages are really supposed to look like in all cases
       // unwrapped._id = id;
-      _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
-      return JSON.stringify(unwrapped);
-    } catch (e) {
-      console.error('ERROR: receive() failed to process message: ', e);
-      return null;
+      // _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
+      if (message._id) _localStorage.setItem(this.#channel._id + '_lastSeenMessage', message._id)
+      // return JSON.stringify(unwrapped);
+      return message
     }
   }
-}
+
+} // end of class ChannelSocket
+
 
 /**
  * Storage API
@@ -1906,15 +1991,15 @@ class StorageApi {
       const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
       const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
       Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
-	// psm: need to clean up these types
-	// @ts-ignore
+        // psm: need to clean up these types
+        // @ts-ignore
         results.forEach((controlData: Dictionary) => {
-	  // psm: need to clean up these types
-	  // @ts-ignore
+          // psm: need to clean up these types
+          // @ts-ignore
           this.#channel.socket.sendSbObject({...controlData, control: true});
         });
-	// psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
-	// @ts-ignore
+        // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
+        // @ts-ignore
         this.#channel.socket.sendSbObject(sbFile);
       });
     } else {
@@ -1965,8 +2050,8 @@ class StorageApi {
   storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: Dictionary): Promise<Dictionary> {
     return new Promise((resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
-	// psm: need to clean up these types
-	// @ts-ignore
+        // psm: need to clean up these types
+        // @ts-ignore
         method: 'POST', body: assemblePayload({
           iv: encrypt_data.iv,
           salt: encrypt_data.salt,

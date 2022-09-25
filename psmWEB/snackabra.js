@@ -18,7 +18,42 @@
     
 
 */
-/* Zen Master: "um" */
+/*
+  format is a single string:
+  
+  dZbuNAeDnuMOLPYcfExi4RIUVPljFZUZLE3tUo3zl1-avzxmm9nBhtRPVOwu6kK4
+  011000001101110010110011101001000001101001
+*/
+const msgIdRegex = /^([A-Za-z0-9+/_\-=]{64})*([01]{42})$/;
+// function dictToMessage(d:  Dictionary | undefined): ChannelMessage {
+//   let r: ChannelMessage = {type: 'invalid'} // default
+//   if (typeof d == 'undefined') return r
+//   try {
+//     console.log("dictionary:")
+//     console.log(d)
+//     console.log("first key:")
+//     console.log(Object.keys(d)[0])
+//     let m1 = msgIdRegex.exec(Object.keys(d)[0])
+//     if (m1) {
+//       console.log("regex hit:")
+//       console.log(m1[1])
+//       console.log(m1[2])
+//     }
+//     let m2 = msgIdRegex.exec("AeDnuMOLPYcfExi4RIUVPljFZUZLE3tUo3zl1-avzxmm9nBhtRPVOwu6kK401010101")
+//     if (!m2) console.log("correctly did not match");
+//     console.log(d[0])
+//     console.log("json:")
+//     console.log(JSON.stringify(d))
+//   } catch (e) {
+//     // any issues 
+//     console.info("dictToMessageId() failed to decode message:")
+//     console.info(d)
+//     console.info("Error:")
+//     console.info(e)
+//   }
+//   return r
+// }
+/* zen Master: "um" */
 export function SB_libraryVersion() {
     return ('THIS IS NEITHER BROWSER NOR NODE THIS IS SPARTA!');
 }
@@ -315,9 +350,9 @@ function encodeChunk(lookup, view, start, end) {
 //     return _U8Afrom(Buffer.from(asc, 'base64'));
 //   }
 // }
-// const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
-//   ? new DataView(bs)
-//   : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
+const bs2dv = (bs) => bs instanceof ArrayBuffer
+    ? new DataView(bs)
+    : new DataView(bs.buffer, bs.byteOffset, bs.byteLength);
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short
@@ -329,7 +364,9 @@ function encodeChunk(lookup, view, start, end) {
 export function arrayBufferToBase64(buffer) {
     // const view = bs2dv(bufferSource)
     // const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    const view = new DataView(buffer);
+    console.log(buffer);
+    // const view = new DataView(buffer)
+    const view = bs2dv(buffer);
     const len = view.byteLength;
     const extraBytes = len % 3; // if we have 1 byte left, pad 2 bytes
     const len2 = len - extraBytes;
@@ -864,6 +901,7 @@ class Crypto {
                 }
                 let encrypted;
                 encrypted = await crypto.subtle.encrypt(algorithm, key, data);
+                console.log(encrypted);
                 resolve((outputType === 'string') ? {
                     content: encodeURIComponent(arrayBufferToBase64(encrypted)), iv: encodeURIComponent(arrayBufferToBase64(iv))
                 } : { content: encrypted, iv: iv });
@@ -1009,15 +1047,17 @@ class Identity {
 class SBMessage {
     encrypted = false;
     contents;
-    sender_pubKey;
+    // sender_pubkey: JsonWebKey
     sign;
     image = '';
     image_sign;
     imageMetaData;
     imageMetadata_sign;
-    constructor(contents, signKey, key) {
+    constructor(channel, contents) {
         this.contents = contents;
-        this.sender_pubKey = key;
+        // this.sender_pubkey = channel.keys.exportable_pubKey // need to get this from SB object
+        console.log(channel);
+        let signKey = channel.keys.personal_signKey;
         this.imageMetaData = JSON.stringify({ imageId: '', previewId: '', imageKey: '', previewKey: '' });
         // psm: setting the rest to be promises, need to follow through in rest of code
         //      ... though i'm not sure why we need these hoops for a non-image
@@ -1035,7 +1075,7 @@ class SBMessage {
 class SBFile {
     encrypted = false;
     contents = '';
-    sender_pubKey;
+    senderPubKey;
     sign;
     data = {
         previewImage: '',
@@ -1049,7 +1089,7 @@ class SBFile {
     imageMetadata_sign = '';
     // file is an instance of File
     constructor(file, signKey, key) {
-        this.sender_pubKey = key;
+        this.senderPubKey = key;
         // psm: again, why are we signing empty contents?
         this.sign = SB_Crypto.sign(signKey, this.contents);
         if (file.type.match(/^image/i)) {
@@ -1352,6 +1392,7 @@ class WS_Protocol {
     onMessage() {
         this.currentWebSocket.addEventListener('message', (event) => {
             const data = jsonParseWrapper(event.data, 'L1342');
+            // console.log(data)
             if (data.ack) {
                 this.events.publish('ws_ack_' + data._id);
                 return;
@@ -1420,7 +1461,7 @@ class Channel {
             this.#socket = new ChannelSocket(this.wss, this, this.identity);
             this.#socket.onJoin = (message) => {
                 if (message?.ready) {
-                    console.log(message);
+                    // console.log(message);
                     this.metaData = message;
                     this.loadKeys(message.keys).then(() => {
                         this.socket.isReady();
@@ -1581,6 +1622,9 @@ class ChannelSocket {
                 }
             },
             onMessage: async (event) => {
+                console.log("****** start: onMessage() *****");
+                console.log(event);
+                console.log("****** end: onMessage() *****");
                 if (event?.ready) {
                     if (typeof this.onJoin === 'function') {
                         this.onJoin(event);
@@ -1656,42 +1700,34 @@ class ChannelSocket {
     }
     /**
      * Receive message on channel socket
+     * psm: updating using new cool types
+     * (it will arrive mostly unwrapped)
      */
     async receive(message) {
-        try {
-            const id = Object.keys(message)[0];
-            let unwrapped;
-            // psm: i don't get the error here 
-            // @ts-ignore
-            if (typeof message === 'string') {
-                unwrapped = message;
-            }
-            else {
-                if (message[id].encrypted_contents) {
-                    try {
-                        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
-                    }
-                    catch (e) {
-                        console.warn(e);
-                        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
-                    }
-                }
-                else {
-                    throw new Error('received a message that is neither a dict nor a string');
-                }
-            }
-            unwrapped = jsonParseWrapper(unwrapped, 'L1702');
+        // const id = Object.keys(message)[0];
+        if (message.encrypted_contents) {
+            throw new Error('add decryption');
+            // try {
+            //   unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey,
+            // 				      message[id].encrypted_contents, 'string');
+            // } catch (e) {
+            //   console.warn(e);
+            //   unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key,
+            // 				      message[id].encrypted_contents, 'string');
+            // }
+        }
+        else {
+            // unwrapped = jsonParseWrapper(unwrapped, 'L1702');
             // psm: TODO, i don't know what messages are really supposed to look like in all cases
             // unwrapped._id = id;
-            _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
-            return JSON.stringify(unwrapped);
-        }
-        catch (e) {
-            console.error('ERROR: receive() failed to process message: ', e);
-            return null;
+            // _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
+            if (message._id)
+                _localStorage.setItem(this.#channel._id + '_lastSeenMessage', message._id);
+            // return JSON.stringify(unwrapped);
+            return message;
         }
     }
-}
+} // end of class ChannelSocket
 /**
  * Storage API
  * @class

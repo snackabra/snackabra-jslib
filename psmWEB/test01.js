@@ -10,7 +10,10 @@ const test_list = [
 
   /* SB API */
   'test04c',
-  'test04a', 'test04',
+  'test04a',
+  /* 'test04',   ... don't have SBImage yet */
+
+  'test04b',
 
   /* voprf test, not standard
      plus: need to uncomment the import far below on voprf
@@ -31,6 +34,7 @@ import {
   getRandomValues,
   jsonParseWrapper,
   MessageBus,
+  SBMessage,
   Snackabra
 } from './snackabra.js';
 
@@ -239,12 +243,16 @@ if (test_list.includes('test04a')) {
     // Watch for incoming messages on the socket
     const SB = new Snackabra(sb_config);
     SB.setIdentity(key).then(async () => {
+      // console.log("@@@@@@@@@@@@@@@@ Identity set")
       const c = await SB.connect(channel_id);
+      // console.log("@@@@@@@@@@@@@@@@ got connection:")
+      console.log(c)
       const messages = [];
       const controlMessages = [];
-      c.channel.socket.onMessage = async (sb_message) => {
-        console.log('Message Received:\n ', sb_message);
-        const message = jsonParseWrapper(sb_message, 'L248');
+
+      c.channel.socket.onMessage = async (message) => {
+        // console.log("@@@@@@@@@@@@@@@@ Message Received:\n ", message);
+        // const message = jsonParseWrapper(sb_message, 'L248');
         if (message?.control) {
           controlMessages.push(message);
         } else {
@@ -264,6 +272,58 @@ if (test_list.includes('test04a')) {
 }
 
 
+// send "Hello"
+if (test_list.includes('test04b')) {
+  channel_id.then((channel_id) => {
+    console.log("@@@@@@@@@@@@@@@@ Channel id:")
+    console.log("localhost:3000/rooms/" + channel_id)
+
+    const SB = new Snackabra(sb_config);
+    SB.setIdentity(key).then(async () => {
+      const c = await SB.connect(channel_id);
+
+      const messages = [];
+      const controlMessages = [];
+
+      console.log("@@@@@@@@@@@@@@@@ channel has keys:")
+      console.log(SB.channel.keys)
+       
+      console.log("@@@@@@@@@@@@@@@@ trying to send message!")
+
+      let sbm = new SBMessage(c.channel, "Hello from test04b!")
+      SB.identity.exportable_pubKey.then((pubKey) => {
+	console.log("Got pubkey: ", pubKey)
+	sbm.imageMetadata_sign.then((s1) => {
+	  sbm.imageMetadata_sign = s1;
+	  sbm.image_sign.then((s2) => {
+	    sbm.image_sign = s2;
+	    sbm.sign.then((s3) => {
+	      sbm.sign = s3;
+	      sbm.sender_pubkey = SB.identity.exportable_pubKey;
+	      console.log("here is sender pubkey:", sbm.sender_pubkey)
+	      sbm.sender_pubkey.then((s4) => {
+		sbm.sender_pubkey = s4;
+		console.log("@@@@@@@@@@@@@@@@ will try to send this message:")
+		console.log(sbm)
+		c.channel.socket.send(sbm).then((c) => console.log("back from send promise?"))
+		console.log("@@@@@@@@@@@@@@@@ end of test")
+	      })
+	    })
+	  })
+	})
+      })
+
+      c.channel.socket.onMessage = async (message) => {
+        console.log('Message Received:\n ', message);
+      }
+
+    });
+  });
+}
+
+
+
+// sends an image to the storage server
 if (test_list.includes('test04')) {
   channel_id.then((channel_id) => {
     const z = document.getElementById('test04');
@@ -281,7 +341,6 @@ if (test_list.includes('test04')) {
           console.log('got channel response:');
           console.log(z2);
           const img = document.getElementById('original-snackabra-img');
-
           fetch(img.src)
             .then((res) => res.blob())
             .then((blob) => {
