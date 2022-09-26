@@ -362,35 +362,42 @@ const bs2dv = (bs) => bs instanceof ArrayBuffer
  * @return {string} base64 string
  */
 export function arrayBufferToBase64(buffer) {
-    // const view = bs2dv(bufferSource)
-    // const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    console.log(buffer);
-    // const view = new DataView(buffer)
-    const view = bs2dv(buffer);
-    const len = view.byteLength;
-    const extraBytes = len % 3; // if we have 1 byte left, pad 2 bytes
-    const len2 = len - extraBytes;
-    const parts = new Array(Math.floor(len2 / MAX_CHUNK_LENGTH) + Math.sign(extraBytes));
-    const lookup = urlLookup;
-    const pad = '';
-    let j = 0;
-    for (let i = 0; i < len2; i += MAX_CHUNK_LENGTH) {
-        parts[j++] = encodeChunk(lookup, view, i, (i + MAX_CHUNK_LENGTH) > len2 ? len2 : (i + MAX_CHUNK_LENGTH));
+    if (buffer == null) {
+        _sb_exception('L509', 'arrayBufferToBase64() -> null paramater');
+        return '';
     }
-    if (extraBytes === 1) {
-        const tmp = view.getUint8(len - 1);
-        parts[j] = (lookup[tmp >> 2] +
-            lookup[(tmp << 4) & 0x3f] +
-            pad + pad);
+    else {
+        // const view = bs2dv(bufferSource)
+        // const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+        console.log(buffer);
+        // const view = new DataView(buffer)
+        const view = bs2dv(buffer);
+        const len = view.byteLength;
+        const extraBytes = len % 3; // if we have 1 byte left, pad 2 bytes
+        const len2 = len - extraBytes;
+        const parts = new Array(Math.floor(len2 / MAX_CHUNK_LENGTH) + Math.sign(extraBytes));
+        // const lookup = urlLookup;
+        const lookup = b64lookup; // regular atob() doesn't like url friendly
+        const pad = '';
+        let j = 0;
+        for (let i = 0; i < len2; i += MAX_CHUNK_LENGTH) {
+            parts[j++] = encodeChunk(lookup, view, i, (i + MAX_CHUNK_LENGTH) > len2 ? len2 : (i + MAX_CHUNK_LENGTH));
+        }
+        if (extraBytes === 1) {
+            const tmp = view.getUint8(len - 1);
+            parts[j] = (lookup[tmp >> 2] +
+                lookup[(tmp << 4) & 0x3f] +
+                pad + pad);
+        }
+        else if (extraBytes === 2) {
+            const tmp = (view.getUint8(len - 2) << 8) + view.getUint8(len - 1);
+            parts[j] = (lookup[tmp >> 10] +
+                lookup[(tmp >> 4) & 0x3f] +
+                lookup[(tmp << 2) & 0x3f] +
+                pad);
+        }
+        return parts.join('');
     }
-    else if (extraBytes === 2) {
-        const tmp = (view.getUint8(len - 2) << 8) + view.getUint8(len - 1);
-        parts[j] = (lookup[tmp >> 10] +
-            lookup[(tmp >> 4) & 0x3f] +
-            lookup[(tmp << 2) & 0x3f] +
-            pad);
-    }
-    return parts.join('');
 }
 // /* ALTERNATIVE implementation to above (not yet typescripted) */
 // const _fromCC = String.fromCharCode.bind(String);
@@ -786,7 +793,7 @@ class Crypto {
             delete pubKey.dq;
             delete pubKey.q;
             delete pubKey.qi;
-            pubKey.key_ops = [];
+            // pubKey.key_ops = [];
             return pubKey;
         }
         catch (e) {
@@ -1045,25 +1052,36 @@ class Identity {
  * @public
  */
 class SBMessage {
+    ready;
     encrypted = false;
     contents;
-    // sender_pubkey: JsonWebKey
-    sign;
+    // sender_pubKey: JsonWebKey
+    sign = '';
     image = '';
-    image_sign;
-    imageMetaData;
-    imageMetadata_sign;
+    image_sign = '';
+    imageMetadata_sign = '';
+    imageMetaData = {};
+    sender_pubKey = {};
     constructor(channel, contents) {
-        this.contents = contents;
-        // this.sender_pubkey = channel.keys.exportable_pubKey // need to get this from SB object
+        console.log("creating SBMessage on channel:");
         console.log(channel);
+        this.contents = contents;
+        // this.sender_pubKey = channel.keys.exportable_pubKey // need to get this from SB object
         let signKey = channel.keys.personal_signKey;
-        this.imageMetaData = JSON.stringify({ imageId: '', previewId: '', imageKey: '', previewKey: '' });
+        this.imageMetaData = { imageId: '', previewId: '', imageKey: '', previewKey: '' };
         // psm: setting the rest to be promises, need to follow through in rest of code
         //      ... though i'm not sure why we need these hoops for a non-image
-        this.sign = SB_Crypto.sign(signKey, contents);
-        this.image_sign = SB_Crypto.sign(signKey, this.image);
-        this.imageMetadata_sign = SB_Crypto.sign(signKey, this.imageMetaData);
+        this.ready = new Promise((resolve) => {
+            const sign = SB_Crypto.sign(signKey, contents);
+            const image_sign = SB_Crypto.sign(signKey, this.image);
+            const imageMetadata_sign = SB_Crypto.sign(signKey, JSON.stringify(this.imageMetaData));
+            Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
+                this.sign = values[0];
+                this.image_sign = values[1];
+                this.imageMetadata_sign = values[2];
+                resolve(true);
+            });
+        });
     }
 }
 /**
@@ -1085,7 +1103,7 @@ class SBFile {
     //      e.g. SBFileImage inherits from SBFile?
     image = '';
     image_sign = '';
-    imageMetaData = '';
+    imageMetaData = {};
     imageMetadata_sign = '';
     // file is an instance of File
     constructor(file, signKey, key) {
@@ -1442,6 +1460,7 @@ class Channel {
     #keys;
     #api;
     #socket;
+    storage;
     constructor(https, wss, identity) {
         this.url = https;
         this.wss = wss;
@@ -1679,13 +1698,15 @@ class ChannelSocket {
      * Send message on channel socket
      */
     async send(message) {
-        if (this.ready) {
-            let payload;
-            this.#payload.wrap(message, this.#channel.keys.encryptionKey).then((payload) => { this.socket.send(payload); });
-        }
-        else {
-            this.#queue.push(message);
-        }
+        message.ready.then(() => {
+            if (this.ready) {
+                let payload;
+                this.#payload.wrap(message, this.#channel.keys.encryptionKey).then((payload) => { this.socket.send(payload); });
+            }
+            else {
+                this.#queue.push(message);
+            }
+        });
     }
     /**
      * Send SB object (file) on channel socket
@@ -1751,7 +1772,8 @@ class StorageApi {
             // psm: need to clean up these types
             // @ts-ignore
             const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
-            const metaData = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
+            // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
+            const metaData = sbFile.imageMetaData;
             const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
             const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
             Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
@@ -1871,25 +1893,32 @@ class StorageApi {
         return data_buffer.slice(0, _size);
     }
     /**
-     * retrieveData
+     * retrieveData (from storage)
      */
     async retrieveData(msgId, messages, controlMessages) {
+        console.log("... need to code up retrieveData() with new typing ..");
+        console.log(msgId);
+        console.log(messages);
+        console.log(controlMessages);
+        console.error("... need to code up retrieveData() with new typing ..");
         const imageMetaData = messages.find((msg) => msg._id === msgId)?.imageMetaData;
         const image_id = imageMetaData.previewId;
-        const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id.startsWith(image_id));
+        // const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id.startsWith(image_id));
+        const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id);
         if (!control_msg) {
             return { 'error': 'Failed to fetch data - missing control message for that image' };
         }
+        // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
+        // @ts-ignore
         const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
+        // @ts-ignore
         const data = extractPayload(imageFetch);
         const iv = data.iv;
         const salt = data.salt;
+        // @ts-ignore
         const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
         const encrypted_image = data.image;
-        const padded_img = str2ab(await SB_Crypto.decrypt(image_key, {
-            content: encrypted_image,
-            iv: iv
-        }, 'arrayBuffer'));
+        const padded_img = str2ab(await SB_Crypto.decrypt(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer'));
         const img = this.#unpadData(padded_img);
         // psm: issues should throw i think
         // if (img.error) {
@@ -1903,6 +1932,7 @@ class StorageApi {
      */
     async retrieveDataFromMessage(message, controlMessages) {
         const imageMetaData = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData;
+        // @ts-ignore
         const image_id = imageMetaData.previewId;
         const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id === image_id);
         if (!control_msg) {
@@ -1912,6 +1942,7 @@ class StorageApi {
         const data = extractPayload(imageFetch);
         const iv = data.iv;
         const salt = data.salt;
+        // @ts-ignore
         const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
         const encrypted_image = data.image;
         const padded_img = str2ab(await SB_Crypto.decrypt(image_key, {
@@ -2719,10 +2750,12 @@ class Snackabra {
                 }
                 const c = new Channel(_self.options.channel_server, _self.options.channel_ws, _self.#identity);
                 c.join(channel_id).then((_c) => {
-                    _self.#channel = _c;
                     _self.#storage = new StorageApi();
+                    _c.storage = _self.#storage;
+                    _self.#channel = _c;
                     _self.#storage.init(_self.options.storage_server, _self.#channel, _self.#identity);
-                    resolve(_self);
+                    // resolve(_self);
+                    resolve(_self.#channel);
                 });
             }
             catch (e) {
@@ -2825,5 +2858,5 @@ class Snackabra {
 //   arrayBufferToBase64,
 //   getRandomValues
 // };
-export { Snackabra, SBMessage, SBFile, };
+export { Channel, Snackabra, SBMessage, SBFile, };
 //# sourceMappingURL=snackabra.js.map
