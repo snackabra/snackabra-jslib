@@ -13,6 +13,7 @@
     "useDefineForClassFields": true,
     "sourceMap": true,
     "watch": true,
+    "declaration": true,
   },
   "files": [
     "snackabra.ts", "test01.ts"
