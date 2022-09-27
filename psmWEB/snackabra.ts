@@ -1478,6 +1478,7 @@ class sbWebSocket {
   #closed = false
   #sbServer: Snackabra
   #websocket: WebSocket
+  #timeout: 30000
   #processMessage(m: any) {
     // receives the message, can be of any type
   }
@@ -1521,6 +1522,18 @@ class sbWebSocket {
     switch(#websocket.readyState) {
     case 1: // OPEN
       this.ready.then(() => {
+        const timeout = setTimeout(() => {
+          const error = `Websocket request timed out after ${this.timeout}ms`;
+          console.error(error, 'ws_ack_' + ackPayload._id);
+          reject(new Error(error));
+        }, this.timeout);
+	
+        const ackResponse = () => {
+          clearTimeout(timeout);
+          this.events.unsubscribe('ws_ack_' + ackPayload._id, ackResponse);
+          resolve(true);
+        };
+
 	
       })
       break	      
