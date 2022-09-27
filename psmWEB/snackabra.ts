@@ -15,7 +15,10 @@
     384-snackabra-webclient/src/utils/ImageWorker.js
     that JS code needs to carry over, below the "most modified"
     parts of that code will throw an error
-    
+
+  Long Term Todo:
+  * eventually defined the protocol, potentially registering with:
+    https://www.iana.org/assignments/websocket/websocket.xml#subprotocol-name
 
 */
 
@@ -105,7 +108,7 @@ interface ImageMetaData {
 }
 
 interface ChannelMessage2 {
-  type?: 'ack' | 'invalid' // we want to migrate to this
+  type?: 'invalid' | 'ready',
   keys?: {
     ownerKey: Dictionary,
     encryptionKey: Dictionary,
@@ -128,6 +131,18 @@ interface ChannelMessage2 {
   verficationToken?: string,
 }
 
+interface ChannelAckMessage {
+  type: 'ack',
+  _id: string,
+}
+
+interface ChannelSystemMessage {
+  type: 'system',
+  _id: string,
+  systemMessage: string,
+}
+
+
 interface ChannelMessage1 {
   // currently we can't do a regex match here, and i can't figure
   // out a more clever way of collapsing this.  TODO maybe we should
@@ -135,7 +150,7 @@ interface ChannelMessage1 {
   [key: string]: ChannelMessage2
 }
 
-export type ChannelMessage = ChannelMessage1 | ChannelMessage2
+export type ChannelMessage = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
 
 // function dictToMessage(d:  Dictionary | undefined): ChannelMessage {
 //   let r: ChannelMessage = {type: 'invalid'} // default
@@ -1231,34 +1246,33 @@ class Identity implements SnackabraKeys {
  */
 class SBMessage {
   ready
-  encrypted = false
-  contents: string
-  // sender_pubKey: JsonWebKey
-  sign = ''
-  image = ''
-  image_sign = ''
-  imageMetadata_sign = ''
-  imageMetaData: ImageMetaData = {}
-  sender_pubKey: JsonWebKey = {}
-
-  constructor(channel: Channel, contents: string) {
+  signKey: CryptoKey
+  contents: {
+    sender_pubKey: JsonWebKey,
+    encrypted = false,
+    body: string,
+    sign = '',
+    image = '',
+    image_sign = '',
+    imageMetadata_sign = '',
+    imageMetaData: ImageMetaData = {imageId: '', previewId: '', imageKey: '', previewKey: '',},
+    sender_pubKey: JsonWebKey = {},
+  }
+  constructor(channel: Channel, body: string) {
     console.log("creating SBMessage on channel:")
     console.log(channel)
-    this.contents = contents;
-    // this.sender_pubKey = channel.keys.exportable_pubKey // need to get this from SB object
-    let signKey = channel.keys.personal_signKey
-    this.imageMetaData = {imageId: '', previewId: '', imageKey: '', previewKey: ''}
-    // psm: setting the rest to be promises, need to follow through in rest of code
-    //      ... though i'm not sure why we need these hoops for a non-image
-    this.ready = new Promise<boolean>((resolve) => {
-      const sign = SB_Crypto.sign(signKey, contents);
-      const image_sign = SB_Crypto.sign(signKey, this.image);
-      const imageMetadata_sign = SB_Crypto.sign(signKey, JSON.stringify(this.imageMetaData))
+    this.contents.body = body;
+    this.contents.sender_pubKey = channel.keys.exportable_pubKey // need to get this from SB object
+    this.signKey = channel.keys.personal_signKey
+    this.ready = new Promise<SBMessage>((resolve) => {
+      const sign = SB_Crypto.sign(this.signKey, body);
+      const image_sign = SB_Crypto.sign(this.signKey, this.image);
+      const imageMetadata_sign = SB_Crypto.sign(this.signKey, JSON.stringify(this.imageMetaData))
       Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
 	this.sign = values[0]
 	this.image_sign = values[1]
 	this.imageMetadata_sign = values[2]
-	resolve(true)
+	resolve(this)
       })
     })
   }
@@ -1452,50 +1466,71 @@ class SBFile {
     // console.log(canvas);
 
     // draw image in canvas element
-    canvas.width = img.width;
-    canvas.height = img.height;
-    canvas!.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height);
-    return canvas;
+    canvas.width = img.width
+    canvas.height = img.height
+    canvas!.getContext('2d')!.drawImage(img, 0, 0, canvas.width, canvas.height)
+    return canvas
   }
 }
 
-/**
- * Takes a message object and turns it into a payload to be
- * used by SB protocol
- */
-class Payload {
-  /**
-   * wrap
-   */
-  wrap(contents: Dictionary, key: CryptoKey): Promise<string> {
-    return new Promise(async (resolve, reject) => {
+class sbWebSocket {
+  ready
+  #closed = false
+  #sbServer: Snackabra
+  #websocket: WebSocket
+  #processMessage(m: any) {
+    // receives the message, can be of any type
+  }
+  #readyPromise(sbServer: Snackabra) {
+    return new Promise<sbWebSocket>((resolve, reject) => {
       try {
-        const msg = {encrypted_contents: await SB_Crypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
-        resolve(JSON.stringify(msg));
-      } catch (e) {
-        console.error(e);
-        reject(new Error('Unable to encrypt payload.'));
+	const ws = this.#websocket = new WebSocket(sbServer.channel_ws)
+	ws.addEventListener('open', () =>  { this.#closed = false; resolve(this) })
+	ws.addEventListener('message', (e: MessageEvent) => this.#processMessage(e.data))
+	ws.addEventListener('closed', (e: Event) => {
+	  this.#closed = true
+	  if (!e.wasClean) {
+	    console.log('sbWebSocket() was closed (and NOT cleanly): ', e.reason)
+	  } else {
+	    console.log('sbWebSocket() was closed (cleanly): ', e.reason)
+	  }
+	  reject('wbSocket() closed before it was opened (?)')
+	})
+	ws.addEventListener('error', (e) => {
+	  this.#closed = true
+	  console.log('sbWebSocket() error: ', e)
+	  reject('sbWebSocket creation error (see log)')
+	})
+      } catch (e: DOMException) {
+	this.#closed = true
+	reject('failed to create sbWebSocket, error: ' + e.message)
       }
-    });
+    })
+  }
+  constructor(sbServer: Snackabra) {
+    this.#sbServer = sbServer
+    this.ready = this.#readyPromise(sbServer)
   }
 
-  /**
-   * unwrap
-   */
-  async unwrap(payload: Dictionary, key: CryptoKey) {
-    try {
-      const msg = await SB_Crypto.decrypt(key, payload.encrypted_contents);
-      // psm: i think this throws in case of error
-      // if (msg['error']) {
-      //   return {error: msg['error']};
-      // }
-      return msg;
-    } catch (e) {
-      return {error: `Error: ${e}`};
+  // for future inspiration here are more thoughts on making this more iron clad:
+  // https://stackoverflow.com/questions/29881957/websocket-connection-timeout
+
+  send (m: string) {
+    if (closed) this.ready = this.#readyPromise(sbServer)
+    const hash = crypto.subtle.digest('SHA-256', new TextEncoder().encode(m));
+    switch(#websocket.readyState) {
+    case 1: // OPEN
+      this.ready.then(() => {
+	
+      })
+      break	      
+    case 3: // CLOSED
+    case 0: // CONNECTING
+    case 2: // CLOSING
+      _sb_exception('sbWebSocket', 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING')
     }
   }
 }
-
 
 /**
  * mtg: Protocol code that we wrap our WebSocket in
@@ -1520,6 +1555,7 @@ class WS_Protocol {
   }
 
   /**
+   * WS_Protocol
    * Get options
    */
   get options() {
@@ -1527,6 +1563,7 @@ class WS_Protocol {
   }
 
   /**
+   * WS_Protocol
    * join
    */
   join(): Promise<boolean> {
@@ -1546,6 +1583,7 @@ class WS_Protocol {
   }
 
   /**
+   * WS_Protocol
    * close
    */
   close() {
@@ -1585,6 +1623,7 @@ class WS_Protocol {
   };
 
   /**
+   * WS_Protocol
    * onError
    */
   onError() {
@@ -1597,6 +1636,7 @@ class WS_Protocol {
   }
 
   /**
+   * WS_Protocol
    * onClose
    */
   onClose() {
@@ -1608,13 +1648,25 @@ class WS_Protocol {
     });
   }
 
+  dispatchMessage(msg: ChannelAckMessage | ChannelSystemMessage) {
+    if (typeof msg == ChannelSystemMessage) {
+      // .. here you can access msg.systemMessage
+    } else {
+      // here you cannot, it will throw compiler error
+    }
+  }
+
   /**
+   * WS_Protocol
    * onMessage
    */
   onMessage() {
     this.currentWebSocket.addEventListener('message', (event) => {
       const data = jsonParseWrapper(event.data, 'L1342');
       // console.log(data)
+
+      dispatchMessage(data)
+
       if (data.ack) {
         this.events.publish('ws_ack_' + data._id);
         return;
@@ -1631,6 +1683,7 @@ class WS_Protocol {
   }
 
   /**
+   * WS_Protocol
    * readyState
    */
   get readyState() {
@@ -1638,6 +1691,7 @@ class WS_Protocol {
   }
 
   /**
+   * WS_Protocol
    * onOpen
    */
   onOpen() {
@@ -1651,15 +1705,19 @@ class WS_Protocol {
 
 /**
  * Channel
+
  * @class
  * @constructor
  * @public
  */
 class Channel {
-  _id: string = '';
-  url: string;
-  wss: string;
-  identity: Identity;
+  // url: string;
+  // wss: string;
+
+  sbServer: Snackabra
+  channel_id
+  identity: Identity
+
   owner: boolean = false;
   admin: boolean = false;
   verifiedGuest: boolean = false;
@@ -1669,38 +1727,59 @@ class Channel {
   #socket!: ChannelSocket;
   storage?: StorageApi;
 
-  constructor(https: string, wss: string, identity: Identity) {
-    this.url = https;
-    this.wss = wss;
-    this.identity = identity;
-  }
+  // constructor(https: string, wss: string, identity: Identity) {
+  //   this.url = https;
+  //   this.wss = wss;
+  //   this.identity = identity;
+  // }
+
+  /*
+   * Join a channel, returns channel object
+   *
+   * @param {Snackabra} which server to join
+   * @param {Identity} your identity on this channel
+   * @param {string} channel_id (the :term:`Channel Name`)
+   */
+  constructor(sbServer: Snackabra, identity: Identity, channel_id: string) {
+    this.sbServer = sbServer
+    this.identity = identity
+    _sb_assert(channel_id != null) // TODO: this can be done with types
+    this.channel_id = channel_id
+
+    this.#api = new ChannelApi(this.sbServer, this, this.identity)
+    this.#socket = new ChannelSocket(this.sbServer, this, this.identity)
+    this.#socket.onJoin = (message: Dictionary) => {
+      if (message?.ready) {
+        // console.log(message);
+        this.metaData = message;
+        this.loadKeys(message.keys).then(() => {
+          this.socket.isReady();
+          resolve(this);
+        });
+      }
+    }
+    this.ready = new Promise<Channel>((resolve) => {
+      const sign = SB_Crypto.sign(this.signKey, body);
+      const image_sign = SB_Crypto.sign(this.signKey, this.image);
+      const imageMetadata_sign = SB_Crypto.sign(this.signKey, JSON.stringify(this.imageMetaData))
+      Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
+	this.sign = values[0]
+	this.image_sign = values[1]
+	this.imageMetadata_sign = values[2]
+	resolve(this)
+      })
+    })
+    
 
   /**
-   * Join channel, channel_id is the :term:`Channel Name`.
+   * Channel.join()
    */
   join(channel_id: string): Promise<Channel> {
-    this._id = channel_id;
-    return new Promise((resolve) => {
-      if (channel_id === null) {
-        return;
-      }
-      this._id = channel_id;
-      this.#api = new ChannelApi(this.url, this, this.identity);
-      this.#socket = new ChannelSocket(this.wss, this, this.identity);
-      this.#socket.onJoin = (message: Dictionary) => {
-        if (message?.ready) {
-          // console.log(message);
-          this.metaData = message;
-          this.loadKeys(message.keys).then(() => {
-            this.socket.isReady();
-            resolve(this);
-          });
-        }
-      };
-    });
   }
 
   /**
+   * Channel.keys()
+   *
    * Return keys
    */
   get keys() {
@@ -1809,20 +1888,16 @@ class Channel {
   };
 }
 
-/**
- * Channel Socket
- * @class
- * @constructor
- * @public
- */
+/** Class managing connections */
 class ChannelSocket {
+  ready
   socket!: WS_Protocol;
   url: string;
   init!: Dictionary;
   channelId: string;
   #channel: Channel;
   #identity: Identity;
-  #payload: Payload;
+  // #payload: Payload;
   #queue: Array<SBMessage> = [];
   ready = false;
   onOpen!: CallableFunction;
@@ -1831,13 +1906,15 @@ class ChannelSocket {
   onError!: CallableFunction;
   onMessage!: CallableFunction;
   onSystemInfo!: CallableFunction;
+  channelCryptoKey: CryptoKey
 
-  constructor(wsUrl: string, channel: Channel, identity: Identity) {
+  constructor(sbServer: Snackabra, channel: Channel, identity: Identity) {
+    this.ready = new Promise<boolean>((resolve) => {
     this.channelId = channel._id;
-    this.url = wsUrl;
-    this.#channel = channel;
-    this.#identity = identity;
-    this.#payload = new Payload();
+    this.url = sbServer.SnackabraOptions.channel_ws
+    this.#channel = channel
+    this.#identity = identity
+    // this.#payload = new Payload();
     this.open();
   }
 
@@ -1848,8 +1925,41 @@ class ChannelSocket {
   //   this.#channel.loadKeys(_keys);
   // }
 
+  #wrap(contents: SBMessage): Promise<string> {
+    contents.ready.then(() => {
+      SB_Crypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')
+      const msg = {encrypted_contents: 
+    }
+
+    // return new Promise(async (resolve, reject) => {
+    //   try {
+    //     const msg = {encrypted_contents: await SB_Crypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
+    //     resolve(JSON.stringify(msg));
+    //   } catch (e) {
+    //     console.error(e);
+    //     reject(new Error('Unable to encrypt payload.'));
+    //   }
+    // });
+
+  }
+
+  async unwrap(payload: Dictionary, key: CryptoKey) {
+    try {
+      const msg = await SB_Crypto.decrypt(key, payload.encrypted_contents);
+      // psm: i think this throws in case of error
+      // if (msg['error']) {
+      //   return {error: msg['error']};
+      // }
+      return msg;
+    } catch (e) {
+      return {error: `Error: ${e}`};
+    }
+  }
+
+
   /**
-   * open
+   * ChannelSocket.open()
+   *
    */
   open() {
     const options: WSProtocolOptions = {
@@ -1898,14 +2008,14 @@ class ChannelSocket {
   }
 
   /**
-   * close
+   * ChannelSocket.close()
    */
   close() {
     this.socket.close();
   }
 
   /**
-   * isReady
+   * ChannelSocket.isReady()
    */
   isReady() {
     console.info('SB Socket ready');
@@ -1918,23 +2028,28 @@ class ChannelSocket {
   }
 
   /**
-   * Send message on channel socket
+   * ChannelSocket.send()
+   *
+   * @param {SBMessage} the message object to send
    */
   async send(message: SBMessage) {
-    message.ready.then(() => {
-      if (this.ready) {
-	let payload;
-	this.#payload.wrap(
-          message,
-          this.#channel.keys.encryptionKey
-	).then((payload) => { this.socket.send(payload) });
-      } else {
-	this.#queue.push(message);
-      }
-    });
+
+    // message.ready.then(() => {
+    //   if (this.ready) {
+    // 	let payload;
+    // 	this.#payload.wrap(
+    //       message,
+    //       this.#channel.keys.encryptionKey
+    // 	).then((payload) => { this.socket.send(payload) });
+    //   } else {
+    // 	this.#queue.push(message);
+    //   }
+    // });
   }
 
   /**
+   * ChannelSocket.sendSbObject()
+   *
    * Send SB object (file) on channel socket
    */
   async sendSbObject(file: SBMessage) {
@@ -1949,6 +2064,8 @@ class ChannelSocket {
   }
 
   /**
+   * ChannelSocket.receive()
+   *
    * Receive message on channel socket
    * psm: updating using new cool types
    * (it will arrive mostly unwrapped)
@@ -2228,13 +2345,14 @@ class ChannelApi {
   #channelServer: string;
   #payload: Payload;
 
-  constructor(server: string, channel: Channel, identity: Identity) {
-    this.server = server;
-    this.#channel = channel;
-    this.#payload = new Payload();
-    this.#channelApi = server + '/api/';
-    this.#channelServer = server + '/api/room/';
-    this.#identity = identity;
+  constructor(sbServer: Snackabra, channel: Channel, identity: Identity) {
+    this.#sbServer = sbServer
+    this.#server = this.sbServer.SnackabraOptions.channel_server
+    this.#channel = channel
+    // this.#payload = new Payload()
+    this.#channelApi = this.#server + '/api/'
+    this.#channelServer = this.#server + '/api/room/'
+    this.#identity = identity
   }
 
   /**

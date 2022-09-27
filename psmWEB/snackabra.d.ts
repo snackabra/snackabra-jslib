@@ -11,24 +11,8 @@ interface SnackabraKeys {
     exportable_privateKey: JsonWebKey | Promise<JsonWebKey | null>;
     privateKey: CryptoKey | Promise<CryptoKey | null>;
 }
-interface WSProtocolOptions {
-    url: string;
-    onOpen?: null | CallableFunction;
-    onMessage?: null | CallableFunction;
-    onClose?: null | CallableFunction;
-    onError?: null | CallableFunction;
-    timeout?: number;
-}
 interface Dictionary {
     [index: string]: any;
-}
-interface ChannelData {
-    roomId?: string;
-    channelId?: string;
-    ownerKey: string;
-    encryptionKey: string;
-    signKey: string;
-    SERVER_SECRET: string;
 }
 interface ImageMetaData {
     imageId?: string;
@@ -37,7 +21,7 @@ interface ImageMetaData {
     previewKey?: string;
 }
 interface ChannelMessage2 {
-    type?: 'ack' | 'invalid';
+    type?: 'invalid' | 'ready';
     keys?: {
         ownerKey: Dictionary;
         encryptionKey: Dictionary;
@@ -59,10 +43,14 @@ interface ChannelMessage2 {
     system?: boolean;
     verficationToken?: string;
 }
+interface ChannelAckMessage {
+    type: 'ack';
+    _id: string;
+}
 interface ChannelMessage1 {
     [key: string]: ChannelMessage2;
 }
-export declare type ChannelMessage = ChannelMessage1 | ChannelMessage2;
+export declare type ChannelMessage = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage;
 export declare function SB_libraryVersion(): string;
 /**
  * SB simple events (mesage bus) class
@@ -321,16 +309,19 @@ declare class Identity implements SnackabraKeys {
  * @public
  */
 declare class SBMessage {
-    ready: Promise<boolean>;
+    ready: any;
+    signKey: CryptoKey;
+    contents: {
+        sender_pubKey: JsonWebKey;
+    };
     encrypted: boolean;
-    contents: string;
+    body: string;
     sign: string;
     image: string;
     image_sign: string;
     imageMetadata_sign: string;
     imageMetaData: ImageMetaData;
     sender_pubKey: JsonWebKey;
-    constructor(channel: Channel, contents: string);
 }
 /**
  * SBFile
@@ -352,133 +343,23 @@ declare class SBFile {
     constructor(file: File, signKey: CryptoKey, key: CryptoKey);
 }
 /**
- * mtg: Protocol code that we wrap our WebSocket in
- * I will be updating this to send messages and remove
- * the wait to send messages only when ack received
- * The benefit is reduced latency in communication protocol
- */
-declare class WS_Protocol {
-    #private;
-    currentWebSocket: WebSocket;
-    _id: string;
-    events: MessageBus;
-    constructor(options: WSProtocolOptions);
-    /**
-     * Get options
-     */
-    get options(): WSProtocolOptions;
-    /**
-     * join
-     */
-    join(): Promise<boolean>;
-    /**
-     * close
-     */
-    close(): void;
-    send: (message: string) => Promise<boolean>;
-    /**
-     * onError
-     */
-    onError(): void;
-    /**
-     * onClose
-     */
-    onClose(): void;
-    /**
-     * onMessage
-     */
-    onMessage(): void;
-    /**
-     * readyState
-     */
-    get readyState(): number;
-    /**
-     * onOpen
-     */
-    onOpen(): void;
-}
-/**
  * Channel
+
  * @class
  * @constructor
  * @public
  */
 declare class Channel {
     #private;
-    _id: string;
-    url: string;
-    wss: string;
+    sbServer: Snackabra;
+    channel_id: string;
     identity: Identity;
     owner: boolean;
     admin: boolean;
     verifiedGuest: boolean;
     metaData: Dictionary;
     storage?: StorageApi;
-    constructor(https: string, wss: string, identity: Identity);
-    /**
-     * Join channel, channel_id is the :term:`Channel Name`.
-     */
-    join(channel_id: string): Promise<Channel>;
-    /**
-     * Return keys
-     */
-    get keys(): Dictionary;
-    /**
-     * Return API
-     */
-    get api(): ChannelApi;
-    /**
-     * Return socket
-     */
-    get socket(): ChannelSocket;
-    loadKeys: (keys: Dictionary) => Promise<unknown>;
-}
-/**
- * Channel Socket
- * @class
- * @constructor
- * @public
- */
-declare class ChannelSocket {
-    #private;
-    socket: WS_Protocol;
-    url: string;
-    init: Dictionary;
-    channelId: string;
-    ready: boolean;
-    onOpen: CallableFunction;
-    onJoin: CallableFunction;
-    onClose: CallableFunction;
-    onError: CallableFunction;
-    onMessage: CallableFunction;
-    onSystemInfo: CallableFunction;
-    constructor(wsUrl: string, channel: Channel, identity: Identity);
-    /**
-     * open
-     */
-    open(): void;
-    /**
-     * close
-     */
-    close(): void;
-    /**
-     * isReady
-     */
-    isReady(): void;
-    /**
-     * Send message on channel socket
-     */
-    send(message: SBMessage): Promise<void>;
-    /**
-     * Send SB object (file) on channel socket
-     */
-    sendSbObject(file: SBMessage): Promise<void>;
-    /**
-     * Receive message on channel socket
-     * psm: updating using new cool types
-     * (it will arrive mostly unwrapped)
-     */
-    receive(message: ChannelMessage): Promise<ChannelMessage>;
+    constructor(sbServer: Snackabra, identity: Identity, channel_id: string);
 }
 /**
  * Storage API
@@ -524,60 +405,6 @@ declare class StorageApi {
         url: string;
         error?: undefined;
     }>;
-}
-/**
- * Channel API
- * @class
- * @constructor
- * @public
- */
-declare class ChannelApi {
-    #private;
-    server: string;
-    constructor(server: string, channel: Channel, identity: Identity);
-    /**
-     * getLastMessageTimes
-     */
-    getLastMessageTimes(): Promise<unknown>;
-    /**
-     * getOldMessages
-     */
-    getOldMessages(currentMessagesLength: number): Promise<unknown>;
-    /**
-     * updateCapacity
-     */
-    updateCapacity(capacity: number): Promise<unknown>;
-    /**
-     * getCapacity
-     */
-    getCapacity(): Promise<unknown>;
-    /**
-     * getJoinRequests
-     */
-    getJoinRequests(): Promise<unknown>;
-    /**
-     * isLocked
-     */
-    isLocked(): Promise<unknown>;
-    /**
-     * Set message of the day
-     */
-    setMOTD(motd: string): Promise<unknown>;
-    /**
-     * getAdminData
-     */
-    getAdminData(): Promise<unknown>;
-    /**
-     * downloadData
-     */
-    downloadData(): Promise<unknown>;
-    uploadChannel(channelData: ChannelData): Promise<unknown>;
-    authorize(ownerPublicKey: Dictionary, serverSecret: string): Promise<unknown>;
-    postPubKey(_exportable_pubKey: Dictionary): Promise<unknown>;
-    storageRequest(byteLength: number): Promise<Dictionary>;
-    lock(): Promise<unknown>;
-    acceptVisitor(pubKey: string): Promise<unknown>;
-    ownerKeyRotation(): Promise<unknown>;
 }
 /**
  * QueueItem class

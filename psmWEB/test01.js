@@ -324,13 +324,11 @@ if (test_list.includes('test04b')) {
             getElement('sayHello').onclick = (() => {
                 messageCount++;
                 let msg = new SBMessage(c, `message number ${messageCount}!`);
-                msg.ready.then(() => {
-                    // @ts-ignore
-                    sbm.sender_pubKey = JSON.stringify(myPubKey);
-                    console.log(`================ sending message number ${messageCount}:`);
-                    console.log(sbm);
-                    c.socket.send(sbm).then((c) => console.log("back from send promise?"));
-                });
+                // @ts-ignore
+                sbm.sender_pubKey = JSON.stringify(myPubKey);
+                console.log(`================ sending message number ${messageCount}:`);
+                console.log(sbm);
+                c.socket.send(sbm).then((c) => console.log("back from send promise?"));
             });
         });
     });
