@@ -14,6 +14,14 @@ interface SnackabraKeys {
 interface Dictionary {
     [index: string]: any;
 }
+interface ChannelData {
+    roomId?: string;
+    channelId?: string;
+    ownerKey: string;
+    encryptionKey: string;
+    signKey: string;
+    SERVER_SECRET: string;
+}
 interface ImageMetaData {
     imageId?: string;
     previewId?: string;
@@ -302,6 +310,16 @@ declare class Identity implements SnackabraKeys {
     mountKeys(key: JsonWebKey): Promise<unknown>;
     get _id(): string;
 }
+interface SBMessageContents {
+    sender_pubKey?: JsonWebKey;
+    encrypted: boolean;
+    body: string;
+    sign: string;
+    image: string;
+    image_sign?: string;
+    imageMetadata_sign?: string;
+    imageMetaData?: ImageMetaData;
+}
 /**
  * SBMessage
  * @class
@@ -309,19 +327,10 @@ declare class Identity implements SnackabraKeys {
  * @public
  */
 declare class SBMessage {
-    ready: any;
+    ready: Promise<SBMessage>;
     signKey: CryptoKey;
-    contents: {
-        sender_pubKey: JsonWebKey;
-    };
-    encrypted: boolean;
-    body: string;
-    sign: string;
-    image: string;
-    image_sign: string;
-    imageMetadata_sign: string;
-    imageMetaData: ImageMetaData;
-    sender_pubKey: JsonWebKey;
+    contents: SBMessageContents;
+    constructor(channel: Channel, body: string);
 }
 /**
  * SBFile
@@ -342,6 +351,13 @@ declare class SBFile {
     imageMetadata_sign: string;
     constructor(file: File, signKey: CryptoKey, key: CryptoKey);
 }
+declare class SBWebSocket {
+    #private;
+    ready: Promise<SBWebSocket>;
+    onMessage: CallableFunction;
+    constructor(url: string, onMessage: CallableFunction);
+    send(m: string): Promise<unknown>;
+}
 /**
  * Channel
 
@@ -360,6 +376,77 @@ declare class Channel {
     metaData: Dictionary;
     storage?: StorageApi;
     constructor(sbServer: Snackabra, identity: Identity, channel_id: string);
+    /**
+     * Channel.join()
+     */
+    /**
+     * Channel.keys()
+     *
+     * Return keys
+     */
+    get keys(): Dictionary;
+    /**
+     * Return API
+     */
+    get api(): ChannelApi;
+    /**
+     * Return socket
+     */
+    get socket(): ChannelSocket;
+    loadKeys: (keys: Dictionary) => Promise<unknown>;
+}
+/** Class managing connections */
+declare class ChannelSocket {
+    #private;
+    ready: () => Promise<SBWebSocket>;
+    sbWebSocket: SBWebSocket;
+    init: Dictionary;
+    channelId: string;
+    ready: () => Promise<SBWebSocket>;
+    onOpen: CallableFunction;
+    onJoin: CallableFunction;
+    onClose: CallableFunction;
+    onError: CallableFunction;
+    onMessage: CallableFunction;
+    onSystemInfo: CallableFunction;
+    channelCryptoKey: CryptoKey;
+    constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
+    unwrap(payload: Dictionary, key: CryptoKey): Promise<string | {
+        error: string;
+    }>;
+    /**
+     * ChannelSocket.open()
+     *
+     */
+    open(): void;
+    /**
+     * ChannelSocket.close()
+     */
+    close(): void;
+    /**
+     * ChannelSocket.isReady()
+     */
+    isReady(): void;
+    /**
+     * ChannelSocket.send()
+     *
+     * @param {SBMessage} the message object to send
+     */
+    send(message: SBMessage): Promise<void>;
+    /**
+     * ChannelSocket.sendSbObject()
+     *
+     * Send SB object (file) on channel socket
+     */
+    sendSbObject(file: SBMessage): Promise<void>;
+    /**
+     * ChannelSocket.receive()
+     *
+     * Receive message on channel socket
+     * psm: updating using new cool types
+     * (it will arrive mostly unwrapped)
+     */
+    receive(message: ChannelMessage): Promise<ChannelMessage>;
 }
 /**
  * Storage API
@@ -405,6 +492,60 @@ declare class StorageApi {
         url: string;
         error?: undefined;
     }>;
+}
+/**
+ * Channel API
+ * @class
+ * @constructor
+ * @public
+ */
+declare class ChannelApi {
+    #private;
+    server: string;
+    constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
+    /**
+     * getLastMessageTimes
+     */
+    getLastMessageTimes(): Promise<unknown>;
+    /**
+     * getOldMessages
+     */
+    getOldMessages(currentMessagesLength: number): Promise<unknown>;
+    /**
+     * updateCapacity
+     */
+    updateCapacity(capacity: number): Promise<unknown>;
+    /**
+     * getCapacity
+     */
+    getCapacity(): Promise<unknown>;
+    /**
+     * getJoinRequests
+     */
+    getJoinRequests(): Promise<unknown>;
+    /**
+     * isLocked
+     */
+    isLocked(): Promise<unknown>;
+    /**
+     * Set message of the day
+     */
+    setMOTD(motd: string): Promise<unknown>;
+    /**
+     * getAdminData
+     */
+    getAdminData(): Promise<unknown>;
+    /**
+     * downloadData
+     */
+    downloadData(): Promise<unknown>;
+    uploadChannel(channelData: ChannelData): Promise<unknown>;
+    authorize(ownerPublicKey: Dictionary, serverSecret: string): Promise<unknown>;
+    postPubKey(_exportable_pubKey: Dictionary): Promise<unknown>;
+    storageRequest(byteLength: number): Promise<Dictionary>;
+    lock(): Promise<unknown>;
+    acceptVisitor(pubKey: string): Promise<unknown>;
+    ownerKeyRotation(): Promise<unknown>;
 }
 /**
  * QueueItem class
