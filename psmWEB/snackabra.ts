@@ -1015,7 +1015,6 @@ class Crypto {
       };
       try {
         // TODO: correctly match differenct combinations of types in the above function declaration
-        // @ts-ignore
         const response = await window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
         resolve(response);
       } catch (e) {
@@ -1905,8 +1904,6 @@ class Channel {
       //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
       // }
       if (_exportable_locked_key !== null) {
-        // psm: punting
-        // @ts-ignore
         _locked_key: CryptoKey = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
       } else if (keys.locked_key) {
         const _string_locked_key: string = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
@@ -2167,22 +2164,16 @@ class StorageApi {
   async saveFile(file: File) {
     if (file instanceof File) {
       // psm: need to clean up these types
-      // @ts-ignore
       const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey!);
       // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
       const metaData: ImageMetaData = sbFile.imageMetaData
       const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId!, metaData.imageKey!, 'f');
       const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId!, metaData.previewKey!, 'p');
       Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
-        // psm: need to clean up these types
-        // @ts-ignore
         results.forEach((controlData: Dictionary) => {
-          // psm: need to clean up these types
-          // @ts-ignore
           this.#channel.socket.sendSbObject({ ...controlData, control: true });
         });
         // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
-        // @ts-ignore
         this.#channel.socket.sendSbObject(sbFile);
       });
     } else {
@@ -2234,7 +2225,6 @@ class StorageApi {
     return new Promise((resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
         // psm: need to clean up these types
-        // @ts-ignore
         method: 'POST', body: assemblePayload({
           iv: encrypt_data.iv,
           salt: encrypt_data.salt,
@@ -2317,13 +2307,10 @@ class StorageApi {
       return { 'error': 'Failed to fetch data - missing control message for that image' };
     }
     // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
-    // @ts-ignore
     const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
-    // @ts-ignore
     const data = extractPayload(imageFetch);
     const iv: number = data.iv;
     const salt: Uint8Array = data.salt;
-    // @ts-ignore
     const image_key: CryptoKey = await this.#getFileKey(imageMetaData.previewKey, salt);
     const encrypted_image: string = data.image;
     const padded_img: ArrayBuffer = str2ab(await SB_Crypto.decrypt(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer'));
@@ -2341,7 +2328,6 @@ class StorageApi {
    */
   async retrieveDataFromMessage(message: Dictionary, controlMessages: Array<Dictionary>) {
     const imageMetaData: ImageMetaData = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData;
-    // @ts-ignore
     const image_id: string = imageMetaData.previewId;
     const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id === image_id);
     if (!control_msg) {
@@ -2351,7 +2337,6 @@ class StorageApi {
     const data: Dictionary = extractPayload(imageFetch);
     const iv: number = data.iv;
     const salt: Uint8Array = data.salt;
-    // @ts-ignore
     const image_key: CryptoKey = await this.#getFileKey(imageMetaData.previewKey, salt);
     const encrypted_image: string = data.image;
     const padded_img: ArrayBuffer = str2ab(await SB_Crypto.decrypt(image_key, {
@@ -2731,7 +2716,6 @@ class ChannelApi {
   acceptVisitor(pubKey: string) {
     return new Promise(async (resolve, reject) => {
       // psm: need some "!"
-      // @ts-ignore
       const shared_key: CryptoKey = await SB_Crypto.deriveKey(await this.#identity.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
       const _encrypted_locked_key: Dictionary = await SB_Crypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.exportable_locked_key)), shared_key, 'string')
       fetch(this.#channelServer + this.#channel._id + '/acceptVisitor', {
@@ -3189,6 +3173,7 @@ class Snackabra {
    *
    */
   constructor(args: SnackabraOptions) {
+    this.storageApi = new StorageApi()
     _sb_assert(args, 'Snackabra(args) - missing args');
     try {
       this.options = {
