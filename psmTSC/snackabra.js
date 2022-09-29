@@ -1354,11 +1354,8 @@ class SBWebSocket {
                                         console.error(error);
                                         reject(new Error(error));
                                     }
-                                    else {
-                                        // normal behavior
-                                    }
-                                }, this.#timeout);
-                            });
+                                });
+                            }, this.#timeout);
                         });
                         break;
                     case 3: // CLOSED
@@ -1570,8 +1567,17 @@ class Channel {
                 });
             }
         };
-        // we're ready when the ChannelSocket is ready, but note that the ready function can change
-        this.ready = (() => { return this.#socket.ready; });
+        this.ready = new Promise((resolve) => {
+            const sign = SB_Crypto.sign(this.signKey, body);
+            const image_sign = SB_Crypto.sign(this.signKey, this.image);
+            const imageMetadata_sign = SB_Crypto.sign(this.signKey, JSON.stringify(this.imageMetaData));
+            Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
+                this.sign = values[0];
+                this.image_sign = values[1];
+                this.imageMetadata_sign = values[2];
+                resolve(this);
+            });
+        });
     }
     /**
      * Channel.join()

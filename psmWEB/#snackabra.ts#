@@ -347,7 +347,6 @@ export function _assertBase64(base64: string) {
   if (z) return (z[0] === base64); else return false;
 }
 
-
 /**
  * Standardized 'str2ab()' function, string to array buffer.
  * This assumes on byte per character.
@@ -1767,6 +1766,17 @@ class Channel {
   #socket!: ChannelSocket;
 
   storage: StorageApi // TODO: in principle should be optional?
+
+
+  this seems
+
+
+  slooooow
+
+
+  
+
+
 
   // constructor(https: string, wss: string, identity: Identity) {
   //   this.url = https;

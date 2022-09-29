@@ -1,0 +1,26 @@
+;; other settings and info:
+;; https://github.com/ananthakumaran/tide
+;; https://github.com/Microsoft/TypeScript/blob/v3.3.1/src/server/protocol.ts#L2858-L2890
+
+{
+  ;; my (psm) overrides
+  "indentSize": 2,
+  "tabSize": 2,
+
+  ;; vcode defaults, from:
+  ;; https://github.com/Microsoft/vscode/blob/main/tsfmt.json 
+
+  ;; "convertTabsToSpaces": false,
+  ;; "insertSpaceAfterCommaDelimiter": true,
+  ;; "insertSpaceAfterSemicolonInForStatements": true,
+  ;; "insertSpaceBeforeAndAfterBinaryOperators": true,
+  ;; "insertSpaceAfterKeywordsInControlFlowStatements": true,
+  ;; "insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
+  ;; "insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis": false,
+  ;; "insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
+  ;; "insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces": false,
+  ;; "insertSpaceAfterOpeningAndBeforeClosingEmptyBraces": true,
+  ;; "insertSpaceBeforeFunctionParenthesis": false,
+  ;; "placeOpenBraceOnNewLineForFunctions": false,
+  ;; "placeOpenBraceOnNewLineForControlBlocks": false
+}

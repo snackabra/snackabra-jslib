@@ -14,6 +14,7 @@
     "sourceMap": true,
     "watch": true,
     "declaration": true,
+    "compileOnSave": true,
   },
   "files": [
     "snackabra.ts", "test01.ts"

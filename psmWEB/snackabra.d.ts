@@ -367,6 +367,7 @@ declare class SBWebSocket {
  */
 declare class Channel {
     #private;
+    ready: () => () => Promise<SBWebSocket>;
     sbServer: Snackabra;
     channel_id: string;
     identity: Identity;
