@@ -143,11 +143,49 @@ interface ChannelSystemMessage {
 }
 
 
+/* **************** New System **************** */
+
+interface ChannelRoomKeys {
+  type: 'roomKeys',
+  encryptionKey: JsonWebKey,
+  guestKey: JsonWebKey,
+  ownerKey: JsonWebKey,
+  signKey: JsonWebKey
+}
+
+interface ChannelEncryptedMessage {
+  type: 'channelMssage',
+  // base64 - 64 chars (512 bits), e.g:
+  // 'wDUMRbcfFhdmByuwMhFyR46MRlcZh-6gKRUhSPkWEQLSRUPE8_jqixV3VQevTDBy'
+  channelID: string,
+  // fourty-two (42) 0s and 1s as string, e.g.:
+  // '011000001110001011010110101010000100000110'
+  timestampPrefix: string,
+  encrypted_contents: {
+    content: string,
+    iv: string,
+  }
+}
+
+interface ChannelEncryptedMessageArray {
+  type: 'channelMessageArray',
+  messages: ChannelEncryptedMessageArray[]
+}
+
+export type ChannelMessageV2 = ChannelRoomKeys | ChannelEncryptedMessage | ChannelEncryptedMessageArray
+
+
+/* **************** New System **************** */
+
+
+
+
 interface ChannelMessage1 {
   // currently we can't do a regex match here, and i can't figure
   // out a more clever way of collapsing this.  TODO maybe we should
   // change the message format
-  [key: string]: ChannelMessage2
+  [key: string]: ChannelMessage2,
+  message: { [prop: string]: any },
 }
 
 export type ChannelMessage = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
@@ -822,7 +860,7 @@ export function jsonParseWrapper(str: string, loc: string) {
 
 
 /**
- * Extract payload
+ * Deprecated (older version of payloads, for older channels)
  */
 export function extractPayloadV1(payload: ArrayBuffer) {
   try {
@@ -878,23 +916,30 @@ export function assemblePayload(data: Dictionary) {
 }
 
 /**
- * Extract payload (latest version)
+ * Extract payload - this decodes from our binary (wire) format
+ * to a JS object. This provides a binary encoding of any JSON,
+ * and it allows some elements of the JSON to be raw (binary).
  */
 export function extractPayload(payload: ArrayBuffer): Dictionary {
   try {
+    // number of bytes of meta data (encoded as a 32-bit Uint)
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
-    const decoder = new TextDecoder();
     console.info('METADATASIZE: ', metadataSize);
+    const decoder = new TextDecoder();
+    // extracts the string of meta data and parses
     console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
     const _metadata: Dictionary = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
     console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
+    // calculate start of actual contents 
     const startIndex: number = 4 + metadataSize;
     if (!_metadata.version) {
+      // backwards compatibility
       _metadata['version'] = '001';
     }
     console.info(_metadata['version']);
     switch (_metadata['version']) {
       case '001': {
+        // deprecated, older format
         return extractPayloadV1(payload);
       }
       case '002': {
@@ -903,9 +948,12 @@ export function extractPayload(payload: ArrayBuffer): Dictionary {
           const _index = i.toString();
           if (_metadata._index) {
             const propertyStartIndex: number = _metadata[_index]['start'];
+            // start (in bytes) of contents
             console.info(propertyStartIndex);
             const size: number = _metadata[_index]['size'];
+            // where to put it
             const entry: Dictionary = _metadata[_index]
+            // extracts contents - this supports raw data
             data[entry['name']] = payload.slice(startIndex + propertyStartIndex, startIndex + propertyStartIndex + size);
           }
         }
@@ -2116,24 +2164,25 @@ class ChannelSocket {
    * (it will arrive mostly unwrapped)
    */
   async receive(message: ChannelMessage) {
-    // const id = Object.keys(message)[0];
+    // 'id' will be first message
+    const id = Object.keys(message)[0];
+    let unwrapped: string
     if (message.encrypted_contents) {
-      throw new Error('add decryption');
-      // try {
-      //   unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey,
-      // 				      message[id].encrypted_contents, 'string');
-      // } catch (e) {
-      //   console.warn(e);
-      //   unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key,
-      // 				      message[id].encrypted_contents, 'string');
-      // }
+      try {
+        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey,
+          message[id].encrypted_contents, 'string');
+      } catch (e) {
+        console.warn(e);
+        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key,
+          message[id].encrypted_contents, 'string');
+      }
     } else {
-      // unwrapped = jsonParseWrapper(unwrapped, 'L1702');
+      unwrapped = jsonParseWrapper(unwrapped, 'L1702');
       // psm: TODO, i don't know what messages are really supposed to look like in all cases
-      // unwrapped._id = id;
-      // _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
+      unwrapped._id = id;
+      _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
       if (message._id) _localStorage.setItem(this.#channel._id + '_lastSeenMessage', message._id)
-      // return JSON.stringify(unwrapped);
+      return JSON.stringify(unwrapped);
       return message
     }
   }
@@ -2288,7 +2337,7 @@ class StorageApi {
 
   /**
    * StorageApi().retrieveData()
-   * retrievses an object from storage
+   * retrieves an object from storage
    */
   async retrieveData(msgId: string,
     messages: Array<ChannelMessage>,
@@ -2308,6 +2357,7 @@ class StorageApi {
     }
     // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
     const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
+    // extracts from binary format
     const data = extractPayload(imageFetch);
     const iv: number = data.iv;
     const salt: Uint8Array = data.salt;
@@ -3233,12 +3283,6 @@ class Snackabra {
 
         const c = new Channel(this, channel_id, identity)
         this.#listOfChannels.push(c)
-
-
-        this.#
-
-
-
         // const c = new Channel(this.options.channel_server, _self.options.channel_ws, _self.#identity);
         // c.join(channel_id).then((_c: Channel) => {
         //   _self.#storage = new StorageApi();

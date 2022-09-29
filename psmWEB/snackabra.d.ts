@@ -233,60 +233,11 @@ export declare function extractPayload(payload: ArrayBuffer): Dictionary;
 /**
  * Encode into b64 URL
  */
-export declare function encodeB64Url(input: string): string;
+export declare function encodeB64Url(input: string): any;
 /**
  * Decode b64 URL
  */
 export declare function decodeB64Url(input: string): string;
-/**
- * Crypto is a class that contains all the SB specific crypto functions
- *
- * @class
- * @constructor
- * @public
- */
-declare class Crypto {
-    /**
-     * Extracts (generates) public key from a private key.
-     */
-    extractPubKey(privateKey: JsonWebKey): JsonWebKey | null;
-    /**
-     * Generates standard ``ECDH`` keys using ``P-384``.
-     */
-    generateKeys(): Promise<CryptoKeyPair>;
-    /**
-     * Import keys
-     */
-    importKey(format: 'raw' | 'pkcs8' | 'spki' | 'jwk', key: BufferSource | JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
-    /**
-     * Derive key.
-     */
-    deriveKey(privateKey: CryptoKey, publicKey: CryptoKey, type: string, extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
-    /**
-     * Get file key
-     */
-    getFileKey(fileHash: string, _salt: ArrayBuffer): Promise<unknown>;
-    /**
-     * Encrypt
-     */
-    encrypt(contents: BufferSource, secret_key: CryptoKey, outputType?: string, _iv?: ArrayBuffer | null): Promise<Dictionary>;
-    /**
-     * Decrypt
-     */
-    decrypt(secretKey: CryptoKey, contents: Dictionary, outputType?: string): Promise<string>;
-    /**
-     * Sign
-     */
-    sign(secretKey: CryptoKey, contents: string): Promise<string>;
-    /**
-     * Verify
-     */
-    verify(secretKey: CryptoKey, sign: string, contents: string): Promise<unknown>;
-    /**
-     * Compare keys
-     */
-    areKeysSame(key1: Dictionary, key2: Dictionary): boolean;
-}
 /**
  * Identity (key for use in SB)
  * @class
@@ -360,7 +311,7 @@ declare class SBWebSocket {
 }
 /**
  * Channel
-
+ *
  * @class
  * @constructor
  * @public
@@ -370,16 +321,13 @@ declare class Channel {
     ready: () => () => Promise<SBWebSocket>;
     sbServer: Snackabra;
     channel_id: string;
-    identity: Identity;
+    defaultIdentity?: Identity;
     owner: boolean;
     admin: boolean;
     verifiedGuest: boolean;
     metaData: Dictionary;
-    storage?: StorageApi;
-    constructor(sbServer: Snackabra, identity: Identity, channel_id: string);
-    /**
-     * Channel.join()
-     */
+    storage: StorageApi;
+    constructor(sbServer: Snackabra, channel_id: string, identity: Identity);
     /**
      * Channel.keys()
      *
@@ -387,14 +335,17 @@ declare class Channel {
      */
     get keys(): Dictionary;
     /**
-     * Return API
+     * Channel.api()
      */
     get api(): ChannelApi;
     /**
-     * Return socket
+     * Channel.socket()
      */
     get socket(): ChannelSocket;
-    loadKeys: (keys: Dictionary) => Promise<unknown>;
+    /**
+     * Channel.loadKeys()
+     */
+    loadKeys(keys: Dictionary): Promise<unknown>;
 }
 /** Class managing connections */
 declare class ChannelSocket {
@@ -403,14 +354,12 @@ declare class ChannelSocket {
     sbWebSocket: SBWebSocket;
     init: Dictionary;
     channelId: string;
-    ready: () => Promise<SBWebSocket>;
     onOpen: CallableFunction;
     onJoin: CallableFunction;
     onClose: CallableFunction;
     onError: CallableFunction;
     onMessage: CallableFunction;
     onSystemInfo: CallableFunction;
-    channelCryptoKey: CryptoKey;
     constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
     unwrap(payload: Dictionary, key: CryptoKey): Promise<string | {
         error: string;
@@ -458,33 +407,34 @@ declare class ChannelSocket {
 declare class StorageApi {
     #private;
     server: string;
-    init(server: string, channel: Channel, identity: Identity): void;
+    constructor(server: string, channel: Channel, identity: Identity);
     /**
-     * saveFile
+     * StorageApi.saveFile()
      */
     saveFile(file: File): Promise<void>;
     /**
-     * storeRequest
+     * StorageApi().storeRequest
      */
     storeRequest(fileId: string): Promise<ArrayBuffer>;
     /**
-     * storeData
+     * StorageApi().storeData()
      */
     storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: Dictionary): Promise<Dictionary>;
     /**
-     * storeImage
+     * StorageApi().storeImage()
      */
     storeImage(image: string | ArrayBuffer, image_id: string, keyData: string, type: string): void;
     /**
-     * fetchData
+     * StorageApi().fetchData()
      */
     fetchData(msgId: string, verificationToken: string): Promise<ArrayBuffer>;
     /**
-     * retrieveData (from storage)
+     * StorageApi().retrieveData()
+     * retrievses an object from storage
      */
     retrieveData(msgId: string, messages: Array<ChannelMessage>, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
     /**
-     * retrieveDataFromMessage
+     * StorageApi().retrieveDataFromMessage()
      */
     retrieveDataFromMessage(message: Dictionary, controlMessages: Array<Dictionary>): Promise<{
         error: string;
@@ -562,42 +512,34 @@ declare class ChannelApi {
  * @constructor
  * @public
  */
-/**
- * Constructor expects an object with the names of the matching servers, for example
- * (this shows the miniflare local dev config):
- * ::
- *
- *     {
- *       channel_server: 'http://127.0.0.1:4001',
- *       channel_ws: 'ws://127.0.0.1:4001',
- *       storage_server: 'http://127.0.0.1:4000'
- *     }
- *
- */
 declare class Snackabra {
     #private;
+    storageApi: StorageApi;
     options: SnackabraOptions;
     /**
+     * Constructor expects an object with the names of the matching servers, for example
+     * (this shows the miniflare local dev config):
+     *
+     * @param {SnackabraOptions} the servers to talk to, look like this:
+     *
+     * ::
+     *
+     *     {
+     *       channel_server: 'http://127.0.0.1:4001',
+     *       channel_ws: 'ws://127.0.0.1:4001',
+     *       storage_server: 'http://127.0.0.1:4000'
+     *     }
+     *
      */
     constructor(args: SnackabraOptions);
-    setIdentity(keys: JsonWebKey): Promise<unknown>;
-    createIdentity(): Promise<unknown>;
     /**
+     * Snackabra.connect()
      * Connects to :term:`Channel Name` on this SB config.
-     * Returns a (promise to a) channel object
+     * Returns a (promise to the) channel object
+     * @param {string} channel name
+     * @param {Identity} default identity for all messages
      */
-    connect(channel_id: string): Promise<Channel>;
-    /**
-     * Creates a channel. Currently uses trivial authentication.
-     * Returns the :term:`Channel Name`.
-     * (TODO: token-based approval of storage spend)
-     */
-    create(serverSecret: string): Promise<string>;
-    get channel(): Channel;
-    get storage(): StorageApi;
-    get crypto(): Crypto;
-    get identity(): Identity;
-    sendMessage(message: SBMessage): void;
-    sendFile(file: File): void;
+    connect(channel_id: string, identity: Identity): Promise<Channel>;
+    catch(e: any): void;
 }
 export { Channel, Snackabra, SBMessage, SBFile, };
