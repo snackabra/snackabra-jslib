@@ -887,7 +887,7 @@ export function extractPayloadV1(payload: ArrayBuffer) {
 /**
  * Assemble payload
  */
-export function assemblePayload(data: Dictionary) {
+export function assemblePayload(data: Dictionary): BodyInit | null {
   try {
     const metadata: Dictionary = {};
     metadata['version'] = '002';
@@ -913,7 +913,7 @@ export function assemblePayload(data: Dictionary) {
     return payload;
   } catch (e) {
     console.error(e);
-    return {};
+    return null;
   }
 }
 
@@ -2189,19 +2189,16 @@ class ChannelSocket {
  */
 class StorageApi {
   server!: string;
-  #channel!: Channel;
-  #identity!: Identity;
 
-  constructor(server: string, channel: Channel, identity: Identity) {
+
+  constructor(server: string) {
     this.server = server + '/api/v1';
-    this.#channel = channel;
-    this.#identity = identity;
   }
 
   /**
    * StorageApi.saveFile()
    */
-  async saveFile(file: File) {
+  async saveFile(file: SBFile) {
     if (file instanceof File) {
       // psm: need to clean up these types
       const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey!);
@@ -2265,7 +2262,8 @@ class StorageApi {
     return new Promise((resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
         // psm: need to clean up these types
-        method: 'POST', body: assemblePayload({
+        method: 'POST',
+        body: assemblePayload({
           iv: encrypt_data.iv,
           salt: encrypt_data.salt,
           image: data.content,
@@ -3189,14 +3187,15 @@ class Queue {
 
 class Snackabra {
   #listOfChannels: Channel[] = []
-  storageApi: StorageApi
-  // #storage = new StorageApi();
-  // #identity = new Identity();
+  #storage!: StorageApi
+  #channel!: Channel
+  #identity = new Identity();
   options: SnackabraOptions = {
     channel_server: '',
     channel_ws: '',
     storage_server: ''
   };
+
 
   /**
    * Constructor expects an object with the names of the matching servers, for example
@@ -3214,16 +3213,22 @@ class Snackabra {
    * @param args {SnackabraOptions} interface
    */
   constructor(args: SnackabraOptions) {
-    this.storageApi = new StorageApi()
+
     _sb_assert(args, 'Snackabra(args) - missing args');
     try {
-      this.options = {
+      this.options = Object.assign(this.options, {
         channel_server: args.channel_server,
         channel_ws: args.channel_ws,
         storage_server: args.storage_server
-      };
-    } catch (e) {
-      _sb_exception('Snackabra.constructor()', `${e}`);
+      });
+      this.#storage = new StorageApi(args.storage_server)
+    } catch (e: any) {
+      if(e.hasOwnProperty('message')){
+        _sb_exception('Snackabra.constructor()', e.message);
+      }else{
+        _sb_exception('Snackabra.constructor()', 'Unknown exception');
+      }
+
     }
   }
 
@@ -3292,7 +3297,7 @@ class Snackabra {
    * Returns the :term:`Channel Name`.
    * (TODO: token-based approval of storage spend)
    */
-  create(serverSecret: string) {
+  create(serverSecret: string, identity: Identity) {
     return new Promise<string>(async (resolve, reject) => {
       try {
         const ownerKeyPair: CryptoKeyPair = await crypto.subtle.generateKey({
@@ -3325,7 +3330,7 @@ class Snackabra {
         });
         resp = await resp.json();
         if (resp.success) {
-          await this.connect(channelId);
+          await this.connect(channelId, identity);
           _localStorage.setItem(channelId, JSON.stringify(exportable_privateKey));
           resolve(channelId);
         } else {
@@ -3352,19 +3357,19 @@ class Snackabra {
   }
 
 
-  get channel() {
+  get channel(): Channel {
     return this.#channel;
   }
 
-  get storage() {
+  get storage(): StorageApi {
     return this.#storage;
   }
 
-  get crypto() {
+  get crypto(): Crypto {
     return SB_Crypto;
   }
 
-  get identity() {
+  get identity(): Identity {
     return this.#identity;
   }
 
@@ -3372,7 +3377,7 @@ class Snackabra {
     this.channel.socket.send(message);
   }
 
-  sendFile(file: File) {
+  sendFile(file: SBFile) {
     this.storage.saveFile(file);
   }
 }
