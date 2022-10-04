@@ -1794,7 +1794,7 @@ class Channel {
   ready
   sbServer: Snackabra
   channel_id
-  defaultIdentity?: Identity
+  defaultIdentity: Identity
 
   owner: boolean = false;
   admin: boolean = false;
@@ -1826,8 +1826,8 @@ class Channel {
     _sb_assert(channel_id != null, 'channel_id cannot be null') // TODO: this can be done with types
     this.channel_id = channel_id
 
-    this.#api = new ChannelApi(this.sbServer, this, this.identity)
-    this.#socket = new ChannelSocket(this.sbServer, this, this.identity)
+    this.#api = new ChannelApi(this.sbServer, this, this.defaultIdentity)
+    this.#socket = new ChannelSocket(this.sbServer, this, this.defaultIdentity)
     this.#socket.onJoin = (message: Dictionary) => {
       if (message?.ready) {
 
@@ -1894,8 +1894,8 @@ class Channel {
       const _exportable_room_signKey: JsonWebKey = jsonParseWrapper(keys.signKey, 'L1470');
       const _exportable_encryption_key: JsonWebKey = jsonParseWrapper(keys.encryptionKey, 'L1471');
       let _exportable_verifiedGuest_pubKey: JsonWebKey = jsonParseWrapper(keys.guestKey || null, 'L1472');
-      const _exportable_pubKey: JsonWebKey = await this.identity.exportable_pubKey.then();
-      const _privateKey: CryptoKey = await this.identity.privateKey.then();
+      const _exportable_pubKey: JsonWebKey = await this.defaultIdentity.exportable_pubKey.then();
+      const _privateKey: CryptoKey = await this.defaultIdentity.privateKey.then();
       let isVerifiedGuest = false;
       const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
       const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
@@ -1943,7 +1943,7 @@ class Channel {
       //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
       // }
       if (_exportable_locked_key !== null) {
-        _locked_key: CryptoKey = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
+        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
       } else if (keys.locked_key) {
         const _string_locked_key: string = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
         _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
@@ -1990,7 +1990,7 @@ class ChannelSocket {
   // channelCryptoKey: CryptoKey
 
   constructor(sbServer: Snackabra, channel: Channel, identity: Identity) {
-    this.channelId = channel._id;
+    this.channelId = channel.channel_id
     // this.url = sbServer.SnackabraOptions.channel_ws
     this.#channel = channel
     this.#identity = identity
