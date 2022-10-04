@@ -1297,13 +1297,23 @@ interface SBMessageContents {
 class SBMessage {
   ready
   signKey: CryptoKey
+  encryptKey: CryptoKey
   contents: SBMessageContents = { encrypted: false, body: '', sign: '', image: '', imageMetaData: {} }
-  constructor(channel: Channel, body: string) {
+
+  constructor(channel: Channel, body: string, identity?: Identity) {
     console.log("creating SBMessage on channel:")
     console.log(channel)
     this.contents.body = body;
 
-    this.contents.sender_pubKey = channel.keys.exportable_pubKey // need to get this from SB object
+    // this.contents.sender_pubKey = channel.keys.exportable_pubKey // need to get this from SB object
+
+    if (identity) {
+      this.encryptKey = identity.exportable_pubKey
+    } else if (channel.defaultIdentity?.exportable_pubKey) {
+      // TODO
+    }
+    _sb_exception('simpleRandomString', 'code ' + code + ' not supported');
+
     this.signKey = channel.keys.personal_signKey
     this.ready = new Promise<SBMessage>((resolve) => {
       const sign = SB_Crypto.sign(this.signKey, body);
