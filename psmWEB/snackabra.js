@@ -23,7 +23,7 @@
 */
 /*
   format is a single string:
-  
+
   dZbuNAeDnuMOLPYcfExi4RIUVPljFZUZLE3tUo3zl1-avzxmm9nBhtRPVOwu6kK4
   011000001101110010110011101001000001101001
 */
@@ -48,7 +48,7 @@ const msgIdRegex = /^([A-Za-z0-9+/_\-=]{64})*([01]{42})$/;
 //     console.log("json:")
 //     console.log(JSON.stringify(d))
 //   } catch (e) {
-//     // any issues 
+//     // any issues
 //     console.info("dictToMessageId() failed to decode message:")
 //     console.info(d)
 //     console.info("Error:")
@@ -720,7 +720,7 @@ export function extractPayload(payload) {
         console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
         const _metadata = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
         console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
-        // calculate start of actual contents 
+        // calculate start of actual contents
         const startIndex = 4 + metadataSize;
         if (!_metadata.version) {
             // backwards compatibility
@@ -829,25 +829,21 @@ class Crypto {
             }
         });
     }
+    /**
+     * Import keys
+     */
     importKey(format, key, type, extractable, keyUsages) {
-        return new Promise(async (resolve, reject) => {
-            const keyAlgorithms = {
-                ECDH: {
-                    name: 'ECDH', namedCurve: 'P-384'
-                }, AES: {
-                    name: 'AES-GCM'
-                }, PBKDF2: 'PBKDF2'
-            };
-            try {
-                // TODO: correctly match differenct combinations of types in the above function declaration
-                const response = await window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
-                resolve(response);
-            }
-            catch (e) {
-                console.error(format, key, type, extractable, keyUsages);
-                reject(e);
-            }
-        });
+        const keyAlgorithms = {
+            ECDH: { name: 'ECDH', namedCurve: 'P-384' },
+            AES: { name: 'AES-GCM' },
+            PBKDF2: 'PBKDF2'
+        };
+        if (format === 'jwk') {
+            return (window.crypto.subtle.importKey('jwk', key, keyAlgorithms[type], extractable, keyUsages));
+        }
+        else {
+            return (window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages));
+        }
     }
     /**
      * Derive key.
@@ -2823,7 +2819,6 @@ class Snackabra {
      * Constructor expects an object with the names of the matching servers, for example
      * (this shows the miniflare local dev config):
      *
-     * @param {SnackabraOptions} the servers to talk to, look like this:
      *
      * ::
      *
@@ -2833,6 +2828,7 @@ class Snackabra {
      *       storage_server: 'http://127.0.0.1:4000'
      *     }
      *
+     * @param args {SnackabraOptions} interface
      */
     constructor(args) {
         this.storageApi = new StorageApi();

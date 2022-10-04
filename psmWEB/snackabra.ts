@@ -1,7 +1,7 @@
 /*
   THIS HEADER HAS INFO WHILE WE ARE REFACTORING
 
-  currently experimenting with 
+  currently experimenting with
   tsc -lib dom,es5,es6,es2021 -t es6 --explainFiles --pretty false --strict ./main.ts
 
   main target options are (default is es3)
@@ -96,7 +96,7 @@ interface ChannelKeys {
 
 /*
   format is a single string:
-  
+
   dZbuNAeDnuMOLPYcfExi4RIUVPljFZUZLE3tUo3zl1-avzxmm9nBhtRPVOwu6kK4
   011000001101110010110011101001000001101001
 */
@@ -212,7 +212,7 @@ export type ChannelMessage = ChannelMessage1 | ChannelMessage2 | ChannelAckMessa
 //     console.log("json:")
 //     console.log(JSON.stringify(d))
 //   } catch (e) {
-//     // any issues 
+//     // any issues
 //     console.info("dictToMessageId() failed to decode message:")
 //     console.info(d)
 //     console.info("Error:")
@@ -932,7 +932,7 @@ export function extractPayload(payload: ArrayBuffer): Dictionary {
     console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
     const _metadata: Dictionary = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
     console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
-    // calculate start of actual contents 
+    // calculate start of actual contents
     const startIndex: number = 4 + metadataSize;
     if (!_metadata.version) {
       // backwards compatibility
@@ -3202,7 +3202,6 @@ class Snackabra {
    * Constructor expects an object with the names of the matching servers, for example
    * (this shows the miniflare local dev config):
    *
-   * @param {SnackabraOptions} the servers to talk to, look like this:
    *
    * ::
    *
@@ -3212,6 +3211,7 @@ class Snackabra {
    *       storage_server: 'http://127.0.0.1:4000'
    *     }
    *
+   * @param args {SnackabraOptions} interface
    */
   constructor(args: SnackabraOptions) {
     this.storageApi = new StorageApi()

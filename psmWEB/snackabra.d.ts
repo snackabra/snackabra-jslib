@@ -283,7 +283,7 @@ declare class Crypto {
     /**
      * Import keys
      */
-    importKey(format: 'pkcs8' | 'spki' | 'raw', key: BufferSource, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
+    importKey(format: KeyFormat, key: BufferSource | JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
     /**
      * Derive key.
      */
@@ -401,7 +401,7 @@ declare class Channel {
     admin: boolean;
     verifiedGuest: boolean;
     metaData: Dictionary;
-    storage: StorageApi;
+    storage?: StorageApi;
     constructor(sbServer: Snackabra, channel_id: string, identity: Identity);
     /**
      * Channel.keys()
@@ -595,7 +595,6 @@ declare class Snackabra {
      * Constructor expects an object with the names of the matching servers, for example
      * (this shows the miniflare local dev config):
      *
-     * @param {SnackabraOptions} the servers to talk to, look like this:
      *
      * ::
      *
@@ -605,6 +604,7 @@ declare class Snackabra {
      *       storage_server: 'http://127.0.0.1:4000'
      *     }
      *
+     * @param args {SnackabraOptions} interface
      */
     constructor(args: SnackabraOptions);
     /**
