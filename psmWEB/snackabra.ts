@@ -1047,33 +1047,20 @@ class Crypto {
     });
   }
 
-  // importKey(format: "jwk", keyData: JsonWebKey, algorithm: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | AesKeyAlgorithm, extractable: boolean, keyUsages: ReadonlyArray<KeyUsage>): Promise<CryptoKey>;
-
-  // importKey(format: Exclude<KeyFormat, "jwk">, keyData: BufferSource, algorithm: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | AesKeyAlgorithm, extractable: boolean, keyUsages: Iterable<KeyUsage>): Promise<CryptoKey>;
-
   /**
    * Import keys
    */
-  importKey(format: 'pkcs8' | 'spki' | 'raw', key: BufferSource, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
-  importKey(format: 'jwk', key: JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey> {
+  importKey(format: KeyFormat, key: BufferSource | JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey> {
     const keyAlgorithms = {
       ECDH: { name: 'ECDH', namedCurve: 'P-384' },
       AES: { name: 'AES-GCM' },
       PBKDF2: 'PBKDF2'
-    };
-    if (typeof format === 'jwk') {
-      return (window.crypto.subtle.importKey('jwk', key, keyAlgorithms[type], extractable, keyUsages))
-    } else {
-      return (window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages))
     }
-
-    //      try {
-    // TODO: correctly match differenct combinations of types in the above function declaration
-    // resolve(response);
-    //      } catch (e) {
-    //        console.error(format, key, type, extractable, keyUsages);
-    //        reject(e);
-    //      }
+    if (format === 'jwk') {
+      return (window.crypto.subtle.importKey('jwk', key as JsonWebKey, keyAlgorithms[type], extractable, keyUsages))
+    } else {
+      return (window.crypto.subtle.importKey(format, key as BufferSource, keyAlgorithms[type], extractable, keyUsages))
+    }
   }
 
   /**
@@ -1817,7 +1804,7 @@ class Channel {
   #api!: ChannelApi;
   #socket!: ChannelSocket;
 
-  storage: StorageApi // TODO: in principle should be optional?
+  storage?: StorageApi // TODO: in principle should be optional?
 
   // constructor(https: string, wss: string, identity: Identity) {
   //   this.url = https;
