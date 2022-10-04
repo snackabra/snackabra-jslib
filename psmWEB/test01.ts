@@ -261,8 +261,8 @@ const sb_config = {
 // updating tests - channel ID is created
 // const channel_id = 'yzeQWYahP87ngAVbhdP7DxU3or0mOrOTLJ3HcQ9UQQzZgKMYq3zWr1Qk5bZTXpHl';
 
-let channel_id_resolve: (arg0: string) => void = (() => { throw new Error('resolve err'); })
-let channel_id = new Promise<string>((resolve) => { channel_id_resolve = resolve; });
+// let channel_id_resolve: (arg0: string) => void = (() => { throw new Error('resolve err'); })
+// let channel_id = new Promise<string>((resolve) => { channel_id_resolve = resolve; });
 
 /* this is one of Matt's keys */
 const key = {
