@@ -243,7 +243,7 @@ if (test_list.includes('test03')) {
 
 
 /* snackabra channel tests ... these correspond to snackabra.pages.dev public server */
-
+/* switch to local miniflare */
 const sb_config = {
   // channel_server: 'https://r.somethingstuff.workers.dev',
   channel_server: 'http://127.0.0.1:4001',
@@ -275,72 +275,42 @@ const key = {
   d: '9sYVDOfUJ8YofRh4y_4dItXcXzTiiwYKI6pXU9thJyfMqMtaFhvUbCsHl14Wx37k'
 };
 
-if (test_list.includes('test04c')) {
-  const z = getElement('test04c');
-  z.innerHTML = 'starting test ... creating Snackabra object ...<br\>';
-  const SB = new Snackabra(sb_config);
-  z.innerHTML += ' ... received Snackabra object (see console log) ...<br\>';
-  console.log(SB);
-  SB.setIdentity(key).then(async () => {
-    z.innerHTML += ' ... set identity ...<br\>';
-    SB.create('password').then((c) => {
-      z.innerHTML += ' ... received new channel:<br\>';
-      z.innerHTML += `<a href="localhost:3000/rooms/${c}">${c}</a><br\n>`;
-      channel_id_resolve(c);
-    });
-  });
-}
+// if (test_list.includes('test04c')) {
+//   const z = getElement('test04c');
+//   z.innerHTML = 'starting test ... creating Snackabra object ...<br\>';
+//   const SB = new Snackabra(sb_config);
+//   z.innerHTML += ' ... received Snackabra object (see console log) ...<br\>';
+//   console.log(SB);
+//   SB.setIdentity(key).then(async () => {
+//     z.innerHTML += ' ... set identity ...<br\>';
+//     SB.create('password').then((c) => {
+//       z.innerHTML += ' ... received new channel:<br\>';
+//       z.innerHTML += `<a href="localhost:3000/rooms/${c}">${c}</a><br\n>`;
+//       channel_id_resolve(c);
+//     });
+//   });
+// }
 
 
+// new tiny 'hello'
 if (test_list.includes('test04a')) {
-  channel_id.then((channel_id: string) => {
-    // Watch for incoming messages on the socket
-    const SB = new Snackabra(sb_config);
-    SB.setIdentity(key).then(async () => {
-      // console.log("@@@@@@@@@@@@@@@@ Identity set")
-      const c: Channel = await SB.connect(channel_id);
-      // console.log("@@@@@@@@@@@@@@@@ got connection:")
-      console.log(c)
-      const messages: ChannelMessage[] = []
-      const controlMessages: ChannelMessage[] = []
-      c.socket.onMessage = async (message: ChannelMessage) => {
-        // console.log("@@@@@@@@@@@@@@@@ Message Received:\n ", message);
-        // const message = jsonParseWrapper(sb_message, 'L248');
-        if (message?.control) {
-          controlMessages.push(message);
-        } else {
-          if (message?.image !== '') {
-            messages.push(message);
-          }
-        }
-        if (controlMessages.length === messages.length * 2 && controlMessages.length > 0) {
-	  // this stuff won't work yet, but error outputs are useful
-	  if (messages[0]._id) {
-	    let m: ChannelMessage = messages[0] // as ChannelMessage
-	    // @ts-ignore
-            const imageData = await c.storage!.retrieveData(m!._id, messages, controlMessages);
-            const img = getElement('new-snackabra-img');
-            console.log(imageData);
-	    // @ts-ignore
-            img.src = imageData.url;
-	  } else {
-	    console.log(messages[0])
-	    assert(false, 'Cannot parse messages[0] (see above)')
-	  }
-        }
-      };
-    });
-  });
-}
+  const SB = new Snackabra(sb_config)
+  // note 'key' set as const above globally
+  SB.create('password').then((c) => {
+    z.innerHTML += ' ... received new channel:<br\>';
+    z.innerHTML += `<a href="localhost:3000/rooms/${c}">${c}</a><br\n>`;
+    channel_id_resolve(c);
 
 
-// send "Hello"
-if (test_list.includes('test04b')) {
+
   channel_id.then((channel_id) => {
-    console.log("@@@@@@@@@@@@@@@@ Channel id:")
-    console.log("localhost:3000/rooms/" + channel_id)
 
+   console.log("localhost:3000/rooms/" + channel_id)
+
+      
     const SB = new Snackabra(sb_config);
+
+
     SB.setIdentity(key).then(async () => {
       const c = await SB.connect(channel_id);
 
@@ -393,6 +363,112 @@ if (test_list.includes('test04b')) {
     });
   });
 }
+
+
+// if (test_list.includes('test04a')) {
+//   channel_id.then((channel_id: string) => {
+//     // Watch for incoming messages on the socket
+//     const SB = new Snackabra(sb_config);
+//     SB.setIdentity(key).then(async () => {
+//       // console.log("@@@@@@@@@@@@@@@@ Identity set")
+//       const c: Channel = await SB.connect(channel_id);
+//       // console.log("@@@@@@@@@@@@@@@@ got connection:")
+//       console.log(c)
+//       const messages: ChannelMessage[] = []
+//       const controlMessages: ChannelMessage[] = []
+//       c.socket.onMessage = async (message: ChannelMessage) => {
+//         // console.log("@@@@@@@@@@@@@@@@ Message Received:\n ", message);
+//         // const message = jsonParseWrapper(sb_message, 'L248');
+//         if (message?.control) {
+//           controlMessages.push(message);
+//         } else {
+//           if (message?.image !== '') {
+//             messages.push(message);
+//           }
+//         }
+//         if (controlMessages.length === messages.length * 2 && controlMessages.length > 0) {
+// 	  // this stuff won't work yet, but error outputs are useful
+// 	  if (messages[0]._id) {
+// 	    let m: ChannelMessage = messages[0] // as ChannelMessage
+// 	    // @ts-ignore
+//             const imageData = await c.storage!.retrieveData(m!._id, messages, controlMessages);
+//             const img = getElement('new-snackabra-img');
+//             console.log(imageData);
+// 	    // @ts-ignore
+//             img.src = imageData.url;
+// 	  } else {
+// 	    console.log(messages[0])
+// 	    assert(false, 'Cannot parse messages[0] (see above)')
+// 	  }
+//         }
+//       };
+//     });
+//   });
+// }
+
+
+
+
+
+// // send "Hello"
+// if (test_list.includes('test04b')) {
+//   channel_id.then((channel_id) => {
+//     console.log("@@@@@@@@@@@@@@@@ Channel id:")
+//     console.log("localhost:3000/rooms/" + channel_id)
+
+//     const SB = new Snackabra(sb_config);
+//     SB.setIdentity(key).then(async () => {
+//       const c = await SB.connect(channel_id);
+
+//       const messages = [];
+//       const controlMessages = [];
+
+//       console.log("@@@@@@@@@@@@@@@@ channel has keys:")
+//       console.log(SB.channel.keys)
+       
+//       console.log("@@@@@@@@@@@@@@@@ trying to send message!")
+
+//       let sbm = new SBMessage(c, "Hello from test04b!")
+//       let myPubKey: JsonWebKey
+
+//       SB.identity.exportable_pubKey.then((pubKey) => {
+// 	console.log("Got pubkey: ", pubKey)
+// 	sbm.ready.then(() => {
+// 	  sbm.sender_pubKey = pubKey! // should be per channel?
+// 	  myPubKey = pubKey!
+
+// 	  console.log("here is sender pubkey:", myPubKey)
+// 	  // console.log("trying to re-import key, i get:")
+// 	  // console.log(await crypto.importKey("jwk", myPubKey, "ECDH", true, []))
+// 	  // myPubKey.key_ops = ['deriveKey', 'sign']
+// 	  // console.log("trying again:")
+// 	  // console.log(await importKey("jwk", myPubKey, "ECDH", true, []))
+
+// 	  console.log("@@@@@@@@@@@@@@@@ will try to send this message:")
+// 	  console.log(sbm)
+// 	  c.socket.send(sbm).then((c) => console.log("back from send promise?"))
+// 	  console.log("@@@@@@@@@@@@@@@@ end of test")
+// 	})
+//       })
+//       c.socket.onMessage = async (message: ChannelMessage) => {
+//         console.log('Message Received:\n ', message);
+//       }
+
+//       // send more hello
+//       let messageCount = 0
+//       getElement('sayHello').onclick = (() => {
+// 	messageCount++
+// 	let msg = new SBMessage(c, `message number ${messageCount}!`)
+// 	// @ts-ignore
+// 	sbm.sender_pubKey = JSON.stringify(myPubKey)
+// 	console.log(`================ sending message number ${messageCount}:`)
+// 	console.log(sbm)
+// 	c.socket.send(sbm).then((c) => console.log("back from send promise?"))
+//       })
+
+//     });
+//   });
+// }
 
 // NOT WORKING YET
 // the image stuff not finished as TS
