@@ -1,6 +1,6 @@
 /*
   THIS HEADER HAS INFO WHILE WE ARE REFACTORING
-  
+
   currently experimenting with
   tsc -lib dom,es5,es6,es2021 -t es6 --explainFiles --pretty false --strict ./main.ts
 
@@ -650,7 +650,7 @@ export function jsonParseWrapper(str, loc) {
     }
 }
 /**
- * Extract payload
+ * Deprecated (older version of payloads, for older channels)
  */
 export function extractPayloadV1(payload) {
     try {
@@ -706,23 +706,30 @@ export function assemblePayload(data) {
     }
 }
 /**
- * Extract payload (latest version)
+ * Extract payload - this decodes from our binary (wire) format
+ * to a JS object. This provides a binary encoding of any JSON,
+ * and it allows some elements of the JSON to be raw (binary).
  */
 export function extractPayload(payload) {
     try {
+        // number of bytes of meta data (encoded as a 32-bit Uint)
         const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
-        const decoder = new TextDecoder();
         console.info('METADATASIZE: ', metadataSize);
+        const decoder = new TextDecoder();
+        // extracts the string of meta data and parses
         console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
         const _metadata = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
         console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
+        // calculate start of actual contents 
         const startIndex = 4 + metadataSize;
         if (!_metadata.version) {
+            // backwards compatibility
             _metadata['version'] = '001';
         }
         console.info(_metadata['version']);
         switch (_metadata['version']) {
             case '001': {
+                // deprecated, older format
                 return extractPayloadV1(payload);
             }
             case '002': {
@@ -731,9 +738,12 @@ export function extractPayload(payload) {
                     const _index = i.toString();
                     if (_metadata._index) {
                         const propertyStartIndex = _metadata[_index]['start'];
+                        // start (in bytes) of contents
                         console.info(propertyStartIndex);
                         const size = _metadata[_index]['size'];
+                        // where to put it
                         const entry = _metadata[_index];
+                        // extracts contents - this supports raw data
                         data[entry['name']] = payload.slice(startIndex + propertyStartIndex, startIndex + propertyStartIndex + size);
                     }
                 }
@@ -833,7 +843,6 @@ class Crypto {
             };
             try {
                 // TODO: correctly match differenct combinations of types in the above function declaration
-                // @ts-ignore
                 const response = await window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
                 resolve(response);
             }
@@ -1354,8 +1363,11 @@ class SBWebSocket {
                                         console.error(error);
                                         reject(new Error(error));
                                     }
-                                });
-                            }, this.#timeout);
+                                    else {
+                                        // normal behavior
+                                    }
+                                }, this.#timeout);
+                            });
                         });
                         break;
                     case 3: // CLOSED
@@ -1518,7 +1530,7 @@ class SBWebSocket {
 // }
 /**
  * Channel
-
+ *
  * @class
  * @constructor
  * @public
@@ -1529,7 +1541,7 @@ class Channel {
     ready;
     sbServer;
     channel_id;
-    identity;
+    defaultIdentity;
     owner = false;
     admin = false;
     verifiedGuest = false;
@@ -1537,29 +1549,30 @@ class Channel {
     #keys;
     #api;
     #socket;
-    storage;
+    storage; // TODO: in principle should be optional?
     // constructor(https: string, wss: string, identity: Identity) {
     //   this.url = https;
     //   this.wss = wss;
     //   this.identity = identity;
     // }
     /*
+     * Channel()
      * Join a channel, returns channel object
      *
      * @param {Snackabra} which server to join
      * @param {Identity} your identity on this channel
      * @param {string} channel_id (the :term:`Channel Name`)
      */
-    constructor(sbServer, identity, channel_id) {
+    constructor(sbServer, channel_id, identity) {
         this.sbServer = sbServer;
-        this.identity = identity;
+        this.defaultIdentity = identity;
         _sb_assert(channel_id != null, 'channel_id cannot be null'); // TODO: this can be done with types
         this.channel_id = channel_id;
         this.#api = new ChannelApi(this.sbServer, this, this.identity);
         this.#socket = new ChannelSocket(this.sbServer, this, this.identity);
         this.#socket.onJoin = (message) => {
             if (message?.ready) {
-                // console.log(message);
+                console.log(message);
                 this.metaData = message;
                 this.loadKeys(message.keys).then(() => {
                     this.socket.isReady();
@@ -1567,21 +1580,12 @@ class Channel {
                 });
             }
         };
-        this.ready = new Promise((resolve) => {
-            const sign = SB_Crypto.sign(this.signKey, body);
-            const image_sign = SB_Crypto.sign(this.signKey, this.image);
-            const imageMetadata_sign = SB_Crypto.sign(this.signKey, JSON.stringify(this.imageMetaData));
-            Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
-                this.sign = values[0];
-                this.image_sign = values[1];
-                this.imageMetadata_sign = values[2];
-                resolve(this);
-            });
-        });
+        // we're ready when the ChannelSocket is ready, but note that the ready function can change
+        this.ready = (() => { return this.#socket.ready; });
     }
-    /**
-     * Channel.join()
-     */
+    // /**
+    //  * Channel.join()
+    //  */
     // join(channel_id: string): Promise<Channel> {
     // }
     /**
@@ -1593,18 +1597,21 @@ class Channel {
         return this.#keys;
     }
     /**
-     * Return API
+     * Channel.api()
      */
     get api() {
         return this.#api;
     }
     /**
-     * Return socket
+     * Channel.socket()
      */
     get socket() {
         return this.#socket;
     }
-    loadKeys = (keys) => {
+    /**
+     * Channel.loadKeys()
+     */
+    loadKeys(keys) {
         return new Promise(async (resolve, reject) => {
             if (keys.ownerKey === null) {
                 reject(new Error('Channel does not exist'));
@@ -1631,10 +1638,13 @@ class Channel {
             // if (process.browser) {
             //const isAdmin: boolean = (document.cookie.split('; ').find((row: string) => row.startsWith('token_' +
             // this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
-            const isAdmin = (this.url !== 'https://s_socket.privacy.app' && isOwner);
+            // TODO: this is hardcoded, and needs different solution
+            // if (<?>) {
+            //   const isAdmin: boolean = (this.url !== 'https://s_socket.privacy.app' && isOwner);
             // } else {
             //   isAdmin = (process.env.REACT_APP_ROOM_SERVER !== 's_socket.privacy.app' && isOwner);
             // }
+            const isAdmin = false;
             if (!isOwner && !isAdmin) {
                 if (_exportable_verifiedGuest_pubKey === null) {
                     this.api.postPubKey(_exportable_pubKey);
@@ -1655,13 +1665,11 @@ class Channel {
             }
             let _locked_key;
             // if (process.browser) {
-            let _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
+            let _exportable_locked_key = await _localStorage.getItem(this.channel_id + '_lockedKey');
             // } else {
             //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
             // }
             if (_exportable_locked_key !== null) {
-                // psm: punting
-                // @ts-ignore
                 _locked_key: CryptoKey = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
             }
             else if (keys.locked_key) {
@@ -1684,7 +1692,8 @@ class Channel {
             this.verifiedGuest = isVerifiedGuest;
             resolve(true);
         });
-    };
+    }
+    ;
 }
 /** Class managing connections */
 class ChannelSocket {
@@ -1698,14 +1707,14 @@ class ChannelSocket {
     #identity;
     // #payload: Payload;
     #queue = [];
-    ready = false;
+    // ready = false;
     onOpen;
     onJoin;
     onClose;
     onError;
     onMessage;
     onSystemInfo;
-    channelCryptoKey;
+    // channelCryptoKey: CryptoKey
     constructor(sbServer, channel, identity) {
         this.channelId = channel._id;
         // this.url = sbServer.SnackabraOptions.channel_ws
@@ -1713,8 +1722,8 @@ class ChannelSocket {
         this.#identity = identity;
         // this.#payload = new Payload();
         // this.open()
-        this.#url = sbServer.SnackabraOptions.channel_server + '/api/room/' + this.channelId + '/websocket',
-            this.sbWebSocket = new SBWebSocket(this.#url, receive);
+        this.#url = sbServer.options.channel_server + '/api/room/' + this.channelId + '/websocket',
+            this.sbWebSocket = new SBWebSocket(this.#url, this.receive);
         // we're ready when the socket is ready, but note that the ready function can change
         this.ready = (() => { return this.sbWebSocket.ready; });
     }
@@ -1862,26 +1871,26 @@ class ChannelSocket {
      * (it will arrive mostly unwrapped)
      */
     async receive(message) {
-        // const id = Object.keys(message)[0];
+        // 'id' will be first message
+        const id = Object.keys(message)[0];
+        let unwrapped;
         if (message.encrypted_contents) {
-            throw new Error('add decryption');
-            // try {
-            //   unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey,
-            // 				      message[id].encrypted_contents, 'string');
-            // } catch (e) {
-            //   console.warn(e);
-            //   unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key,
-            // 				      message[id].encrypted_contents, 'string');
-            // }
+            try {
+                unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
+            }
+            catch (e) {
+                console.warn(e);
+                unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
+            }
         }
         else {
-            // unwrapped = jsonParseWrapper(unwrapped, 'L1702');
+            unwrapped = jsonParseWrapper(unwrapped, 'L1702');
             // psm: TODO, i don't know what messages are really supposed to look like in all cases
-            // unwrapped._id = id;
-            // _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
+            unwrapped._id = id;
+            _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
             if (message._id)
                 _localStorage.setItem(this.#channel._id + '_lastSeenMessage', message._id);
-            // return JSON.stringify(unwrapped);
+            return JSON.stringify(unwrapped);
             return message;
         }
     }
@@ -1896,33 +1905,27 @@ class StorageApi {
     server;
     #channel;
     #identity;
-    init(server, channel, identity) {
+    constructor(server, channel, identity) {
         this.server = server + '/api/v1';
         this.#channel = channel;
         this.#identity = identity;
     }
     /**
-     * saveFile
+     * StorageApi.saveFile()
      */
     async saveFile(file) {
         if (file instanceof File) {
             // psm: need to clean up these types
-            // @ts-ignore
             const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
             // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
             const metaData = sbFile.imageMetaData;
             const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
             const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
             Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
-                // psm: need to clean up these types
-                // @ts-ignore
                 results.forEach((controlData) => {
-                    // psm: need to clean up these types
-                    // @ts-ignore
                     this.#channel.socket.sendSbObject({ ...controlData, control: true });
                 });
                 // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
-                // @ts-ignore
                 this.#channel.socket.sendSbObject(sbFile);
             });
         }
@@ -1931,7 +1934,7 @@ class StorageApi {
         }
     }
     /**
-     * getFileKey
+     * StorageApi().getFileKey
      */
     async #getFileKey(fileHash, _salt) {
         const keyMaterial = await SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
@@ -1946,7 +1949,7 @@ class StorageApi {
         return key;
     }
     /**
-     * storeRequest
+     * StorageApi().storeRequest
      */
     storeRequest(fileId) {
         return new Promise((resolve, reject) => {
@@ -1965,13 +1968,12 @@ class StorageApi {
         });
     }
     /**
-     * storeData
+     * StorageApi().storeData()
      */
     storeData(type, fileId, encrypt_data, storageToken, data) {
         return new Promise((resolve, reject) => {
             fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
                 // psm: need to clean up these types
-                // @ts-ignore
                 method: 'POST', body: assemblePayload({
                     iv: encrypt_data.iv,
                     salt: encrypt_data.salt,
@@ -1994,7 +1996,7 @@ class StorageApi {
         });
     }
     /**
-     * storeImage
+     * StorageApi().storeImage()
      */
     storeImage(image, image_id, keyData, type) {
         // latest and greatest JS version is in:
@@ -2002,7 +2004,7 @@ class StorageApi {
         throw new Error('Storage() needs TS version');
     }
     /**
-     * fetchData
+     * StorageApi().fetchData()
      */
     fetchData(msgId, verificationToken) {
         return new Promise((resolve, reject) => {
@@ -2023,14 +2025,15 @@ class StorageApi {
         });
     }
     /**
-     * unpadData
+     * StorageApi().unpadData()
      */
     #unpadData(data_buffer) {
         const _size = new Uint32Array(data_buffer.slice(-4))[0];
         return data_buffer.slice(0, _size);
     }
     /**
-     * retrieveData (from storage)
+     * StorageApi().retrieveData()
+     * retrieves an object from storage
      */
     async retrieveData(msgId, messages, controlMessages) {
         console.log("... need to code up retrieveData() with new typing ..");
@@ -2046,13 +2049,11 @@ class StorageApi {
             return { 'error': 'Failed to fetch data - missing control message for that image' };
         }
         // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
-        // @ts-ignore
         const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
-        // @ts-ignore
+        // extracts from binary format
         const data = extractPayload(imageFetch);
         const iv = data.iv;
         const salt = data.salt;
-        // @ts-ignore
         const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
         const encrypted_image = data.image;
         const padded_img = str2ab(await SB_Crypto.decrypt(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer'));
@@ -2065,11 +2066,10 @@ class StorageApi {
         return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
     }
     /**
-     * retrieveDataFromMessage
+     * StorageApi().retrieveDataFromMessage()
      */
     async retrieveDataFromMessage(message, controlMessages) {
         const imageMetaData = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData;
-        // @ts-ignore
         const image_id = imageMetaData.previewId;
         const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id === image_id);
         if (!control_msg) {
@@ -2079,7 +2079,6 @@ class StorageApi {
         const data = extractPayload(imageFetch);
         const iv = data.iv;
         const salt = data.salt;
-        // @ts-ignore
         const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
         const encrypted_image = data.image;
         const padded_img = str2ab(await SB_Crypto.decrypt(image_key, {
@@ -2430,7 +2429,6 @@ class ChannelApi {
     acceptVisitor(pubKey) {
         return new Promise(async (resolve, reject) => {
             // psm: need some "!"
-            // @ts-ignore
             const shared_key = await SB_Crypto.deriveKey(await this.#identity.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
             const _encrypted_locked_key = await SB_Crypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.exportable_locked_key)), shared_key, 'string');
             fetch(this.#channelServer + this.#channel._id + '/acceptVisitor', {
@@ -2814,31 +2812,33 @@ class Queue {
 }
 
  */
-/**
- * Constructor expects an object with the names of the matching servers, for example
- * (this shows the miniflare local dev config):
- * ::
- *
- *     {
- *       channel_server: 'http://127.0.0.1:4001',
- *       channel_ws: 'ws://127.0.0.1:4001',
- *       storage_server: 'http://127.0.0.1:4000'
- *     }
- *
- */
 class Snackabra {
-    // PSM: i think these two are on a per-channel object basis?
-    #channel;
-    #storage = new StorageApi();
-    #identity = new Identity();
+    #listOfChannels = [];
+    storageApi;
+    // #storage = new StorageApi();
+    // #identity = new Identity();
     options = {
         channel_server: '',
         channel_ws: '',
         storage_server: ''
     };
     /**
+     * Constructor expects an object with the names of the matching servers, for example
+     * (this shows the miniflare local dev config):
+     *
+     * @param {SnackabraOptions} the servers to talk to, look like this:
+     *
+     * ::
+     *
+     *     {
+     *       channel_server: 'http://127.0.0.1:4001',
+     *       channel_ws: 'ws://127.0.0.1:4001',
+     *       storage_server: 'http://127.0.0.1:4000'
+     *     }
+     *
      */
     constructor(args) {
+        this.storageApi = new StorageApi();
         _sb_assert(args, 'Snackabra(args) - missing args');
         try {
             this.options = {
@@ -2851,54 +2851,58 @@ class Snackabra {
             _sb_exception('Snackabra.constructor()', `${e}`);
         }
     }
-    setIdentity(keys) {
-        return new Promise(async (resolve, reject) => {
-            try {
-                await this.#identity.mountKeys(keys);
-                resolve(this.#identity);
-            }
-            catch (e) {
-                reject(e);
-            }
-        });
-    }
-    createIdentity() {
-        return new Promise(async (resolve, reject) => {
-            try {
-                this.#identity = await new Identity();
-                resolve(this.#identity);
-            }
-            catch (e) {
-                reject(e);
-            }
-        });
-    }
+    // psm: this is no longer global
+    // /** Snackabra.setIdentity()
+    //     @param {JsonWebKey} sets public key (identity) you're joining channel with
+    //  */
+    // setIdentity(keys: JsonWebKey) {
+    //   return new Promise(async (resolve, reject) => {
+    //     try {
+    //       await this.#identity.mountKeys(keys);
+    //       resolve(this.#identity);
+    //     } catch (e) {
+    //       reject(e);
+    //     }
+    //   });
+    // }
+    // /** Snackabra.createIdentity
+    //     Creates a random (new) identity
+    //  */
+    // createIdentity() {
+    //   return new Promise(async (resolve, reject) => {
+    //     try {
+    //       this.#identity = await new Identity();
+    //       resolve(this.#identity);
+    //     } catch (e) {
+    //       reject(e);
+    //     }
+    //   });
+    // }
     /**
+     * Snackabra.connect()
      * Connects to :term:`Channel Name` on this SB config.
-     * Returns a (promise to a) channel object
+     * Returns a (promise to the) channel object
+     * @param {string} channel name
+     * @param {Identity} default identity for all messages
      */
-    connect(channel_id) {
+    connect(channel_id, identity) {
         return new Promise((resolve, reject) => {
-            try {
-                // eslint-disable-next-line @typescript-eslint/no-this-alias
-                const _self = this;
-                if (!_self.#identity.exportable_pubKey) {
-                    // @psm TODO: does it?
-                    reject(new Error('setIdentity must be called before connecting'));
-                }
-                const c = new Channel(_self.options.channel_server, _self.options.channel_ws, _self.#identity);
-                c.join(channel_id).then((_c) => {
-                    _self.#storage = new StorageApi();
-                    _c.storage = _self.#storage;
-                    _self.#channel = _c;
-                    _self.#storage.init(_self.options.storage_server, _self.#channel, _self.#identity);
-                    // resolve(_self);
-                    resolve(_self.#channel);
-                });
-            }
-            catch (e) {
-                reject(e);
-            }
+            // eslint-disable-next-line @typescript-eslint/no-this-alias
+            // psm: changing to make this on a per-message basis
+            // if (!_self.#identity.exportable_pubKey) {
+            //   reject(new Error('setIdentity() must be called before connecting'));
+            // }
+            const c = new Channel(this, channel_id, identity);
+            this.#listOfChannels.push(c);
+            resolve(c);
+            // const c = new Channel(this.options.channel_server, _self.options.channel_ws, _self.#identity);
+            // c.join(channel_id).then((_c: Channel) => {
+            //   _self.#storage = new StorageApi();
+            //   _c.storage = _self.#storage
+            //   _self.#channel = _c;
+            //   _self.#storage.init(_self.options.storage_server, _self.#channel, _self.#identity)
+            //   // resolve(_self);
+            //   resolve(_self.#channel);
         });
     }
     /**

@@ -1,6 +1,6 @@
 /*
   THIS HEADER HAS INFO WHILE WE ARE REFACTORING
-  
+
   currently experimenting with 
   tsc -lib dom,es5,es6,es2021 -t es6 --explainFiles --pretty false --strict ./main.ts
 
@@ -30,6 +30,8 @@
 /* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
 
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
+
+
 
 /**
  * Interfaces
@@ -993,6 +995,7 @@ export function decodeB64Url(input: string) {
   return input;
 }
 
+
 // class EventEmitter extends EventTarget {
 //   on(type: string, callback: (ev: DocumentEventMap[E]) => any) {
 //     this.addEventListener(type, callback);
@@ -1044,32 +1047,33 @@ class Crypto {
     });
   }
 
+  // importKey(format: "jwk", keyData: JsonWebKey, algorithm: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | AesKeyAlgorithm, extractable: boolean, keyUsages: ReadonlyArray<KeyUsage>): Promise<CryptoKey>;
+
+  // importKey(format: Exclude<KeyFormat, "jwk">, keyData: BufferSource, algorithm: AlgorithmIdentifier | RsaHashedImportParams | EcKeyImportParams | HmacImportParams | AesKeyAlgorithm, extractable: boolean, keyUsages: Iterable<KeyUsage>): Promise<CryptoKey>;
 
   /**
    * Import keys
    */
-  importKey(format: 'raw' | 'pkcs8' | 'spki' | 'jwk',
-    key: BufferSource | JsonWebKey,
-    type: 'ECDH' | 'AES' | 'PBKDF2',
-    extractable: boolean,
-    keyUsages: KeyUsage[]): Promise<CryptoKey> {
-    return new Promise(async (resolve, reject) => {
-      const keyAlgorithms = {
-        ECDH: {
-          name: 'ECDH', namedCurve: 'P-384'
-        }, AES: {
-          name: 'AES-GCM'
-        }, PBKDF2: 'PBKDF2'
-      };
-      try {
-        // TODO: correctly match differenct combinations of types in the above function declaration
-        const response = await window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
-        resolve(response);
-      } catch (e) {
-        console.error(format, key, type, extractable, keyUsages);
-        reject(e);
-      }
-    })
+  importKey(format: 'pkcs8' | 'spki' | 'raw', key: BufferSource, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
+  importKey(format: 'jwk', key: JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey> {
+    const keyAlgorithms = {
+      ECDH: { name: 'ECDH', namedCurve: 'P-384' },
+      AES: { name: 'AES-GCM' },
+      PBKDF2: 'PBKDF2'
+    };
+    if (typeof format === 'jwk') {
+      return (window.crypto.subtle.importKey('jwk', key, keyAlgorithms[type], extractable, keyUsages))
+    } else {
+      return (window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages))
+    }
+
+    //      try {
+    // TODO: correctly match differenct combinations of types in the above function declaration
+    // resolve(response);
+    //      } catch (e) {
+    //        console.error(format, key, type, extractable, keyUsages);
+    //        reject(e);
+    //      }
   }
 
   /**
@@ -3265,6 +3269,7 @@ class Snackabra {
   //   });
   // }
 
+
   /**
    * Snackabra.connect()
    * Connects to :term:`Channel Name` on this SB config.
@@ -3274,118 +3279,115 @@ class Snackabra {
    */
   connect(channel_id: string, identity: Identity): Promise<Channel> {
     return new Promise<Channel>((resolve, reject) => {
+      // eslint-disable-next-line @typescript-eslint/no-this-alias
+      // psm: changing to make this on a per-message basis
+      // if (!_self.#identity.exportable_pubKey) {
+      //   reject(new Error('setIdentity() must be called before connecting'));
+      // }
+
+      const c = new Channel(this, channel_id, identity)
+      this.#listOfChannels.push(c)
+      resolve(c)
+
+      // const c = new Channel(this.options.channel_server, _self.options.channel_ws, _self.#identity);
+      // c.join(channel_id).then((_c: Channel) => {
+      //   _self.#storage = new StorageApi();
+      //   _c.storage = _self.#storage
+      //   _self.#channel = _c;
+      //   _self.#storage.init(_self.options.storage_server, _self.#channel, _self.#identity)
+      //   // resolve(_self);
+      //   resolve(_self.#channel);
+    })
+  }
+
+  /**
+   * Creates a channel. Currently uses trivial authentication.
+   * Returns the :term:`Channel Name`.
+   * (TODO: token-based approval of storage spend)
+   */
+  create(serverSecret: string) {
+    return new Promise<string>(async (resolve, reject) => {
       try {
-        // eslint-disable-next-line @typescript-eslint/no-this-alias
-        // psm: changing to make this on a per-message basis
-        // if (!_self.#identity.exportable_pubKey) {
-        //   reject(new Error('setIdentity() must be called before connecting'));
-        // }
-
-        const c = new Channel(this, channel_id, identity)
-        this.#listOfChannels.push(c)
-        // const c = new Channel(this.options.channel_server, _self.options.channel_ws, _self.#identity);
-        // c.join(channel_id).then((_c: Channel) => {
-        //   _self.#storage = new StorageApi();
-        //   _c.storage = _self.#storage
-        //   _self.#channel = _c;
-        //   _self.#storage.init(_self.options.storage_server, _self.#channel, _self.#identity)
-        //   // resolve(_self);
-        //   resolve(_self.#channel);
-      });
-  } catch(e) {
-    reject(e);
-  }
-});
-  }
-
-/**
- * Creates a channel. Currently uses trivial authentication.
- * Returns the :term:`Channel Name`.
- * (TODO: token-based approval of storage spend)
- */
-create(serverSecret: string) {
-  return new Promise<string>(async (resolve, reject) => {
-    try {
-      const ownerKeyPair: CryptoKeyPair = await crypto.subtle.generateKey({
-        name: 'ECDH',
-        namedCurve: 'P-384'
-      }, true, ['deriveKey']);
-      const exportable_privateKey: Dictionary = await crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
-      const exportable_pubKey: Dictionary = await crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
-      const channelId: string = await this.#generateRoomId(exportable_pubKey.x, exportable_pubKey.y);
-      const encryptionKey: CryptoKey = await crypto.subtle.generateKey({
-        name: 'AES-GCM',
-        length: 256
-      }, true, ['encrypt', 'decrypt']);
-      const exportable_encryptionKey: Dictionary = await crypto.subtle.exportKey('jwk', encryptionKey);
-      const signKeyPair: CryptoKeyPair = await crypto.subtle.generateKey({
-        name: 'ECDH', namedCurve: 'P-384'
-      }, true, ['deriveKey']);
-      const exportable_signKey: Dictionary = await crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
-      const channelData: ChannelData = {
-        roomId: channelId,
-        ownerKey: JSON.stringify(exportable_pubKey),
-        encryptionKey: JSON.stringify(exportable_encryptionKey),
-        signKey: JSON.stringify(exportable_signKey),
-        SERVER_SECRET: serverSecret
-      };
-      const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
-      let resp: Dictionary = await fetch(this.options.channel_server + '/api/room/' + channelId + '/uploadRoom', {
-        method: 'POST',
-        body: data
-      });
-      resp = await resp.json();
-      if (resp.success) {
-        await this.connect(channelId);
-        _localStorage.setItem(channelId, JSON.stringify(exportable_privateKey));
-        resolve(channelId);
-      } else {
-        reject(new Error(JSON.stringify(resp)));
+        const ownerKeyPair: CryptoKeyPair = await crypto.subtle.generateKey({
+          name: 'ECDH',
+          namedCurve: 'P-384'
+        }, true, ['deriveKey']);
+        const exportable_privateKey: Dictionary = await crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
+        const exportable_pubKey: Dictionary = await crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
+        const channelId: string = await this.#generateRoomId(exportable_pubKey.x, exportable_pubKey.y);
+        const encryptionKey: CryptoKey = await crypto.subtle.generateKey({
+          name: 'AES-GCM',
+          length: 256
+        }, true, ['encrypt', 'decrypt']);
+        const exportable_encryptionKey: Dictionary = await crypto.subtle.exportKey('jwk', encryptionKey);
+        const signKeyPair: CryptoKeyPair = await crypto.subtle.generateKey({
+          name: 'ECDH', namedCurve: 'P-384'
+        }, true, ['deriveKey']);
+        const exportable_signKey: Dictionary = await crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
+        const channelData: ChannelData = {
+          roomId: channelId,
+          ownerKey: JSON.stringify(exportable_pubKey),
+          encryptionKey: JSON.stringify(exportable_encryptionKey),
+          signKey: JSON.stringify(exportable_signKey),
+          SERVER_SECRET: serverSecret
+        };
+        const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
+        let resp: Dictionary = await fetch(this.options.channel_server + '/api/room/' + channelId + '/uploadRoom', {
+          method: 'POST',
+          body: data
+        });
+        resp = await resp.json();
+        if (resp.success) {
+          await this.connect(channelId);
+          _localStorage.setItem(channelId, JSON.stringify(exportable_privateKey));
+          resolve(channelId);
+        } else {
+          reject(new Error(JSON.stringify(resp)));
+        }
+      } catch (e) {
+        reject(e);
       }
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
+    });
+  }
 
-#generateRoomId(x: string, y: string): Promise < string > {
-  return new Promise(async (resolve, reject) => {
-    try {
-      const xBytes = base64ToArrayBuffer(decodeB64Url(x));
-      const yBytes = base64ToArrayBuffer(decodeB64Url(y));
-      const channelBytes = _appendBuffer(xBytes, yBytes);
-      const channelBytesHash = await crypto.subtle.digest('SHA-384', channelBytes);
-      resolve(encodeB64Url(arrayBufferToBase64(channelBytesHash)));
-    } catch (e) {
-      reject(e);
-    }
-  });
-}
+  #generateRoomId(x: string, y: string): Promise<string> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const xBytes = base64ToArrayBuffer(decodeB64Url(x));
+        const yBytes = base64ToArrayBuffer(decodeB64Url(y));
+        const channelBytes = _appendBuffer(xBytes, yBytes);
+        const channelBytesHash = await crypto.subtle.digest('SHA-384', channelBytes);
+        resolve(encodeB64Url(arrayBufferToBase64(channelBytesHash)));
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
 
 
   get channel() {
-  return this.#channel;
-}
+    return this.#channel;
+  }
 
   get storage() {
-  return this.#storage;
-}
+    return this.#storage;
+  }
 
   get crypto() {
-  return SB_Crypto;
-}
+    return SB_Crypto;
+  }
 
   get identity() {
-  return this.#identity;
-}
+    return this.#identity;
+  }
 
-sendMessage(message: SBMessage) {
-  this.channel.socket.send(message);
-}
+  sendMessage(message: SBMessage) {
+    this.channel.socket.send(message);
+  }
 
-sendFile(file: File) {
-  this.storage.saveFile(file);
-}
+  sendFile(file: File) {
+    this.storage.saveFile(file);
+  }
 }
 
 // export {

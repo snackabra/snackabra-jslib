@@ -55,8 +55,32 @@ interface ChannelAckMessage {
     type: 'ack';
     _id: string;
 }
+interface ChannelRoomKeys {
+    type: 'roomKeys';
+    encryptionKey: JsonWebKey;
+    guestKey: JsonWebKey;
+    ownerKey: JsonWebKey;
+    signKey: JsonWebKey;
+}
+interface ChannelEncryptedMessage {
+    type: 'channelMssage';
+    channelID: string;
+    timestampPrefix: string;
+    encrypted_contents: {
+        content: string;
+        iv: string;
+    };
+}
+interface ChannelEncryptedMessageArray {
+    type: 'channelMessageArray';
+    messages: ChannelEncryptedMessageArray[];
+}
+export declare type ChannelMessageV2 = ChannelRoomKeys | ChannelEncryptedMessage | ChannelEncryptedMessageArray;
 interface ChannelMessage1 {
     [key: string]: ChannelMessage2;
+    message: {
+        [prop: string]: any;
+    };
 }
 export declare type ChannelMessage = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage;
 export declare function SB_libraryVersion(): string;
@@ -219,7 +243,7 @@ export declare function partition(str: string, n: number): string[];
  */
 export declare function jsonParseWrapper(str: string, loc: string): any;
 /**
- * Extract payload
+ * Deprecated (older version of payloads, for older channels)
  */
 export declare function extractPayloadV1(payload: ArrayBuffer): Dictionary;
 /**
@@ -227,17 +251,68 @@ export declare function extractPayloadV1(payload: ArrayBuffer): Dictionary;
  */
 export declare function assemblePayload(data: Dictionary): {};
 /**
- * Extract payload (latest version)
+ * Extract payload - this decodes from our binary (wire) format
+ * to a JS object. This provides a binary encoding of any JSON,
+ * and it allows some elements of the JSON to be raw (binary).
  */
 export declare function extractPayload(payload: ArrayBuffer): Dictionary;
 /**
  * Encode into b64 URL
  */
-export declare function encodeB64Url(input: string): any;
+export declare function encodeB64Url(input: string): string;
 /**
  * Decode b64 URL
  */
 export declare function decodeB64Url(input: string): string;
+/**
+ * Crypto is a class that contains all the SB specific crypto functions
+ *
+ * @class
+ * @constructor
+ * @public
+ */
+declare class Crypto {
+    /**
+     * Extracts (generates) public key from a private key.
+     */
+    extractPubKey(privateKey: JsonWebKey): JsonWebKey | null;
+    /**
+     * Generates standard ``ECDH`` keys using ``P-384``.
+     */
+    generateKeys(): Promise<CryptoKeyPair>;
+    /**
+     * Import keys
+     */
+    importKey(format: 'pkcs8' | 'spki' | 'raw', key: BufferSource, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
+    /**
+     * Derive key.
+     */
+    deriveKey(privateKey: CryptoKey, publicKey: CryptoKey, type: string, extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
+    /**
+     * Get file key
+     */
+    getFileKey(fileHash: string, _salt: ArrayBuffer): Promise<unknown>;
+    /**
+     * Encrypt
+     */
+    encrypt(contents: BufferSource, secret_key: CryptoKey, outputType?: string, _iv?: ArrayBuffer | null): Promise<Dictionary>;
+    /**
+     * Decrypt
+     */
+    decrypt(secretKey: CryptoKey, contents: Dictionary, outputType?: string): Promise<string>;
+    /**
+     * Sign
+     */
+    sign(secretKey: CryptoKey, contents: string): Promise<string>;
+    /**
+     * Verify
+     */
+    verify(secretKey: CryptoKey, sign: string, contents: string): Promise<unknown>;
+    /**
+     * Compare keys
+     */
+    areKeysSame(key1: Dictionary, key2: Dictionary): boolean;
+}
 /**
  * Identity (key for use in SB)
  * @class
@@ -396,7 +471,7 @@ declare class ChannelSocket {
      * psm: updating using new cool types
      * (it will arrive mostly unwrapped)
      */
-    receive(message: ChannelMessage): Promise<ChannelMessage>;
+    receive(message: ChannelMessage): Promise<string | ChannelMessage | undefined>;
 }
 /**
  * Storage API
@@ -430,7 +505,7 @@ declare class StorageApi {
     fetchData(msgId: string, verificationToken: string): Promise<ArrayBuffer>;
     /**
      * StorageApi().retrieveData()
-     * retrievses an object from storage
+     * retrieves an object from storage
      */
     retrieveData(msgId: string, messages: Array<ChannelMessage>, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
     /**
@@ -540,6 +615,17 @@ declare class Snackabra {
      * @param {Identity} default identity for all messages
      */
     connect(channel_id: string, identity: Identity): Promise<Channel>;
-    catch(e: any): void;
+    /**
+     * Creates a channel. Currently uses trivial authentication.
+     * Returns the :term:`Channel Name`.
+     * (TODO: token-based approval of storage spend)
+     */
+    create(serverSecret: string): Promise<string>;
+    get channel(): any;
+    get storage(): any;
+    get crypto(): Crypto;
+    get identity(): any;
+    sendMessage(message: SBMessage): void;
+    sendFile(file: File): void;
 }
 export { Channel, Snackabra, SBMessage, SBFile, };
