@@ -23,7 +23,7 @@
 */
 /*
   format is a single string:
-  
+
   dZbuNAeDnuMOLPYcfExi4RIUVPljFZUZLE3tUo3zl1-avzxmm9nBhtRPVOwu6kK4
   011000001101110010110011101001000001101001
 */
@@ -48,7 +48,7 @@ const msgIdRegex = /^([A-Za-z0-9+/_\-=]{64})*([01]{42})$/;
 //     console.log("json:")
 //     console.log(JSON.stringify(d))
 //   } catch (e) {
-//     // any issues 
+//     // any issues
 //     console.info("dictToMessageId() failed to decode message:")
 //     console.info(d)
 //     console.info("Error:")
@@ -702,7 +702,7 @@ export function assemblePayload(data) {
     }
     catch (e) {
         console.error(e);
-        return {};
+        return null;
     }
 }
 /**
@@ -720,7 +720,7 @@ export function extractPayload(payload) {
         console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
         const _metadata = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
         console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
-        // calculate start of actual contents 
+        // calculate start of actual contents
         const startIndex = 4 + metadataSize;
         if (!_metadata.version) {
             // backwards compatibility
@@ -833,24 +833,17 @@ class Crypto {
      * Import keys
      */
     importKey(format, key, type, extractable, keyUsages) {
-        return new Promise(async (resolve, reject) => {
-            const keyAlgorithms = {
-                ECDH: {
-                    name: 'ECDH', namedCurve: 'P-384'
-                }, AES: {
-                    name: 'AES-GCM'
-                }, PBKDF2: 'PBKDF2'
-            };
-            try {
-                // TODO: correctly match differenct combinations of types in the above function declaration
-                const response = await window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages);
-                resolve(response);
-            }
-            catch (e) {
-                console.error(format, key, type, extractable, keyUsages);
-                reject(e);
-            }
-        });
+        const keyAlgorithms = {
+            ECDH: { name: 'ECDH', namedCurve: 'P-384' },
+            AES: { name: 'AES-GCM' },
+            PBKDF2: 'PBKDF2'
+        };
+        if (format === 'jwk') {
+            return (window.crypto.subtle.importKey('jwk', key, keyAlgorithms[type], extractable, keyUsages));
+        }
+        else {
+            return (window.crypto.subtle.importKey(format, key, keyAlgorithms[type], extractable, keyUsages));
+        }
     }
     /**
      * Derive key.
@@ -1011,23 +1004,38 @@ const SB_Crypto = new Crypto();
  * @public
  */
 class Identity {
-    resolve_exportable_pubKey = (() => { throw new Error('uninit prom called'); });
-    resolve_exportable_privateKey = (() => { throw new Error('uninit prom called'); });
-    resolve_privateKey = (() => { throw new Error('uninit prom called'); });
+    ready;
+    resolve_exportable_pubKey = (() => {
+        throw new Error('uninit prom called');
+    });
+    resolve_exportable_privateKey = (() => {
+        throw new Error('uninit prom called');
+    });
+    resolve_privateKey = (() => {
+        throw new Error('uninit prom called');
+    });
     exportable_pubKey = new Promise((resolve) => this.resolve_exportable_pubKey = resolve);
     exportable_privateKey = new Promise((resolve) => this.resolve_exportable_privateKey = resolve);
     privateKey = new Promise((resolve) => this.resolve_privateKey = resolve);
+    constructor(keys) {
+        const _self = this;
+        this.ready = new Promise((resolve) => {
+            // as soon as any source of crypto resolves the Identity, we're ready
+            this.exportable_pubKey.then(() => resolve(_self));
+        });
+    }
     /**
      * Mint keys
      */
     mintKeys() {
         return new Promise(async (resolve, reject) => {
+            const _self = this;
             try {
                 SB_Crypto.generateKeys().then((keyPair) => {
                     crypto.subtle.exportKey('jwk', keyPair.publicKey).then((k) => this.resolve_exportable_pubKey(k));
                     crypto.subtle.exportKey('jwk', keyPair.privateKey).then((k) => this.resolve_exportable_privateKey(k));
                     this.resolve_privateKey(keyPair.privateKey);
-                    Promise.all([this.resolve_exportable_pubKey, this.resolve_privateKey]).then(() => resolve(true));
+                    Promise.all([this.resolve_exportable_pubKey, this.resolve_privateKey]).then(() => resolve(_self));
                 });
             }
             catch (e) {
@@ -1040,12 +1048,13 @@ class Identity {
      */
     mountKeys(key) {
         return new Promise(async (resolve, reject) => {
+            const _self = this;
             try {
                 this.resolve_exportable_privateKey(key);
                 this.resolve_exportable_pubKey(SB_Crypto.extractPubKey(key));
                 SB_Crypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
                     this.resolve_privateKey(k);
-                    resolve(true);
+                    resolve(_self);
                 });
             }
             catch (e) {
@@ -1066,12 +1075,22 @@ class Identity {
 class SBMessage {
     ready;
     signKey;
+    identity;
     contents = { encrypted: false, body: '', sign: '', image: '', imageMetaData: {} };
-    constructor(channel, body) {
+    constructor(channel, body, identity) {
         console.log("creating SBMessage on channel:");
         console.log(channel);
         this.contents.body = body;
-        this.contents.sender_pubKey = channel.keys.exportable_pubKey; // need to get this from SB object
+        // this.contents.sender_pubKey = channel.keys.exportable_pubKey // need to get this from SB object
+        if (identity) {
+            this.identity = identity;
+        }
+        else if (channel.defaultIdentity) {
+            this.identity = channel.defaultIdentity;
+        }
+        else {
+            _sb_exception('SBMessage()', 'No Identity (and thus no encryption keys) given');
+        }
         this.signKey = channel.keys.personal_signKey;
         this.ready = new Promise((resolve) => {
             const sign = SB_Crypto.sign(this.signKey, body);
@@ -1314,7 +1333,10 @@ class SBWebSocket {
                 if (this.#websocket)
                     this.#websocket.close(); // keep clean
                 const ws = this.#websocket = new WebSocket(url);
-                ws.addEventListener('open', () => { this.#closed = false; resolve(this); });
+                ws.addEventListener('open', () => {
+                    this.#closed = false;
+                    resolve(this);
+                });
                 ws.addEventListener('message', (e) => this.#processMessage(e.data));
                 ws.addEventListener('close', (e) => {
                     this.#closed = true;
@@ -1546,6 +1568,7 @@ class Channel {
     admin = false;
     verifiedGuest = false;
     metaData = {};
+    // #keys!: Dictionary;
     #keys;
     #api;
     #socket;
@@ -1565,13 +1588,22 @@ class Channel {
      */
     constructor(sbServer, channel_id, identity) {
         this.sbServer = sbServer;
-        this.defaultIdentity = identity;
+        if (identity) {
+            this.defaultIdentity = identity;
+        }
+        else if (sbServer.defaultIdentity) {
+            this.defaultIdentity = sbServer.defaultIdentity;
+        }
+        else {
+            _sb_exception('new Channel()', 'currently a channel needs a default Identity on creation');
+        }
         _sb_assert(channel_id != null, 'channel_id cannot be null'); // TODO: this can be done with types
         this.channel_id = channel_id;
-        this.#api = new ChannelApi(this.sbServer, this, this.identity);
-        this.#socket = new ChannelSocket(this.sbServer, this, this.identity);
+        this.#api = new ChannelApi(this.sbServer, this, this.defaultIdentity);
+        this.#socket = new ChannelSocket(this.sbServer, this, this.defaultIdentity);
         this.#socket.onJoin = (message) => {
             if (message?.ready) {
+                console.log("Got setup keys for channel:");
                 console.log(message);
                 this.metaData = message;
                 this.loadKeys(message.keys).then(() => {
@@ -1581,7 +1613,9 @@ class Channel {
             }
         };
         // we're ready when the ChannelSocket is ready, but note that the ready function can change
-        this.ready = (() => { return this.#socket.ready; });
+        this.ready = (() => {
+            return this.#socket.ready;
+        });
     }
     // /**
     //  * Channel.join()
@@ -1610,10 +1644,38 @@ class Channel {
     }
     /**
      * Channel.loadKeys()
+     *
+     * When connecting to a channel server, the first thing it replies with is a set of
+     * keys for operating against the channel. Here we load those into the channel.
+     *
+     * Specifically the server will respond with something like this: ::
+     *
+     *   {"ready":true,
+     *    "keys":{
+     *            "ownerKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+     *                        \"x\":\"9s17B4i0Cuf_w9XN_uAq2DFePOr6S3sMFMA95KjLN8akBUWEhPAcuMEMwNUlrrkN\",
+     *                        \"y\":\"6dAtcyMbtsO5ufKvlhxRsvjTmkABGlTYG1BrEjTpwrAgtmn6k25GR7akklz9klBr\"}",
+     *            "guestKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+     *                         \"x\":\"Lx0eJcbNuyEfHDobWaZqgy9UO7ppxVIsEpEtvbzkAlIjySh9lY2AvgnACREO6QXD\",
+     *                         \"y\":\"zEHPgpsl4jge_Q-K6ekuzi2bQOybnaPT1MozCFQJnXEePBX8emkHriOiwl6P8BAS\"}",
+     *            "encryptionKey":"{\"alg\":\"A256GCM\",\"ext\":true,
+     *                             \"k\":\"F0sQTTLXDhuvvmgGQLzMoeHPD-SJlFyhfOD-cqejEOU\",
+     *                             \"key_ops\":[\"encrypt\",\"decrypt\"],\"kty\":\"oct\"}",
+     *            "signKey":"{\"crv\":\"P-384\",
+     *                        \"d\":\"KCJHDZ34XgVFsS9-sU09HFzXZhnGCvnDgJ5a8GTSfjuJQaq-1N2acvchPRhknk8B\",
+     *                        \"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",
+     *                        \"x\":\"rdsyBle0DD1hvp2OE2mINyyI87Cyg7FS3tCQUIeVkfPiNOACtFxi6iP8oeYt-Dge\",
+     *                        \"y\":\"qW9VP72uf9rgUU117G7AfTkCMncJbT5scIaIRwBXfqET6FYcq20fwSP7R911J2_t\"}"
+     *             },
+     *     "motd":"",
+     *     "roomLocked":false}
+     *
      */
     loadKeys(keys) {
         return new Promise(async (resolve, reject) => {
+            const _self = this;
             if (keys.ownerKey === null) {
+                console.error('did not receive owner keys - probably means no such channel');
                 reject(new Error('Channel does not exist'));
             }
             let _exportable_owner_pubKey = jsonParseWrapper(keys.ownerKey || JSON.stringify({}), 'L1460');
@@ -1629,21 +1691,21 @@ class Channel {
             const _exportable_room_signKey = jsonParseWrapper(keys.signKey, 'L1470');
             const _exportable_encryption_key = jsonParseWrapper(keys.encryptionKey, 'L1471');
             let _exportable_verifiedGuest_pubKey = jsonParseWrapper(keys.guestKey || null, 'L1472');
-            const _exportable_pubKey = await this.identity.exportable_pubKey.then();
-            const _privateKey = await this.identity.privateKey.then();
+            const _exportable_pubKey = await _self.defaultIdentity.exportable_pubKey.then();
+            const _privateKey = await _self.defaultIdentity.privateKey.then();
             let isVerifiedGuest = false;
             const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
             const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
-            // @psm TODO .. hardcoded i don't know what this does ...
-            // if (process.browser) {
-            //const isAdmin: boolean = (document.cookie.split('; ').find((row: string) => row.startsWith('token_' +
-            // this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
-            // TODO: this is hardcoded, and needs different solution
-            // if (<?>) {
+            // TODO: this handles the cookie/admin mechanism from an SSO
+            // BROWSER
+            // hardcoded to only trust cookies from 'privacy.app' SSO (MI):
+            // const isAdmin: boolean = (document.cookie.split('; ').find((row: string) =>
+            //     row.startsWith('token_' + this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
+            // NODE? not sure what fallback this is:
             //   const isAdmin: boolean = (this.url !== 'https://s_socket.privacy.app' && isOwner);
-            // } else {
-            //   isAdmin = (process.env.REACT_APP_ROOM_SERVER !== 's_socket.privacy.app' && isOwner);
-            // }
+            // and this might be local dev override?
+            //   const isAdmin = (process.env.REACT_APP_ROOM_SERVER !== 's_socket.privacy.app' && isOwner);
+            // for now disabled feature (TODO this is for SSO support which adds an 'admin' status)
             const isAdmin = false;
             if (!isOwner && !isAdmin) {
                 if (_exportable_verifiedGuest_pubKey === null) {
@@ -1670,7 +1732,7 @@ class Channel {
             //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
             // }
             if (_exportable_locked_key !== null) {
-                _locked_key: CryptoKey = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
+                _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
             }
             else if (keys.locked_key) {
                 const _string_locked_key = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
@@ -1716,7 +1778,7 @@ class ChannelSocket {
     onSystemInfo;
     // channelCryptoKey: CryptoKey
     constructor(sbServer, channel, identity) {
-        this.channelId = channel._id;
+        this.channelId = channel.channel_id;
         // this.url = sbServer.SnackabraOptions.channel_ws
         this.#channel = channel;
         this.#identity = identity;
@@ -1725,7 +1787,9 @@ class ChannelSocket {
         this.#url = sbServer.options.channel_server + '/api/room/' + this.channelId + '/websocket',
             this.sbWebSocket = new SBWebSocket(this.#url, this.receive);
         // we're ready when the socket is ready, but note that the ready function can change
-        this.ready = (() => { return this.sbWebSocket.ready; });
+        this.ready = (() => {
+            return this.sbWebSocket.ready;
+        });
     }
     // /**
     //  * setKeys
@@ -1734,9 +1798,9 @@ class ChannelSocket {
     //   this.#channel.loadKeys(_keys);
     // }
     #wrap(sbMessage) {
-        contents.ready.then(() => {
+        sbMessage.ready.then(() => {
             // TODO - in progress
-            SB_Crypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), key, 'string').then((c) => {
+            SB_Crypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), this.#channel.keys, 'string').then((c) => {
                 const msg = { encrypted_contents: c };
             });
         });
@@ -1769,11 +1833,11 @@ class ChannelSocket {
      */
     open() {
         const options = {
-            url: this.url + '/api/room/' + this.channelId + '/websocket',
+            url: this.#url + '/api/room/' + this.channelId + '/websocket',
             onOpen: async (event) => {
                 console.info('websocket opened');
                 this.init = { name: JSON.stringify(this.#identity.exportable_pubKey) };
-                await this.socket.send(JSON.stringify(this.init));
+                await this.sbWebSocket.send(JSON.stringify(this.init));
                 if (typeof this.onOpen === 'function') {
                     this.onOpen(event);
                 }
@@ -1812,13 +1876,13 @@ class ChannelSocket {
                 }
             }
         };
-        this.socket = new WS_Protocol(options);
+        // this.sbWebSocket = new WS_Protocol(options);
     }
     /**
      * ChannelSocket.close()
      */
     close() {
-        this.socket.close();
+        this.sbWebSocket.close();
     }
     /**
      * ChannelSocket.isReady()
@@ -1856,12 +1920,15 @@ class ChannelSocket {
      * Send SB object (file) on channel socket
      */
     async sendSbObject(file) {
-        if (this.ready) {
-            this.#payload.wrap(file, this.#channel.keys.encryptionKey).then((payload) => this.socket.send(payload));
-        }
-        else {
-            this.#queue.push(file);
-        }
+        // TODO
+        // if (this.ready) {
+        //   this.#payload.wrap(
+        //     file,
+        //     this.#channel.keys.encryptionKey
+        //   ).then((payload) => this.socket.send(payload));
+        // } else {
+        //   this.#queue.push(file);
+        // }
     }
     /**
      * ChannelSocket.receive()
@@ -1903,35 +1970,24 @@ class ChannelSocket {
  */
 class StorageApi {
     server;
-    #channel;
-    #identity;
-    constructor(server, channel, identity) {
+    constructor(server) {
         this.server = server + '/api/v1';
-        this.#channel = channel;
-        this.#identity = identity;
     }
     /**
      * StorageApi.saveFile()
      */
-    async saveFile(file) {
-        if (file instanceof File) {
-            // psm: need to clean up these types
-            const sbFile = await new SBFile(file, this.#channel.keys.personal_signKey, this.#identity.exportable_pubKey);
-            // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
-            const metaData = sbFile.imageMetaData;
-            const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
-            const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
-            Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
-                results.forEach((controlData) => {
-                    this.#channel.socket.sendSbObject({ ...controlData, control: true });
-                });
-                // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
-                this.#channel.socket.sendSbObject(sbFile);
+    async saveFile(sbFile, channel) {
+        // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
+        const metaData = sbFile.imageMetaData;
+        const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
+        const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
+        Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
+            results.forEach((controlData) => {
+                channel.socket.sendSbObject({ ...controlData, control: true });
             });
-        }
-        else {
-            throw new Error('Must be an instance of File accepted');
-        }
+            // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
+            channel.socket.sendSbObject(sbFile);
+        });
     }
     /**
      * StorageApi().getFileKey
@@ -1974,7 +2030,8 @@ class StorageApi {
         return new Promise((resolve, reject) => {
             fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
                 // psm: need to clean up these types
-                method: 'POST', body: assemblePayload({
+                method: 'POST',
+                body: assemblePayload({
                     iv: encrypt_data.iv,
                     salt: encrypt_data.salt,
                     image: data.content,
@@ -2100,20 +2157,22 @@ class StorageApi {
  * @public
  */
 class ChannelApi {
-    server;
+    #sbServer;
+    #server; // channel server
     #identity;
     #channel;
     #channelApi;
     #channelServer;
-    #payload;
+    // #payload: Payload;
     constructor(sbServer, channel, identity) {
         this.#sbServer = sbServer;
-        this.#server = this.sbServer.SnackabraOptions.channel_server;
+        this.#server = this.#sbServer.options.channel_server;
         this.#channel = channel;
         // this.#payload = new Payload()
         this.#channelApi = this.#server + '/api/';
         this.#channelServer = this.#server + '/api/room/';
-        this.#identity = identity;
+        if (identity)
+            this.#identity = identity;
     }
     /**
      * getLastMessageTimes
@@ -2121,14 +2180,14 @@ class ChannelApi {
     getLastMessageTimes() {
         return new Promise((resolve, reject) => {
             fetch(this.#channelApi + '/getLastMessageTimes', {
-                method: 'POST', body: JSON.stringify([this.#channel._id])
+                method: 'POST', body: JSON.stringify([this.#channel.channel_id])
             }).then((response) => {
                 if (!response.ok) {
                     reject(new Error('Network response was not OK'));
                 }
                 return response.json();
             }).then((message_times) => {
-                resolve(message_times[this.#channel._id]);
+                resolve(message_times[this.#channel.channel_id]);
             }).catch((e) => {
                 reject(e);
             });
@@ -2139,7 +2198,7 @@ class ChannelApi {
      */
     getOldMessages(currentMessagesLength) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
+            fetch(this.#channelServer + this.#channel.channel_id + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
                 method: 'GET',
             }).then((response) => {
                 if (!response.ok) {
@@ -2158,7 +2217,7 @@ class ChannelApi {
      */
     updateCapacity(capacity) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/updateRoomCapacity?capacity=' + capacity, {
+            fetch(this.#channelServer + this.#channel.channel_id + '/updateRoomCapacity?capacity=' + capacity, {
                 method: 'GET', credentials: 'include'
             }).then((response) => {
                 if (!response.ok) {
@@ -2177,7 +2236,7 @@ class ChannelApi {
      */
     getCapacity() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/getRoomCapacity', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/getRoomCapacity', {
                 method: 'GET', credentials: 'include'
             }).then((response) => {
                 if (!response.ok) {
@@ -2196,7 +2255,7 @@ class ChannelApi {
      */
     getJoinRequests() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/getJoinRequests', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/getJoinRequests', {
                 method: 'GET', credentials: 'include'
             })
                 .then((response) => {
@@ -2220,7 +2279,7 @@ class ChannelApi {
      */
     isLocked() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/roomLocked', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/roomLocked', {
                 method: 'GET', credentials: 'include'
             })
                 .then((response) => {
@@ -2242,7 +2301,7 @@ class ChannelApi {
     setMOTD(motd) {
         return new Promise((resolve, reject) => {
             //if (this.#channel.owner) {
-            fetch(this.#channelServer + this.#channel._id + '/motd', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/motd', {
                 method: 'POST', body: JSON.stringify({ motd: motd }), headers: {
                     'Content-Type': 'application/json'
                 }
@@ -2271,7 +2330,7 @@ class ChannelApi {
             //if (this.#channel.owner) {
             const token_data = new Date().getTime().toString();
             const token_sign = await SB_Crypto.sign(this.#channel.keys.personal_signKey, token_data);
-            fetch(this.#channelServer + this.#channel._id + '/getAdminData', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/getAdminData', {
                 method: 'GET', credentials: 'include', headers: {
                     'authorization': token_data + '.' + token_sign, 'Content-Type': 'application/json'
                 }
@@ -2300,7 +2359,7 @@ class ChannelApi {
      */
     downloadData() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/downloadData', {
+            fetch(this.#channelServer + this.#channel.channel4_id + '/downloadData', {
                 method: 'GET', credentials: 'include', headers: {
                     'Content-Type': 'application/json'
                 }
@@ -2320,7 +2379,7 @@ class ChannelApi {
     }
     uploadChannel(channelData) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/uploadRoom', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/uploadRoom', {
                 method: 'POST', body: JSON.stringify(channelData), headers: {
                     'Content-Type': 'application/json'
                 }
@@ -2340,9 +2399,9 @@ class ChannelApi {
     }
     authorize(ownerPublicKey, serverSecret) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/authorizeRoom', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/authorizeRoom', {
                 method: 'POST',
-                body: JSON.stringify({ roomId: this.#channel._id, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey })
+                body: JSON.stringify({ roomId: this.#channel.channel_id, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey })
             })
                 .then((response) => {
                 if (!response.ok) {
@@ -2359,7 +2418,7 @@ class ChannelApi {
     }
     postPubKey(_exportable_pubKey) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/postPubKey?type=guestKey', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/postPubKey?type=guestKey', {
                 method: 'POST',
                 body: JSON.stringify(_exportable_pubKey),
                 headers: {
@@ -2381,7 +2440,7 @@ class ChannelApi {
     }
     storageRequest(byteLength) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/storageRequest?size=' + byteLength, {
+            fetch(this.#channelServer + this.#channel.channel_id + '/storageRequest?size=' + byteLength, {
                 method: 'GET', credentials: 'include', headers: {
                     'Content-Type': 'application/json'
                 }
@@ -2406,7 +2465,7 @@ class ChannelApi {
                     name: 'AES-GCM', length: 256
                 }, true, ['encrypt', 'decrypt']);
                 const _exportable_locked_key = await crypto.subtle.exportKey('jwk', _locked_key);
-                fetch(this.#channelServer + this.#channel._id + '/lockRoom', {
+                fetch(this.#channelServer + this.#channel.channel_id + '/lockRoom', {
                     method: 'GET', credentials: 'include'
                 })
                     .then((response) => {
@@ -2431,7 +2490,7 @@ class ChannelApi {
             // psm: need some "!"
             const shared_key = await SB_Crypto.deriveKey(await this.#identity.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
             const _encrypted_locked_key = await SB_Crypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.exportable_locked_key)), shared_key, 'string');
-            fetch(this.#channelServer + this.#channel._id + '/acceptVisitor', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/acceptVisitor', {
                 method: 'POST',
                 body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
                 headers: {
@@ -2454,7 +2513,7 @@ class ChannelApi {
     }
     ownerKeyRotation() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel._id + '/ownerKeyRotation', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/ownerKeyRotation', {
                 method: 'GET', credentials: 'include', headers: {
                     'Content-Type': 'application/json'
                 }
@@ -2814,9 +2873,10 @@ class Queue {
  */
 class Snackabra {
     #listOfChannels = [];
-    storageApi;
-    // #storage = new StorageApi();
+    #storage;
+    #channel;
     // #identity = new Identity();
+    defaultIdentity;
     options = {
         channel_server: '',
         channel_ws: '',
@@ -2826,7 +2886,6 @@ class Snackabra {
      * Constructor expects an object with the names of the matching servers, for example
      * (this shows the miniflare local dev config):
      *
-     * @param {SnackabraOptions} the servers to talk to, look like this:
      *
      * ::
      *
@@ -2836,19 +2895,25 @@ class Snackabra {
      *       storage_server: 'http://127.0.0.1:4000'
      *     }
      *
+     * @param args {SnackabraOptions} interface
      */
     constructor(args) {
-        this.storageApi = new StorageApi();
         _sb_assert(args, 'Snackabra(args) - missing args');
         try {
-            this.options = {
+            this.options = Object.assign(this.options, {
                 channel_server: args.channel_server,
                 channel_ws: args.channel_ws,
                 storage_server: args.storage_server
-            };
+            });
+            this.#storage = new StorageApi(args.storage_server);
         }
         catch (e) {
-            _sb_exception('Snackabra.constructor()', `${e}`);
+            if (e.hasOwnProperty('message')) {
+                _sb_exception('Snackabra.constructor()', e.message);
+            }
+            else {
+                _sb_exception('Snackabra.constructor()', 'Unknown exception');
+            }
         }
     }
     // psm: this is no longer global
@@ -2910,7 +2975,7 @@ class Snackabra {
      * Returns the :term:`Channel Name`.
      * (TODO: token-based approval of storage spend)
      */
-    create(serverSecret) {
+    create(serverSecret, identity) {
         return new Promise(async (resolve, reject) => {
             try {
                 const ownerKeyPair = await crypto.subtle.generateKey({
@@ -2943,7 +3008,7 @@ class Snackabra {
                 });
                 resp = await resp.json();
                 if (resp.success) {
-                    await this.connect(channelId);
+                    await this.connect(channelId, identity);
                     _localStorage.setItem(channelId, JSON.stringify(exportable_privateKey));
                     resolve(channelId);
                 }
@@ -2980,7 +3045,8 @@ class Snackabra {
         return SB_Crypto;
     }
     get identity() {
-        return this.#identity;
+        // return this.#identity;
+        return defaultIdentity;
     }
     sendMessage(message) {
         this.channel.socket.send(message);
@@ -3000,5 +3066,7 @@ class Snackabra {
 //   arrayBufferToBase64,
 //   getRandomValues
 // };
-export { Channel, Snackabra, SBMessage, SBFile, };
+export { 
+// ChannelMessage,
+Channel, Identity, SBFile, SBMessage, Snackabra, };
 //# sourceMappingURL=snackabra.js.map

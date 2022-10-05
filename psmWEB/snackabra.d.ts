@@ -1,0 +1,669 @@
+/**
+ * Interfaces
+ */
+interface SnackabraOptions {
+    channel_server: string;
+    channel_ws: string;
+    storage_server: string;
+}
+interface SnackabraKeys {
+    exportable_pubKey: JsonWebKey | Promise<JsonWebKey | null>;
+    exportable_privateKey: JsonWebKey | Promise<JsonWebKey | null>;
+    privateKey: CryptoKey | Promise<CryptoKey | null>;
+}
+interface Dictionary {
+    [index: string]: any;
+}
+interface ChannelData {
+    roomId?: string;
+    channelId?: string;
+    ownerKey: string;
+    encryptionKey: string;
+    signKey: string;
+    SERVER_SECRET: string;
+}
+interface ChannelKeys {
+    exportable_owner_pubKey: CryptoKey;
+    exportable_verifiedGuest_pubKey: CryptoKey;
+    personal_signKey: CryptoKey;
+    room_privateSignKey: CryptoKey;
+    encryptionKey: CryptoKey;
+    locked_key: CryptoKey;
+    shared_key: CryptoKey;
+    exportable_locked_key: Dictionary;
+}
+interface ImageMetaData {
+    imageId?: string;
+    previewId?: string;
+    imageKey?: string;
+    previewKey?: string;
+}
+interface ChannelMessage2 {
+    type?: 'invalid' | 'ready';
+    keys?: {
+        ownerKey: Dictionary;
+        encryptionKey: Dictionary;
+        signKey: Dictionary;
+    };
+    _id?: string;
+    id?: string;
+    timestamp?: number;
+    timestampPrefix?: string;
+    channelID?: string;
+    control?: boolean;
+    encrypted_contents?: string;
+    image?: string;
+    imageMetaData?: ImageMetaData;
+    motd?: string;
+    ready?: boolean;
+    roomLocked?: boolean;
+    sender_pubKey?: JsonWebKey;
+    system?: boolean;
+    verficationToken?: string;
+}
+interface ChannelAckMessage {
+    type: 'ack';
+    _id: string;
+}
+interface ChannelRoomKeys {
+    type: 'roomKeys';
+    encryptionKey: JsonWebKey;
+    guestKey: JsonWebKey;
+    ownerKey: JsonWebKey;
+    signKey: JsonWebKey;
+}
+interface ChannelEncryptedMessage {
+    type: 'channelMssage';
+    channelID: string;
+    timestampPrefix: string;
+    encrypted_contents: {
+        content: string;
+        iv: string;
+    };
+}
+interface ChannelEncryptedMessageArray {
+    type: 'channelMessageArray';
+    messages: ChannelEncryptedMessageArray[];
+}
+export declare type ChannelMessageV2 = ChannelRoomKeys | ChannelEncryptedMessage | ChannelEncryptedMessageArray;
+interface ChannelMessage1 {
+    [key: string]: ChannelMessage2;
+    message: {
+        [prop: string]: any;
+    };
+}
+export declare type ChannelMessage = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage;
+export declare function SB_libraryVersion(): string;
+/**
+ * SB simple events (mesage bus) class
+ */
+export declare class MessageBus {
+    #private;
+    bus: Dictionary;
+    /**
+     * Subscribe. 'event' is a string, special case '*' means everything
+     *  (in which case the handler is also given the message)
+     */
+    subscribe(event: string, handler: CallableFunction): void;
+    /**
+     * Unsubscribe
+     */
+    unsubscribe(event: string, handler: CallableFunction): void;
+    /**
+     * Publish
+     */
+    publish(event: string, ...args: unknown[]): void;
+}
+/**
+ * @fileoverview Main file for snackabra javascript utilities.
+ *               See https://snackabra.io for details.
+ * @package
+ */
+export declare function _sb_exception(loc: string, msg: string): void;
+export declare function _sb_resolve(val: any): any;
+export declare function _sb_assert(val: unknown, msg: string): void;
+/**
+ * Fills buffer with random data
+ */
+export declare function getRandomValues(buffer: Uint8Array): Uint8Array;
+/**
+ * Returns 'true' if (and only if) string is well-formed base64.
+ * Works same on browsers and nodejs.
+ */
+export declare function _assertBase64(base64: string): boolean;
+/**
+ * Standardized 'str2ab()' function, string to array buffer.
+ * This assumes on byte per character.
+ *
+ * @param {string} string
+ * @return {Uint8Array} buffer
+ */
+export declare function str2ab(string: string): Uint8Array;
+/**
+ * Standardized 'ab2str()' function, array buffer to string.
+ * This assumes one byte per character.
+ *
+ * @return {Uint8Array} Uint8Array
+ *
+ * @param buffer
+ */
+export declare function ab2str(buffer: Uint8Array): string;
+/**
+ * Standardized 'atob()' function, e.g. takes the a Base64 encoded
+ * input and decodes it. Note: always returns Uint8Array.
+ * Accepts both regular Base64 and the URL-friendly variant,
+ * where `+` => `-`, `/` => `_`, and the padding character is omitted.
+ *
+ * @param {str} base64 string in either regular or URL-friendly representation.
+ * @return {Uint8Array} returns decoded binary result
+ */
+export declare function base64ToArrayBuffer(str: string): Uint8Array;
+/**
+ * Standardized 'btoa()'-like function, e.g., takes a binary string
+ * ('b') and returns a Base64 encoded version ('a' used to be short
+ * for 'ascii').
+ *
+ * @param {bufferSource} ArrayBuffer buffer
+ * @return {string} base64 string
+ */
+export declare function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null): string;
+export declare function _appendBuffer(buffer1: Uint8Array | ArrayBuffer, buffer2: Uint8Array | ArrayBuffer): ArrayBuffer;
+/**
+ * Import a PEM encoded RSA public key, to use for RSA-OAEP
+ * encryption.  Takes a string containing the PEM encoded key, and
+ * returns a Promise that will resolve to a CryptoKey representing
+ * the public key.
+ *
+ * @param {pem} RSA public key, string, PEM format
+ * @return {cryptoKey} RSA-OAEP key
+ *
+ */
+export declare function importPublicKey(pem?: string): Promise<CryptoKey>;
+/**
+ * Returns random number
+ *
+ * @return {int} integer 0..255
+ *
+ */
+export declare function simpleRand256(): number;
+/**
+ * Returns a random string in requested encoding
+ *
+ * @param {n} number of characters
+ * @param {code} encoding, supported types: 'base32mi'
+ * @return {string} random string
+ *
+ * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
+ */
+export declare function simpleRandomString(n: number, code: string): string;
+/**
+ * Disambiguates strings that are known to be 'base32mi' type
+ *
+ * ::
+ *
+ *     'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
+ *
+ * This is the base32mi disambiguation table ::
+ *
+ *     [OoQD] -> '0'
+ *     [lIiJ] -> '1'
+ *     [Zz] -> '2'
+ *     [A] -> '4'
+ *     [Ss] -> '5'
+ *     [G] -> '6'
+ *     [t] -> '7'
+ *     [B] -> '8'
+ *     [gq] -> '9'
+ *     [C] -> 'c'
+ *     [Y] -> 'y'
+ *     [KxX] -> 'k'
+ *     [M] -> 'm'
+ *     [n] -> 'N'
+ *     [P] -> 'p'
+ *     [uvV] -> 'U'
+ *     [w] -> 'W'
+ *
+ * Another way to think of it is that this, becomes this ('.' means no change): ::
+ *
+ *     0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
+ *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
+ *
+ */
+export declare function cleanBase32mi(s: string): string;
+/**
+ * Takes an arbitrary dict object, a public key in PEM
+ * format, and a callback function: generates a random AES key,
+ * wraps that in (RSA) key, and when all done will call the
+ * callback function with the results
+ *
+ * @param {dict} dictionary (payload)
+ * @param {publicKeyPEM} public key (PEM format)
+ * @param {callback} callback function, called with results
+ *
+ */
+export declare function packageEncryptDict(dict: Dictionary, publicKeyPEM: string, callback: CallableFunction): void;
+/**
+ * Partition
+ */
+export declare function partition(str: string, n: number): string[];
+/**
+ * There are o many problems with JSON parsing, adding a wrapper to capture more info.
+ * The 'loc' parameter should be a (unique) string that allows you to find the usage
+ * in the code; one approach is the line number in the file (at some point).
+ */
+export declare function jsonParseWrapper(str: string, loc: string): any;
+/**
+ * Deprecated (older version of payloads, for older channels)
+ */
+export declare function extractPayloadV1(payload: ArrayBuffer): Dictionary;
+/**
+ * Assemble payload
+ */
+export declare function assemblePayload(data: Dictionary): BodyInit | null;
+/**
+ * Extract payload - this decodes from our binary (wire) format
+ * to a JS object. This provides a binary encoding of any JSON,
+ * and it allows some elements of the JSON to be raw (binary).
+ */
+export declare function extractPayload(payload: ArrayBuffer): Dictionary;
+/**
+ * Encode into b64 URL
+ */
+export declare function encodeB64Url(input: string): string;
+/**
+ * Decode b64 URL
+ */
+export declare function decodeB64Url(input: string): string;
+/**
+ * Crypto is a class that contains all the SB specific crypto functions
+ *
+ * @class
+ * @constructor
+ * @public
+ */
+declare class Crypto {
+    /**
+     * Extracts (generates) public key from a private key.
+     */
+    extractPubKey(privateKey: JsonWebKey): JsonWebKey | null;
+    /**
+     * Generates standard ``ECDH`` keys using ``P-384``.
+     */
+    generateKeys(): Promise<CryptoKeyPair>;
+    /**
+     * Import keys
+     */
+    importKey(format: KeyFormat, key: BufferSource | JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
+    /**
+     * Derive key.
+     */
+    deriveKey(privateKey: CryptoKey, publicKey: CryptoKey, type: string, extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
+    /**
+     * Get file key
+     */
+    getFileKey(fileHash: string, _salt: ArrayBuffer): Promise<unknown>;
+    /**
+     * Encrypt
+     */
+    encrypt(contents: BufferSource, secret_key: CryptoKey, outputType?: string, _iv?: ArrayBuffer | null): Promise<Dictionary | string>;
+    /**
+     * Decrypt
+     */
+    decrypt(secretKey: CryptoKey, contents: Dictionary, outputType?: string): Promise<string>;
+    /**
+     * Sign
+     */
+    sign(secretKey: CryptoKey, contents: string): Promise<string>;
+    /**
+     * Verify
+     */
+    verify(secretKey: CryptoKey, sign: string, contents: string): Promise<unknown>;
+    /**
+     * Compare keys
+     */
+    areKeysSame(key1: Dictionary, key2: Dictionary): boolean;
+}
+/**
+ * Identity (key for use in SB)
+ * @class
+ * @constructor
+ * @public
+ */
+declare class Identity implements SnackabraKeys {
+    ready: Promise<Identity>;
+    resolve_exportable_pubKey: (arg0: JsonWebKey | null) => void;
+    resolve_exportable_privateKey: (arg0: JsonWebKey | null) => void;
+    resolve_privateKey: (arg0: CryptoKey | null) => void;
+    exportable_pubKey: Promise<JsonWebKey | null>;
+    exportable_privateKey: Promise<JsonWebKey | null>;
+    privateKey: Promise<CryptoKey | null>;
+    constructor(keys?: JsonWebKey);
+    /**
+     * Mint keys
+     */
+    mintKeys(): Promise<unknown>;
+    /**
+     * Mount keys
+     */
+    mountKeys(key: JsonWebKey): Promise<unknown>;
+    get _id(): string;
+}
+interface SBMessageContents {
+    sender_pubKey?: JsonWebKey;
+    encrypted: boolean;
+    body: string;
+    sign: string;
+    image: string;
+    image_sign?: string;
+    imageMetadata_sign?: string;
+    imageMetaData?: ImageMetaData;
+}
+/**
+ * SBMessage
+ * @class
+ * @constructor
+ * @public
+ */
+declare class SBMessage {
+    ready: Promise<SBMessage>;
+    signKey: CryptoKey;
+    identity?: Identity;
+    contents: SBMessageContents;
+    constructor(channel: Channel, body: string, identity?: Identity);
+}
+/**
+ * SBFile
+ * @class
+ * @constructor
+ * @public
+ */
+declare class SBFile {
+    #private;
+    encrypted: boolean;
+    contents: string;
+    senderPubKey: CryptoKey;
+    sign: Promise<string>;
+    data: Dictionary;
+    image: string;
+    image_sign: string;
+    imageMetaData: ImageMetaData;
+    imageMetadata_sign: string;
+    constructor(file: File, signKey: CryptoKey, key: CryptoKey);
+}
+declare class SBWebSocket {
+    #private;
+    ready: Promise<SBWebSocket>;
+    onMessage: CallableFunction;
+    constructor(url: string, onMessage: CallableFunction);
+    send(m: string): Promise<unknown>;
+}
+/**
+ * Channel
+ *
+ * @class
+ * @constructor
+ * @public
+ */
+declare class Channel {
+    #private;
+    ready: () => () => Promise<SBWebSocket>;
+    sbServer: Snackabra;
+    channel_id: string;
+    defaultIdentity?: Identity;
+    owner: boolean;
+    admin: boolean;
+    verifiedGuest: boolean;
+    metaData: Dictionary;
+    storage?: StorageApi;
+    constructor(sbServer: Snackabra, channel_id: string, identity?: Identity);
+    /**
+     * Channel.keys()
+     *
+     * Return keys
+     */
+    get keys(): ChannelKeys;
+    /**
+     * Channel.api()
+     */
+    get api(): ChannelApi;
+    /**
+     * Channel.socket()
+     */
+    get socket(): ChannelSocket;
+    /**
+     * Channel.loadKeys()
+     *
+     * When connecting to a channel server, the first thing it replies with is a set of
+     * keys for operating against the channel. Here we load those into the channel.
+     *
+     * Specifically the server will respond with something like this: ::
+     *
+     *   {"ready":true,
+     *    "keys":{
+     *            "ownerKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+     *                        \"x\":\"9s17B4i0Cuf_w9XN_uAq2DFePOr6S3sMFMA95KjLN8akBUWEhPAcuMEMwNUlrrkN\",
+     *                        \"y\":\"6dAtcyMbtsO5ufKvlhxRsvjTmkABGlTYG1BrEjTpwrAgtmn6k25GR7akklz9klBr\"}",
+     *            "guestKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+     *                         \"x\":\"Lx0eJcbNuyEfHDobWaZqgy9UO7ppxVIsEpEtvbzkAlIjySh9lY2AvgnACREO6QXD\",
+     *                         \"y\":\"zEHPgpsl4jge_Q-K6ekuzi2bQOybnaPT1MozCFQJnXEePBX8emkHriOiwl6P8BAS\"}",
+     *            "encryptionKey":"{\"alg\":\"A256GCM\",\"ext\":true,
+     *                             \"k\":\"F0sQTTLXDhuvvmgGQLzMoeHPD-SJlFyhfOD-cqejEOU\",
+     *                             \"key_ops\":[\"encrypt\",\"decrypt\"],\"kty\":\"oct\"}",
+     *            "signKey":"{\"crv\":\"P-384\",
+     *                        \"d\":\"KCJHDZ34XgVFsS9-sU09HFzXZhnGCvnDgJ5a8GTSfjuJQaq-1N2acvchPRhknk8B\",
+     *                        \"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",
+     *                        \"x\":\"rdsyBle0DD1hvp2OE2mINyyI87Cyg7FS3tCQUIeVkfPiNOACtFxi6iP8oeYt-Dge\",
+     *                        \"y\":\"qW9VP72uf9rgUU117G7AfTkCMncJbT5scIaIRwBXfqET6FYcq20fwSP7R911J2_t\"}"
+     *             },
+     *     "motd":"",
+     *     "roomLocked":false}
+     *
+     */
+    loadKeys(keys: Dictionary): Promise<unknown>;
+}
+/** Class managing connections */
+declare class ChannelSocket {
+    #private;
+    ready: () => Promise<SBWebSocket>;
+    sbWebSocket: SBWebSocket;
+    init: Dictionary;
+    channelId: string;
+    onOpen: CallableFunction;
+    onJoin: CallableFunction;
+    onClose: CallableFunction;
+    onError: CallableFunction;
+    onMessage: CallableFunction;
+    onSystemInfo: CallableFunction;
+    constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
+    unwrap(payload: Dictionary, key: CryptoKey): Promise<string | {
+        error: string;
+    }>;
+    /**
+     * ChannelSocket.open()
+     *
+     */
+    open(): void;
+    /**
+     * ChannelSocket.close()
+     */
+    close(): void;
+    /**
+     * ChannelSocket.isReady()
+     */
+    isReady(): void;
+    /**
+     * ChannelSocket.send()
+     *
+     * @param {SBMessage} the message object to send
+     */
+    send(message: SBMessage): Promise<void>;
+    /**
+     * ChannelSocket.sendSbObject()
+     *
+     * Send SB object (file) on channel socket
+     */
+    sendSbObject(file: SBMessage): Promise<void>;
+    /**
+     * ChannelSocket.receive()
+     *
+     * Receive message on channel socket
+     * psm: updating using new cool types
+     * (it will arrive mostly unwrapped)
+     */
+    receive(message: ChannelMessage): Promise<string | ChannelMessage | undefined>;
+}
+/**
+ * Storage API
+ * @class
+ * @constructor
+ * @public
+ */
+declare class StorageApi {
+    #private;
+    server: string;
+    constructor(server: string);
+    /**
+     * StorageApi.saveFile()
+     */
+    saveFile(sbFile: SBFile, channel: Channel): Promise<void>;
+    /**
+     * StorageApi().storeRequest
+     */
+    storeRequest(fileId: string): Promise<ArrayBuffer>;
+    /**
+     * StorageApi().storeData()
+     */
+    storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: Dictionary): Promise<Dictionary>;
+    /**
+     * StorageApi().storeImage()
+     */
+    storeImage(image: string | ArrayBuffer, image_id: string, keyData: string, type: string): void;
+    /**
+     * StorageApi().fetchData()
+     */
+    fetchData(msgId: string, verificationToken: string): Promise<ArrayBuffer>;
+    /**
+     * StorageApi().retrieveData()
+     * retrieves an object from storage
+     */
+    retrieveData(msgId: string, messages: Array<ChannelMessage>, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
+    /**
+     * StorageApi().retrieveDataFromMessage()
+     */
+    retrieveDataFromMessage(message: Dictionary, controlMessages: Array<Dictionary>): Promise<{
+        error: string;
+        url?: undefined;
+    } | {
+        url: string;
+        error?: undefined;
+    }>;
+}
+/**
+ * Channel API
+ * @class
+ * @constructor
+ * @public
+ */
+declare class ChannelApi {
+    #private;
+    constructor(sbServer: Snackabra, channel: Channel, identity?: Identity);
+    /**
+     * getLastMessageTimes
+     */
+    getLastMessageTimes(): Promise<unknown>;
+    /**
+     * getOldMessages
+     */
+    getOldMessages(currentMessagesLength: number): Promise<unknown>;
+    /**
+     * updateCapacity
+     */
+    updateCapacity(capacity: number): Promise<unknown>;
+    /**
+     * getCapacity
+     */
+    getCapacity(): Promise<unknown>;
+    /**
+     * getJoinRequests
+     */
+    getJoinRequests(): Promise<unknown>;
+    /**
+     * isLocked
+     */
+    isLocked(): Promise<unknown>;
+    /**
+     * Set message of the day
+     */
+    setMOTD(motd: string): Promise<unknown>;
+    /**
+     * getAdminData
+     */
+    getAdminData(): Promise<unknown>;
+    /**
+     * downloadData
+     */
+    downloadData(): Promise<unknown>;
+    uploadChannel(channelData: ChannelData): Promise<unknown>;
+    authorize(ownerPublicKey: Dictionary, serverSecret: string): Promise<unknown>;
+    postPubKey(_exportable_pubKey: Dictionary): Promise<unknown>;
+    storageRequest(byteLength: number): Promise<Dictionary>;
+    lock(): Promise<unknown>;
+    acceptVisitor(pubKey: string): Promise<unknown>;
+    ownerKeyRotation(): Promise<unknown>;
+}
+/**
+ * QueueItem class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
+/**
+ * Queue Class
+ *
+ * @class
+ * @constructor
+ * @public
+ */
+declare class Snackabra {
+    #private;
+    defaultIdentity?: Identity;
+    options: SnackabraOptions;
+    /**
+     * Constructor expects an object with the names of the matching servers, for example
+     * (this shows the miniflare local dev config):
+     *
+     *
+     * ::
+     *
+     *     {
+     *       channel_server: 'http://127.0.0.1:4001',
+     *       channel_ws: 'ws://127.0.0.1:4001',
+     *       storage_server: 'http://127.0.0.1:4000'
+     *     }
+     *
+     * @param args {SnackabraOptions} interface
+     */
+    constructor(args: SnackabraOptions);
+    /**
+     * Snackabra.connect()
+     * Connects to :term:`Channel Name` on this SB config.
+     * Returns a (promise to the) channel object
+     * @param {string} channel name
+     * @param {Identity} default identity for all messages
+     */
+    connect(channel_id: string, identity: Identity): Promise<Channel>;
+    /**
+     * Creates a channel. Currently uses trivial authentication.
+     * Returns the :term:`Channel Name`.
+     * (TODO: token-based approval of storage spend)
+     */
+    create(serverSecret: string, identity: Identity): Promise<string>;
+    get channel(): Channel;
+    get storage(): StorageApi;
+    get crypto(): Crypto;
+    get identity(): Identity;
+    sendMessage(message: SBMessage): void;
+    sendFile(file: SBFile): void;
+}
+export { Channel, Identity, SBFile, SBMessage, Snackabra, };
