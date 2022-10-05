@@ -185,7 +185,7 @@ interface ChannelKeysMessage {
   ready: boolean,
   keys: ChannelKeys,
   motd: string,
-  roomLocked: interface
+  roomLocked: boolean,
 }
 
 
@@ -244,11 +244,11 @@ export function deserializeMessage(m: string, expect?: ChannelMessageTypes): Cha
     if ((expect) && (expect == 'channelKeys')) {
       let m0 = JSON.parse(m) // no wrapping because we want the exception here
       let keys: ChannelKeys = {
-        ownerKey: SB_Crypto.importKey('jwk', JSON.parse(m0.keys.ownerKey), 'ECDH', false, []),
-        encryptionKey: SB_Crypto.importKey('jwk', JSON.parse(m0.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
-        signKey: SB_Crypto.importKey('jwk', JSON.parse(m0.keys.importKey), 'ECDH', true, ['deriveKey']),
+        ownerKey: sbCrypto.importKey('jwk', JSON.parse(m0.keys.ownerKey), 'ECDH', false, []),
+        encryptionKey: sbCrypto.importKey('jwk', JSON.parse(m0.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
+        signKey: sbCrypto.importKey('jwk', JSON.parse(m0.keys.importKey), 'ECDH', true, ['deriveKey']),
       }
-      if (m0.keys.guestKey) keys.guestKey = SB_Crypto.importKey('jwk', JSON.parse(m0.keys.guestKey), 'ECDH', false, [])
+      if (m0.keys.guestKey) keys.guestKey = sbCrypto.importKey('jwk', JSON.parse(m0.keys.guestKey), 'ECDH', false, [])
       let m1: ChannelKeysMessage = {
         type: 'channelKeys',
         ready: m0.ready,
@@ -275,8 +275,8 @@ export function deserializeMessage(m: string, expect?: ChannelMessageTypes): Cha
 //   const _exportable_pubKey: JsonWebKey = await _self.defaultIdentity!.exportable_pubKey.then();
 //   const _privateKey: CryptoKey = await _self.defaultIdentity!.privateKey.then();
 //   let isVerifiedGuest = false;
-//   const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
-//   const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
+//   const _owner_pubKey = await sbCrypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
+//   const isOwner = sbCrypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
 
 //   // TODO: this handles the cookie/admin mechanism from an SSO
 //   // BROWSER
@@ -297,23 +297,23 @@ export function deserializeMessage(m: string, expect?: ChannelMessageTypes): Cha
 //       this.api.postPubKey(_exportable_pubKey);
 //       _exportable_verifiedGuest_pubKey = { ..._exportable_pubKey };
 //     }
-//     if (SB_Crypto.areKeysSame(_exportable_verifiedGuest_pubKey, _exportable_pubKey)) {
+//     if (sbCrypto.areKeysSame(_exportable_verifiedGuest_pubKey, _exportable_pubKey)) {
 //       isVerifiedGuest = true;
 //     }
 //   }
 
-//   const _encryption_key: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_encryption_key, 'AES', false, ['encrypt', 'decrypt']);
+//   const _encryption_key: CryptoKey = await sbCrypto.importKey('jwk', _exportable_encryption_key, 'AES', false, ['encrypt', 'decrypt']);
 
-//   const _room_privateSignKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signKey, 'ECDH', true, ['deriveKey']);
-//   const _exportable_room_signPubKey: JsonWebKey | null = SB_Crypto.extractPubKey(_exportable_room_signKey);
+//   const _room_privateSignKey: CryptoKey = await sbCrypto.importKey('jwk', _exportable_room_signKey, 'ECDH', true, ['deriveKey']);
+//   const _exportable_room_signPubKey: JsonWebKey | null = sbCrypto.extractPubKey(_exportable_room_signKey);
 
-//   const _room_signPubKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signPubKey!, 'ECDH', true, []);
-//   const _personal_signKey: CryptoKey = await SB_Crypto.deriveKey(_privateKey, _room_signPubKey, 'HMAC', false, ['sign', 'verify']);
+//   const _room_signPubKey: CryptoKey = await sbCrypto.importKey('jwk', _exportable_room_signPubKey!, 'ECDH', true, []);
+//   const _personal_signKey: CryptoKey = await sbCrypto.deriveKey(_privateKey, _room_signPubKey, 'HMAC', false, ['sign', 'verify']);
 
 //   let _shared_key: CryptoKey | null;
 
 //   if (!isOwner) {
-//     _shared_key = await SB_Crypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
+//     _shared_key = await sbCrypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
 //   }
 
 //   let _locked_key
@@ -323,11 +323,11 @@ export function deserializeMessage(m: string, expect?: ChannelMessageTypes): Cha
 //   //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
 //   // }
 //   if (_exportable_locked_key !== null) {
-//     _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
+//     _locked_key = await sbCrypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
 //   } else if (keys.locked_key) {
-//     const _string_locked_key: string = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
+//     const _string_locked_key: string = await sbCrypto.decrypt(isOwner ? await sbCrypto.deriveKey(keys.privateKey, await sbCrypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
 //     _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
-//     _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key!, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
+//     _locked_key = await sbCrypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key!, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
 //   }
 
 //   this.#keys = {
@@ -1470,7 +1470,7 @@ class Identity implements SnackabraKeys {
       const _self = this
       try {
         this.resolve_exportable_privateKey(key)
-        this.resolve_exportable_pubKey(SB_Crypto.extractPubKey(key))
+        this.resolve_exportable_pubKey(sbCrypto.extractPubKey(key))
         sbCrypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
           this.resolve_privateKey(k)
           resolve(_self)
@@ -1545,15 +1545,16 @@ class SBMessage {
   }
 }
 
+/* mtg: I think we landed on the SBFile is a type and all the
+ * functionality here is performed elsewhere and passed to SB */
+
 /**
  * SBFile
  * @class
  * @constructor
  * @public
  */
-/* mtg: I think we landed on the SBFile is a type and all the functionality here is performed elsewhere and passed to SB
-
-class SBFile {
+export class SBFile {
   encrypted = false;
   contents: string = ''
   senderPubKey: CryptoKey;
@@ -3519,7 +3520,7 @@ class Snackabra {
     return this.#storage;
   }
 
-  get crypto(): Crypto {
+  get crypto(): SBCrypto {
     return sbCrypto;
   }
 
