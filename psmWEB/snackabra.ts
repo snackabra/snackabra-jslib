@@ -185,7 +185,26 @@ interface ChannelKeysMessage {
   ready: boolean,
   keys: ChannelKeys,
   motd: string,
-  roomLocked: boolean
+  roomLocked: interface
+}
+
+
+/** WrappedObject
+
+    SB standard wrapping of 'anything' that's passed around.
+
+    Encryption is done with AES-GCM, 16 bytes of salt (iv),
+    typically by SBCrypto.encrypt(). The encryptedContents
+    are base64 made web/net safe by running through
+    encodeURIComponent. 
+
+    TODO: multiple terms above should be links to function
+    definitions or glossary terms.
+
+ */
+export interface WrappedObject {
+  encryptedContents: string,
+  iv: string,
 }
 
 interface ChannelEncryptedMessage {
@@ -917,7 +936,12 @@ export function cleanBase32mi(s: string) {
  * Takes an arbitrary dict object, a public key in PEM
  * format, and a callback function: generates a random AES key,
  * wraps that in (RSA) key, and when all done will call the
- * callback function with the results
+ * callback function with the results.
+ *
+ * This function is for direct use in a web page, for example
+ * capturing a 'form' input set of data about a user, and
+ * sending towards a backend in such a way that the contents
+ * can only be decrypted and read off-line (air gapped).
  *
  * @param {dict} dictionary (payload)
  * @param {publicKeyPEM} public key (PEM format)
@@ -1156,13 +1180,13 @@ export function decodeB64Url(input: string) {
 // }
 
 /**
- * Crypto is a class that contains all the SB specific crypto functions
+ * SBCrypto is a class that contains all the SB specific crypto functions
  *
  * @class
  * @constructor
  * @public
  */
-class Crypto {
+class SBCrypto {
   /**
    * Extracts (generates) public key from a private key.
    */
@@ -1183,6 +1207,8 @@ class Crypto {
   }
 
   /**
+   * SBCrypto.generatekeys()
+   *
    * Generates standard ``ECDH`` keys using ``P-384``.
    */
   generateKeys() {
@@ -1198,6 +1224,8 @@ class Crypto {
   }
 
   /**
+   * SBCrypto.importKey()
+   *
    * Import keys
    */
   importKey(format: KeyFormat, key: BufferSource | JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey> {
@@ -1214,6 +1242,8 @@ class Crypto {
   }
 
   /**
+   * SBCrypto.deriveKey()
+   *
    * Derive key.
    */
   deriveKey(privateKey: CryptoKey, publicKey: CryptoKey, type: string, extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey> {
@@ -1242,6 +1272,8 @@ class Crypto {
   }
 
   /**
+   * SBCrypto.getFileKey()
+   *
    * Get file key
    */
   getFileKey(fileHash: string, _salt: ArrayBuffer) {
@@ -1265,6 +1297,8 @@ class Crypto {
   }
 
   /**
+   * SBCrypto.encrypt()
+   *
    * Encrypt
    */
   encrypt(contents: BufferSource, secret_key: CryptoKey, outputType = 'string', _iv: ArrayBuffer | null = null): Promise<Dictionary | string> {
@@ -1298,6 +1332,8 @@ class Crypto {
   }
 
   /**
+   * SBCrypto.decrypt()
+   *
    * Decrypt
    */
   decrypt(secretKey: CryptoKey, contents: Dictionary, outputType = 'string'): Promise<string> {
@@ -1316,6 +1352,8 @@ class Crypto {
   }
 
   /**
+   * SBCrypto.sign()
+   *
    * Sign
    */
   sign(secretKey: CryptoKey, contents: string): Promise<string> {
@@ -1337,6 +1375,8 @@ class Crypto {
   }
 
   /**
+   * SBCrypto.verify()
+   *
    * Verify
    */
   verify(secretKey: CryptoKey, sign: string, contents: string) {
@@ -1358,7 +1398,9 @@ class Crypto {
   }
 
   /**
-   * Compare keys
+   * SBCrypto.areKeysSame()
+   *
+   * Compare keys. (TODO: deprecate/ change)
    */
   areKeysSame(key1: Dictionary, key2: Dictionary): boolean {
     if (key1 != null && key2 != null && typeof key1 === 'object' && typeof key2 === 'object') {
@@ -1366,9 +1408,9 @@ class Crypto {
     }
     return false;
   }
-}
+} /* SBCrypto */
 
-const SB_Crypto = new Crypto();
+const sbCrypto = new SBCrypto();
 
 /**
  * Identity (key for use in SB)
@@ -1408,7 +1450,7 @@ class Identity implements SnackabraKeys {
     return new Promise(async (resolve, reject) => {
       const _self = this
       try {
-        SB_Crypto.generateKeys().then((keyPair: CryptoKeyPair) => {
+        sbCrypto.generateKeys().then((keyPair: CryptoKeyPair) => {
           crypto.subtle.exportKey('jwk', keyPair.publicKey).then((k: JsonWebKey) => this.resolve_exportable_pubKey(k))
           crypto.subtle.exportKey('jwk', keyPair.privateKey).then((k: JsonWebKey) => this.resolve_exportable_privateKey(k))
           this.resolve_privateKey(keyPair.privateKey)
@@ -1429,7 +1471,7 @@ class Identity implements SnackabraKeys {
       try {
         this.resolve_exportable_privateKey(key)
         this.resolve_exportable_pubKey(SB_Crypto.extractPubKey(key))
-        SB_Crypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
+        sbCrypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
           this.resolve_privateKey(k)
           resolve(_self)
         })
@@ -1488,9 +1530,9 @@ class SBMessage {
     this.ready = new Promise<SBMessage>((resolve) => {
       channel.keys.then((keys) => {
         keys.signKey.then((signKey) => {
-          const sign = SB_Crypto.sign(signKey, body)
-          const image_sign = SB_Crypto.sign(signKey, this.contents.image)
-          const imageMetadata_sign = SB_Crypto.sign(signKey, JSON.stringify(this.contents.imageMetaData))
+          const sign = sbCrypto.sign(signKey, body)
+          const image_sign = sbCrypto.sign(signKey, this.contents.image)
+          const imageMetadata_sign = sbCrypto.sign(signKey, JSON.stringify(this.contents.imageMetaData))
           Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
             this.contents.sign = values[0]
             this.contents.image_sign = values[1]
@@ -1531,7 +1573,7 @@ class SBFile {
   constructor(file: File, signKey: CryptoKey, key: CryptoKey) {
     this.senderPubKey = key;
     // psm: again, why are we signing empty contents?
-    this.sign = SB_Crypto.sign(signKey, this.contents);
+    this.sign = sbCrypto.sign(signKey, this.contents);
     if (file.type.match(/^image/i)) {
       this.#asImage(file, signKey)
     } else {
@@ -1553,14 +1595,14 @@ class SBFile {
     // // psm: not sure what this does next, but the new SBImage class should do all this for you
     // // @ts-ignore
     // this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
-    // this.image_sign = await SB_Crypto.sign(signKey, this.image);
+    // this.image_sign = await sbCrypto.sign(signKey, this.image);
     // this.imageMetaData = JSON.stringify({
     //   imageId: fullHash.id,
     //   previewId: previewHash.id,
     //   imageKey: fullHash.key,
     //   previewKey: previewHash.key
     // });
-    // this.imageMetadata_sign = await SB_Crypto.sign(signKey, this.imageMetaData)
+    // this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
   }
 
   /!**
@@ -2148,8 +2190,8 @@ class Channel {
   //       const _exportable_pubKey: JsonWebKey = await _self.defaultIdentity!.exportable_pubKey.then();
   //       const _privateKey: CryptoKey = await _self.defaultIdentity!.privateKey.then();
   //       let isVerifiedGuest = false;
-  //       const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
-  //       const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
+  //       const _owner_pubKey = await sbCrypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
+  //       const isOwner = sbCrypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
 
   //       // TODO: this handles the cookie/admin mechanism from an SSO
   //       // BROWSER
@@ -2170,22 +2212,22 @@ class Channel {
   //           this.api.postPubKey(_exportable_pubKey);
   //           _exportable_verifiedGuest_pubKey = { ..._exportable_pubKey };
   //         }
-  //         if (SB_Crypto.areKeysSame(_exportable_verifiedGuest_pubKey, _exportable_pubKey)) {
+  //         if (sbCrypto.areKeysSame(_exportable_verifiedGuest_pubKey, _exportable_pubKey)) {
   //           isVerifiedGuest = true;
   //         }
   //       }
 
-  //       const _encryption_key: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_encryption_key, 'AES', false, ['encrypt', 'decrypt']);
+  //       const _encryption_key: CryptoKey = await sbCrypto.importKey('jwk', _exportable_encryption_key, 'AES', false, ['encrypt', 'decrypt']);
 
-  //       const _room_privateSignKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signKey, 'ECDH', true, ['deriveKey']);
-  //       const _exportable_room_signPubKey: JsonWebKey | null = SB_Crypto.extractPubKey(_exportable_room_signKey);
+  //       const _room_privateSignKey: CryptoKey = await sbCrypto.importKey('jwk', _exportable_room_signKey, 'ECDH', true, ['deriveKey']);
+  //       const _exportable_room_signPubKey: JsonWebKey | null = sbCrypto.extractPubKey(_exportable_room_signKey);
 
-  //       const _room_signPubKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signPubKey!, 'ECDH', true, []);
-  //       const _personal_signKey: CryptoKey = await SB_Crypto.deriveKey(_privateKey, _room_signPubKey, 'HMAC', false, ['sign', 'verify']);
+  //       const _room_signPubKey: CryptoKey = await sbCrypto.importKey('jwk', _exportable_room_signPubKey!, 'ECDH', true, []);
+  //       const _personal_signKey: CryptoKey = await sbCrypto.deriveKey(_privateKey, _room_signPubKey, 'HMAC', false, ['sign', 'verify']);
   //       let _shared_key: CryptoKey | null;
 
   //       if (!isOwner) {
-  //         _shared_key = await SB_Crypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
+  //         _shared_key = await sbCrypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
   //       }
 
   //       let _locked_key
@@ -2195,11 +2237,11 @@ class Channel {
   //       //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
   //       // }
   //       if (_exportable_locked_key !== null) {
-  //         _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
+  //         _locked_key = await sbCrypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
   //       } else if (keys.locked_key) {
-  //         const _string_locked_key: string = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
+  //         const _string_locked_key: string = await sbCrypto.decrypt(isOwner ? await sbCrypto.deriveKey(keys.privateKey, await sbCrypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
   //         _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
-  //         _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key!, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
+  //         _locked_key = await sbCrypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key!, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
   //       }
 
   //       this.#keys = {
@@ -2271,7 +2313,7 @@ class ChannelSocket {
         // TODO - in progress
         this.#channel.keys.then((keys) => {
           keys.encryptionKey.then((encryptionKey) => {
-            SB_Crypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), encryptionKey, 'string').then((c) => {
+            sbCrypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), encryptionKey, 'string').then((c) => {
               resolve({ encrypted_contents: c })
             })
           })
@@ -2282,7 +2324,7 @@ class ChannelSocket {
 
   // return new Promise(async (resolve, reject) => {
   //   try {
-  //     const msg = {encrypted_contents: await SB_Crypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
+  //     const msg = {encrypted_contents: await sbCrypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
   //     resolve(JSON.stringify(msg));
   //   } catch (e) {
   //     console.error(e);
@@ -2293,7 +2335,7 @@ class ChannelSocket {
 
   async unwrap(payload: Dictionary, key: CryptoKey) {
     try {
-      const msg = await SB_Crypto.decrypt(key, payload.encrypted_contents);
+      const msg = await sbCrypto.decrypt(key, payload.encrypted_contents);
       // psm: i think this throws in case of error
       // if (msg['error']) {
       //   return {error: msg['error']};
@@ -2433,11 +2475,11 @@ class ChannelSocket {
     let unwrapped: string
     if (message.encrypted_contents) {
       try {
-          unwrapped = await SB_Crypto.decrypt(await (await this.#channel.keys.then()).encryptionKey.then(),
+        unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).encryptionKey.then(),
           message.encrypted_contents!, 'string');
       } catch (e) {
         console.warn(e);
-          unwrapped = await SB_Crypto.decrypt(await (await this.#channel.keys.then()).lockedKey,
+        unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).lockedKey,
           message.encrypted_contents, 'string');
       }
     } else {
@@ -2490,7 +2532,7 @@ class StorageApi {
    * StorageApi().getFileKey
    */
   async #getFileKey(fileHash: string, _salt: Uint8Array) {
-    const keyMaterial = await SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+    const keyMaterial = await sbCrypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
 
     // @psm TODO - Support deriving from PBKDF2 in deriveKey function
     const key: CryptoKey = await crypto.subtle.deriveKey({
@@ -2623,7 +2665,7 @@ class StorageApi {
     const salt: Uint8Array = data.salt;
     const image_key: CryptoKey = await this.#getFileKey(imageMetaData!.previewKey!, salt);
     const encrypted_image: string = data.image;
-    const padded_img: ArrayBuffer = str2ab(await SB_Crypto.decrypt(image_key, {
+    const padded_img: ArrayBuffer = str2ab(await sbCrypto.decrypt(image_key, {
       content: encrypted_image,
       iv: iv
     }, 'arrayBuffer'));
@@ -2652,7 +2694,7 @@ class StorageApi {
     const salt = data.salt;
     const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
     const encrypted_image = data.image;
-    const padded_img = str2ab(await SB_Crypto.decrypt(image_key, {
+    const padded_img = str2ab(await sbCrypto.decrypt(image_key, {
       content: encrypted_image,
       iv: iv
     }, 'arrayBuffer'));
@@ -2865,7 +2907,7 @@ class ChannelApi {
     return new Promise(async (resolve, reject) => {
       //if (this.#channel.owner) {
       const token_data: string = new Date().getTime().toString();
-      const token_sign: string = await SB_Crypto.sign(this.#channel.keys.personal_signKey, token_data);
+      const token_sign: string = await sbCrypto.sign(this.#channel.keys.personal_signKey, token_data);
       fetch(this.#channelServer + this.#channel.channel_id + '/getAdminData', {
         method: 'GET', credentials: 'include', headers: {
           'authorization': token_data + '.' + token_sign, 'Content-Type': 'application/json'
@@ -3042,8 +3084,8 @@ class ChannelApi {
     }
     return new Promise(async (resolve, reject) => {
       // psm: need some "!"
-      const shared_key = await SB_Crypto.deriveKey(await _identity.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
-      const _encrypted_locked_key = await SB_Crypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.exportable_locked_key)), shared_key, 'string')
+      const shared_key = await sbCrypto.deriveKey(await _identity.privateKey, await sbCrypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
+      const _encrypted_locked_key = await sbCrypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.exportable_locked_key)), shared_key, 'string')
       fetch(this.#channelServer + this.#channel.channel_id + '/acceptVisitor', {
         method: 'POST',
         body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
@@ -3478,7 +3520,7 @@ class Snackabra {
   }
 
   get crypto(): Crypto {
-    return SB_Crypto;
+    return sbCrypto;
   }
 
   get identity(): Identity {
