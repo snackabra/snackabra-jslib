@@ -22,6 +22,16 @@ interface ChannelData {
     signKey: string;
     SERVER_SECRET: string;
 }
+interface ChannelKeys {
+    exportable_owner_pubKey: CryptoKey;
+    exportable_verifiedGuest_pubKey: CryptoKey;
+    personal_signKey: CryptoKey;
+    room_privateSignKey: CryptoKey;
+    encryptionKey: CryptoKey;
+    locked_key: CryptoKey;
+    shared_key: CryptoKey;
+    exportable_locked_key: Dictionary;
+}
 interface ImageMetaData {
     imageId?: string;
     previewId?: string;
@@ -249,7 +259,7 @@ export declare function extractPayloadV1(payload: ArrayBuffer): Dictionary;
 /**
  * Assemble payload
  */
-export declare function assemblePayload(data: Dictionary): {};
+export declare function assemblePayload(data: Dictionary): BodyInit | null;
 /**
  * Extract payload - this decodes from our binary (wire) format
  * to a JS object. This provides a binary encoding of any JSON,
@@ -295,7 +305,7 @@ declare class Crypto {
     /**
      * Encrypt
      */
-    encrypt(contents: BufferSource, secret_key: CryptoKey, outputType?: string, _iv?: ArrayBuffer | null): Promise<Dictionary>;
+    encrypt(contents: BufferSource, secret_key: CryptoKey, outputType?: string, _iv?: ArrayBuffer | null): Promise<Dictionary | string>;
     /**
      * Decrypt
      */
@@ -320,12 +330,14 @@ declare class Crypto {
  * @public
  */
 declare class Identity implements SnackabraKeys {
+    ready: Promise<Identity>;
     resolve_exportable_pubKey: (arg0: JsonWebKey | null) => void;
     resolve_exportable_privateKey: (arg0: JsonWebKey | null) => void;
     resolve_privateKey: (arg0: CryptoKey | null) => void;
     exportable_pubKey: Promise<JsonWebKey | null>;
     exportable_privateKey: Promise<JsonWebKey | null>;
     privateKey: Promise<CryptoKey | null>;
+    constructor(keys?: JsonWebKey);
     /**
      * Mint keys
      */
@@ -355,8 +367,9 @@ interface SBMessageContents {
 declare class SBMessage {
     ready: Promise<SBMessage>;
     signKey: CryptoKey;
+    identity?: Identity;
     contents: SBMessageContents;
-    constructor(channel: Channel, body: string);
+    constructor(channel: Channel, body: string, identity?: Identity);
 }
 /**
  * SBFile
@@ -402,13 +415,13 @@ declare class Channel {
     verifiedGuest: boolean;
     metaData: Dictionary;
     storage?: StorageApi;
-    constructor(sbServer: Snackabra, channel_id: string, identity: Identity);
+    constructor(sbServer: Snackabra, channel_id: string, identity?: Identity);
     /**
      * Channel.keys()
      *
      * Return keys
      */
-    get keys(): Dictionary;
+    get keys(): ChannelKeys;
     /**
      * Channel.api()
      */
@@ -419,6 +432,32 @@ declare class Channel {
     get socket(): ChannelSocket;
     /**
      * Channel.loadKeys()
+     *
+     * When connecting to a channel server, the first thing it replies with is a set of
+     * keys for operating against the channel. Here we load those into the channel.
+     *
+     * Specifically the server will respond with something like this: ::
+     *
+     *   {"ready":true,
+     *    "keys":{
+     *            "ownerKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+     *                        \"x\":\"9s17B4i0Cuf_w9XN_uAq2DFePOr6S3sMFMA95KjLN8akBUWEhPAcuMEMwNUlrrkN\",
+     *                        \"y\":\"6dAtcyMbtsO5ufKvlhxRsvjTmkABGlTYG1BrEjTpwrAgtmn6k25GR7akklz9klBr\"}",
+     *            "guestKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+     *                         \"x\":\"Lx0eJcbNuyEfHDobWaZqgy9UO7ppxVIsEpEtvbzkAlIjySh9lY2AvgnACREO6QXD\",
+     *                         \"y\":\"zEHPgpsl4jge_Q-K6ekuzi2bQOybnaPT1MozCFQJnXEePBX8emkHriOiwl6P8BAS\"}",
+     *            "encryptionKey":"{\"alg\":\"A256GCM\",\"ext\":true,
+     *                             \"k\":\"F0sQTTLXDhuvvmgGQLzMoeHPD-SJlFyhfOD-cqejEOU\",
+     *                             \"key_ops\":[\"encrypt\",\"decrypt\"],\"kty\":\"oct\"}",
+     *            "signKey":"{\"crv\":\"P-384\",
+     *                        \"d\":\"KCJHDZ34XgVFsS9-sU09HFzXZhnGCvnDgJ5a8GTSfjuJQaq-1N2acvchPRhknk8B\",
+     *                        \"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",
+     *                        \"x\":\"rdsyBle0DD1hvp2OE2mINyyI87Cyg7FS3tCQUIeVkfPiNOACtFxi6iP8oeYt-Dge\",
+     *                        \"y\":\"qW9VP72uf9rgUU117G7AfTkCMncJbT5scIaIRwBXfqET6FYcq20fwSP7R911J2_t\"}"
+     *             },
+     *     "motd":"",
+     *     "roomLocked":false}
+     *
      */
     loadKeys(keys: Dictionary): Promise<unknown>;
 }
@@ -482,11 +521,11 @@ declare class ChannelSocket {
 declare class StorageApi {
     #private;
     server: string;
-    constructor(server: string, channel: Channel, identity: Identity);
+    constructor(server: string);
     /**
      * StorageApi.saveFile()
      */
-    saveFile(file: File): Promise<void>;
+    saveFile(sbFile: SBFile, channel: Channel): Promise<void>;
     /**
      * StorageApi().storeRequest
      */
@@ -527,8 +566,7 @@ declare class StorageApi {
  */
 declare class ChannelApi {
     #private;
-    server: string;
-    constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
+    constructor(sbServer: Snackabra, channel: Channel, identity?: Identity);
     /**
      * getLastMessageTimes
      */
@@ -589,7 +627,7 @@ declare class ChannelApi {
  */
 declare class Snackabra {
     #private;
-    storageApi: StorageApi;
+    defaultIdentity?: Identity;
     options: SnackabraOptions;
     /**
      * Constructor expects an object with the names of the matching servers, for example
@@ -620,12 +658,12 @@ declare class Snackabra {
      * Returns the :term:`Channel Name`.
      * (TODO: token-based approval of storage spend)
      */
-    create(serverSecret: string): Promise<string>;
-    get channel(): any;
-    get storage(): any;
+    create(serverSecret: string, identity: Identity): Promise<string>;
+    get channel(): Channel;
+    get storage(): StorageApi;
     get crypto(): Crypto;
-    get identity(): any;
+    get identity(): Identity;
     sendMessage(message: SBMessage): void;
-    sendFile(file: File): void;
+    sendFile(file: SBFile): void;
 }
-export { Channel, Snackabra, SBMessage, SBFile, };
+export { Channel, Identity, SBFile, SBMessage, Snackabra, };

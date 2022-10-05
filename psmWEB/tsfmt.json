@@ -10,17 +10,18 @@
   ;; vcode defaults, from:
   ;; https://github.com/Microsoft/vscode/blob/main/tsfmt.json 
 
-  ;; "convertTabsToSpaces": false,
-  ;; "insertSpaceAfterCommaDelimiter": true,
-  ;; "insertSpaceAfterSemicolonInForStatements": true,
-  ;; "insertSpaceBeforeAndAfterBinaryOperators": true,
-  ;; "insertSpaceAfterKeywordsInControlFlowStatements": true,
-  ;; "insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
-  ;; "insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis": false,
-  ;; "insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
-  ;; "insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces": false,
-  ;; "insertSpaceAfterOpeningAndBeforeClosingEmptyBraces": true,
-  ;; "insertSpaceBeforeFunctionParenthesis": false,
-  ;; "placeOpenBraceOnNewLineForFunctions": false,
-  ;; "placeOpenBraceOnNewLineForControlBlocks": false
+  "convertTabsToSpaces": false,
+
+  "insertSpaceAfterCommaDelimiter": true,
+  "insertSpaceAfterSemicolonInForStatements": true,
+  "insertSpaceBeforeAndAfterBinaryOperators": true,
+  "insertSpaceAfterKeywordsInControlFlowStatements": true,
+  "insertSpaceAfterFunctionKeywordForAnonymousFunctions": true,
+  "insertSpaceAfterOpeningAndBeforeClosingNonemptyParenthesis": true,
+  "insertSpaceAfterOpeningAndBeforeClosingNonemptyBrackets": false,
+  "insertSpaceAfterOpeningAndBeforeClosingTemplateStringBraces": false,
+  "insertSpaceAfterOpeningAndBeforeClosingEmptyBraces": true,
+  "insertSpaceBeforeFunctionParenthesis": false,
+  "placeOpenBraceOnNewLineForFunctions": false,
+  "placeOpenBraceOnNewLineForControlBlocks": false
 }

@@ -1,4 +1,4 @@
- // Copyright (c) 2022 Magnusson Institute, All Rights Reserved.
+// Copyright (c) 2022 Magnusson Institute, All Rights Reserved.
 
 // to use this, simply add module script import in html:
 //  <script type="module" src="./test01.js"></script>
@@ -47,12 +47,13 @@ import {
   base64ToArrayBuffer,
   arrayBufferToBase64,
   getRandomValues,
-  jsonParseWrapper,
+  // jsonParseWrapper,
+  // Channel,
+  Identity,
   MessageBus,
+  // SBFile,
   SBMessage,
-  ChannelMessage,
-  Channel,
-  Snackabra
+  Snackabra,
 } from './snackabra.js';
 
 
@@ -93,19 +94,18 @@ const z2 = [
 // TODO: we should probably have an SB class for buffers
 
 const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
-   ? new DataView(bs)
-   : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
+  ? new DataView(bs)
+  : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
 
 // compare buffers
 function compareBuffers(a: Uint8Array | ArrayBuffer | null,
-			b: Uint8Array | ArrayBuffer | null): boolean
-{
+  b: Uint8Array | ArrayBuffer | null): boolean {
   if (typeof a != typeof b) return false
   if ((a == null) || (b == null)) return false
   const av = bs2dv(a)
   const bv = bs2dv(b)
   if (av.byteLength !== bv.byteLength) return false
-  for (let i=0; i < av.byteLength; i++)  if (av.getUint8(i) !== bv.getUint8(i)) return false
+  for (let i = 0; i < av.byteLength; i++)  if (av.getUint8(i) !== bv.getUint8(i)) return false
   return true
 }
 
@@ -120,9 +120,8 @@ function compareBuffers(a: Uint8Array | ArrayBuffer | null,
 // }
 
 function test_with_array(test_dom: Element | null,
-			 test_index: number,
-			 array: ArrayBuffer | null)
-{
+  test_index: number,
+  array: ArrayBuffer | null) {
   if ((test_dom == null) || (array == null)) {
     assert(false, "test_with_array() passed on or more null values")
     return
@@ -294,71 +293,61 @@ const key = {
 
 // new tiny 'hello'
 if (test_list.includes('test04a')) {
+  // "me", note 'key' is set above as a const
+  const myId = new Identity(key)
+  // create SB (orchestration) object
   const SB = new Snackabra(sb_config)
-  // note 'key' set as const above globally
-  SB.create('password').then((c) => {
+  // create a new room (channel)
+  SB.create('password', myId).then((channelId) => {
+    // we have a nice new channel
+    const roomUrl = `localhost:3000/rooms/${channelId}`
     z.innerHTML += ' ... received new channel:<br\>';
-    z.innerHTML += `<a href="localhost:3000/rooms/${c}">${c}</a><br\n>`;
-    channel_id_resolve(c);
+    z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br\n>`;
 
+    console.log("@@@@@@@@@@@@@@@@ created ID and created room:")
+    console.log(myId)
+    console.log(roomUrl)
 
+    SB.connect(channelId, myId).then((c) => {
+      console.log("@@@@@@@@@@@@@@@@ got ourselves a channel:")
+      console.log(c)
 
-  channel_id.then((channel_id) => {
-
-   console.log("localhost:3000/rooms/" + channel_id)
-
-      
-    const SB = new Snackabra(sb_config);
-
-
-    SB.setIdentity(key).then(async () => {
-      const c = await SB.connect(channel_id);
-
-      const messages = [];
-      const controlMessages = [];
+      // const messages = [];
+      // const controlMessages = [];
 
       console.log("@@@@@@@@@@@@@@@@ channel has keys:")
-      console.log(SB.channel.keys)
-       
+      console.log(c.keys)
+
       console.log("@@@@@@@@@@@@@@@@ trying to send message!")
 
       let sbm = new SBMessage(c, "Hello from test04b!")
-      let myPubKey: JsonWebKey
 
-      SB.identity.exportable_pubKey.then((pubKey) => {
-	console.log("Got pubkey: ", pubKey)
-	sbm.ready.then(() => {
-	  sbm.sender_pubKey = pubKey! // should be per channel?
-	  myPubKey = pubKey!
+      console.log("@@@@@@@@@@@@@@@@ will try to send this message:")
+      console.log(sbm)
 
-	  console.log("here is sender pubkey:", myPubKey)
-	  // console.log("trying to re-import key, i get:")
-	  // console.log(await crypto.importKey("jwk", myPubKey, "ECDH", true, []))
-	  // myPubKey.key_ops = ['deriveKey', 'sign']
-	  // console.log("trying again:")
-	  // console.log(await importKey("jwk", myPubKey, "ECDH", true, []))
-
-	  console.log("@@@@@@@@@@@@@@@@ will try to send this message:")
-	  console.log(sbm)
-	  c.socket.send(sbm).then((c) => console.log("back from send promise?"))
-	  console.log("@@@@@@@@@@@@@@@@ end of test")
-	})
+      c.socket.send(sbm).then((c) => {
+        console.log("back from send promise? got response:")
+        console.log(c)
+        console.log("@@@@@@@@@@@@@@@@ end of test")
       })
-      c.socket.onMessage = async (message: ChannelMessage) => {
-        console.log('Message Received:\n ', message);
+
+      // in parallel, handle incoming messages:
+      c.socket.onMessage = async (message: any) => {
+        console.log('Message Received:')
+        console.log(message)
       }
 
-      // send more hello
-      let messageCount = 0
-      getElement('sayHello').onclick = (() => {
-	messageCount++
-	let msg = new SBMessage(c, `message number ${messageCount}!`)
-	// @ts-ignore
-	sbm.sender_pubKey = JSON.stringify(myPubKey)
-	console.log(`================ sending message number ${messageCount}:`)
-	console.log(sbm)
-	c.socket.send(sbm).then((c) => console.log("back from send promise?"))
-      })
+      // // send more hello
+      // let messageCount = 0
+      // getElement('sayHello').onclick = (() => {
+      //   messageCount++
+      //   let msg = new SBMessage(c, `message number ${messageCount}!`)
+      //   // @ts-ignore
+      //   sbm.sender_pubKey = JSON.stringify(myPubKey)
+      //   console.log(`================ sending message number ${messageCount}:`)
+      //   console.log(sbm)
+      //   c.socket.send(sbm).then((c) => console.log("back from send promise?"))
+      // })
 
     });
   });
@@ -425,7 +414,7 @@ if (test_list.includes('test04a')) {
 
 //       console.log("@@@@@@@@@@@@@@@@ channel has keys:")
 //       console.log(SB.channel.keys)
-       
+
 //       console.log("@@@@@@@@@@@@@@@@ trying to send message!")
 
 //       let sbm = new SBMessage(c, "Hello from test04b!")
@@ -536,7 +525,7 @@ if (test_list.includes('test04a')) {
 //   const publicKey = generatePublicKey(suite, privateKey);
 //   const client = new VOPRFClient(suite, publicKey);
 //   console.log("Public key (49 bytes so b64 will be padded): ", arrayBufferToBase64(publicKey.buffer));
-  
+
 //   // client generates input (it's secret)
 //   const input = new TextEncoder().encode("This is the client's input");
 //   console.log("Client input 1: ", arrayBufferToBase64(input));
@@ -556,7 +545,7 @@ if (test_list.includes('test04a')) {
 //   const evaluation2 = await server.evaluate(evalReq2);
 //   const output2 = await client.finalize(finData2, evaluation2);
 //   console.log("Test 2, returns: ", arrayBufferToBase64(output2[0]));
-  
+
 //   console.log("testing again with same client secret");
 //   const [finData3, evalReq3] = await client.blind([input2]);
 //   const evaluation3 = await server.evaluate(evalReq3);
