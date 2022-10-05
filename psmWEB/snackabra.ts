@@ -26,7 +26,6 @@
   BELOW HERE is what eventually becomes final code ..
 */
 
-
 /* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
 
 /* Distributed under GPL-v03, see 'LICENSE' file for details */
@@ -42,6 +41,7 @@ interface SnackabraOptions {
   storage_server: string,
 }
 
+// TODO: phasing out 
 interface SnackabraKeys {
   exportable_pubKey: JsonWebKey | Promise<JsonWebKey | null>
   exportable_privateKey: JsonWebKey | Promise<JsonWebKey | null>
@@ -82,16 +82,18 @@ interface ChannelData {
   SERVER_SECRET: string;
 }
 
-interface ChannelKeys {
-  exportable_owner_pubKey: CryptoKey;
-  exportable_verifiedGuest_pubKey: CryptoKey;
-  personal_signKey: CryptoKey;
-  room_privateSignKey: CryptoKey;
-  encryptionKey: CryptoKey;
-  locked_key: CryptoKey;
-  shared_key: CryptoKey;
-  exportable_locked_key: Dictionary;
-}
+
+// psm: replacing this old stuff ... 
+// interface ChannelKeys {
+//   exportable_owner_pubKey: CryptoKey;
+//   exportable_verifiedGuest_pubKey: CryptoKey;
+//   personal_signKey: CryptoKey;
+//   room_privateSignKey: CryptoKey;
+//   encryptionKey: CryptoKey;
+//   locked_key: CryptoKey;
+//   shared_key: CryptoKey;
+//   exportable_locked_key: Dictionary;
+// }
 
 /*
   format is a single string:
@@ -113,6 +115,7 @@ interface ChannelMessage2 {
   keys?: {
     ownerKey: Dictionary,
     encryptionKey: Dictionary,
+    guestKey?: Dictionary,
     signKey: Dictionary,
   },
   _id?: string,
@@ -146,16 +149,47 @@ interface ChannelSystemMessage {
 
 /* **************** New System **************** */
 
-interface ChannelRoomKeys {
-  type: 'roomKeys',
-  encryptionKey: JsonWebKey,
-  guestKey: JsonWebKey,
-  ownerKey: JsonWebKey,
-  signKey: JsonWebKey
+
+/*
+ * { "ready": true,
+ *    "keys": {
+ *            "ownerKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+ *                        \"x\":\"9s17B4i0Cuf_w9XN_uAq2DFePOr6S3sMFMA95KjLN8akBUWEhPAcuMEMwNUlrrkN\",
+ *                        \"y\":\"6dAtcyMbtsO5ufKvlhxRsvjTmkABGlTYG1BrEjTpwrAgtmn6k25GR7akklz9klBr\"}",
+ *            "guestKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+ *                         \"x\":\"Lx0eJcbNuyEfHDobWaZqgy9UO7ppxVIsEpEtvbzkAlIjySh9lY2AvgnACREO6QXD\",
+ *                         \"y\":\"zEHPgpsl4jge_Q-K6ekuzi2bQOybnaPT1MozCFQJnXEePBX8emkHriOiwl6P8BAS\"}",
+ *            "encryptionKey": "{\"alg\":\"A256GCM\",\"ext\":true,
+ *                             \"k\":\"F0sQTTLXDhuvvmgGQLzMoeHPD-SJlFyhfOD-cqejEOU\",
+ *                             \"key_ops\":[\"encrypt\",\"decrypt\"],\"kty\":\"oct\"}",
+ *            "signKey": "{\"crv\":\"P-384\",
+ *                        \"d\":\"KCJHDZ34XgVFsS9-sU09HFzXZhnGCvnDgJ5a8GTSfjuJQaq-1N2acvchPRhknk8B\",
+ *                        \"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",
+ *                        \"x\":\"rdsyBle0DD1hvp2OE2mINyyI87Cyg7FS3tCQUIeVkfPiNOACtFxi6iP8oeYt-Dge\",
+ *                        \"y\":\"qW9VP72uf9rgUU117G7AfTkCMncJbT5scIaIRwBXfqET6FYcq20fwSP7R911J2_t\"}"
+ *             },
+ * "motd": "",
+ * "roomLocked": false}
+ */
+
+interface ChannelKeys {
+  encryptionKey: Promise<CryptoKey>,
+  guestKey?: Promise<CryptoKey>,
+  ownerKey: Promise<CryptoKey>,
+  signKey: Promise<CryptoKey>,
+  lockedKey?: Promise<CryptoKey>,
+}
+
+interface ChannelKeysMessage {
+  type: 'channelKeys',
+  ready: boolean,
+  keys: ChannelKeys,
+  motd: string,
+  roomLocked: boolean
 }
 
 interface ChannelEncryptedMessage {
-  type: 'channelMssage',
+  type: 'channelMessage',
   // base64 - 64 chars (512 bits), e.g:
   // 'wDUMRbcfFhdmByuwMhFyR46MRlcZh-6gKRUhSPkWEQLSRUPE8_jqixV3VQevTDBy'
   channelID: string,
@@ -174,7 +208,124 @@ interface ChannelEncryptedMessageArray {
 }
 
 // mtg: we shouldn't need the export here because we are using them internally
-export type ChannelMessageV2 = ChannelRoomKeys | ChannelEncryptedMessage | ChannelEncryptedMessageArray
+export type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void
+
+export type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys'
+
+
+
+/**
+ * deserializeMessage()
+ * 
+ * @param {string} m raw message string
+ * @param {ChannelMessageTypes} expect expected (required) type (exception if it's not)
+ */
+export function deserializeMessage(m: string, expect?: ChannelMessageTypes): ChannelMessage {
+  try {
+    if ((expect) && (expect == 'channelKeys')) {
+      let m0 = JSON.parse(m) // no wrapping because we want the exception here
+      let keys: ChannelKeys = {
+        ownerKey: SB_Crypto.importKey('jwk', JSON.parse(m0.keys.ownerKey), 'ECDH', false, []),
+        encryptionKey: SB_Crypto.importKey('jwk', JSON.parse(m0.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
+        signKey: SB_Crypto.importKey('jwk', JSON.parse(m0.keys.importKey), 'ECDH', true, ['deriveKey']),
+      }
+      if (m0.keys.guestKey) keys.guestKey = SB_Crypto.importKey('jwk', JSON.parse(m0.keys.guestKey), 'ECDH', false, [])
+      let m1: ChannelKeysMessage = {
+        type: 'channelKeys',
+        ready: m0.ready,
+        keys: keys,
+        motd: m0.motd,
+        roomLocked: m0.roomLocked,
+      }
+      return m1
+    }
+  } catch (e) {
+    console.error(e)
+    throw new Error('Failed to parse message, see log for details')
+  }
+}
+
+
+// // TODO: keep adding message type
+// // TODO: processing this:
+
+
+//   const _exportable_room_signKey: JsonWebKey = jsonParseWrapper(keys.signKey, 'L1470');
+//   const _exportable_encryption_key: JsonWebKey = jsonParseWrapper(keys.encryptionKey, 'L1471');
+//   let _exportable_verifiedGuest_pubKey: JsonWebKey = jsonParseWrapper(keys.guestKey || null, 'L1472');
+//   const _exportable_pubKey: JsonWebKey = await _self.defaultIdentity!.exportable_pubKey.then();
+//   const _privateKey: CryptoKey = await _self.defaultIdentity!.privateKey.then();
+//   let isVerifiedGuest = false;
+//   const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
+//   const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
+
+//   // TODO: this handles the cookie/admin mechanism from an SSO
+//   // BROWSER
+
+//   // hardcoded to only trust cookies from 'privacy.app' SSO (MI):
+//   // const isAdmin: boolean = (document.cookie.split('; ').find((row: string) =>
+//   //     row.startsWith('token_' + this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
+//   // NODE? not sure what fallback this is:
+//   //   const isAdmin: boolean = (this.url !== 'https://s_socket.privacy.app' && isOwner);
+//   // and this might be local dev override?
+//   //   const isAdmin = (process.env.REACT_APP_ROOM_SERVER !== 's_socket.privacy.app' && isOwner);
+
+//   // for now disabled feature (TODO this is for SSO support which adds an 'admin' status)
+//   const isAdmin: boolean = false
+
+//   if (!isOwner && !isAdmin) {
+//     if (_exportable_verifiedGuest_pubKey === null) {
+//       this.api.postPubKey(_exportable_pubKey);
+//       _exportable_verifiedGuest_pubKey = { ..._exportable_pubKey };
+//     }
+//     if (SB_Crypto.areKeysSame(_exportable_verifiedGuest_pubKey, _exportable_pubKey)) {
+//       isVerifiedGuest = true;
+//     }
+//   }
+
+//   const _encryption_key: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_encryption_key, 'AES', false, ['encrypt', 'decrypt']);
+
+//   const _room_privateSignKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signKey, 'ECDH', true, ['deriveKey']);
+//   const _exportable_room_signPubKey: JsonWebKey | null = SB_Crypto.extractPubKey(_exportable_room_signKey);
+
+//   const _room_signPubKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signPubKey!, 'ECDH', true, []);
+//   const _personal_signKey: CryptoKey = await SB_Crypto.deriveKey(_privateKey, _room_signPubKey, 'HMAC', false, ['sign', 'verify']);
+
+//   let _shared_key: CryptoKey | null;
+
+//   if (!isOwner) {
+//     _shared_key = await SB_Crypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
+//   }
+
+//   let _locked_key
+//   // if (process.browser) {
+//   let _exportable_locked_key: string | null = await _localStorage.getItem(this.channel_id + '_lockedKey');
+//   // } else {
+//   //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
+//   // }
+//   if (_exportable_locked_key !== null) {
+//     _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
+//   } else if (keys.locked_key) {
+//     const _string_locked_key: string = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
+//     _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
+//     _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key!, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
+//   }
+
+//   this.#keys = {
+//     shared_key: _shared_key!,
+//     exportable_owner_pubKey: _exportable_owner_pubKey,
+//     exportable_verifiedGuest_pubKey: _exportable_verifiedGuest_pubKey,
+//     personal_signKey: _personal_signKey,
+//     room_privateSignKey: _room_privateSignKey,
+//     encryptionKey: _encryption_key,
+//     locked_key: _locked_key,
+//     exportable_locked_key: _exportable_locked_key
+//   };
+//   this.owner = isOwner;
+//   this.admin = isAdmin;
+//   this.verifiedGuest = isVerifiedGuest;
+//   resolve(true);
+// });
 
 
 /* **************** New System **************** */
@@ -189,7 +340,7 @@ interface ChannelMessage1 {
   message: { [prop: string]: any },
 }
 
-export type ChannelMessage = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
+export type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
 
 // function dictToMessage(d:  Dictionary | undefined): ChannelMessage {
 //   let r: ChannelMessage = {type: 'invalid'} // default
@@ -687,7 +838,7 @@ export function importPublicKey(pem?: string) {
   // const pemContents = pem.substring(pemHeader.length, pem.length - pemFooter.length);
   // console.log(pemContents)
   const binaryDer = base64ToArrayBuffer(pemContents);
-  return crypto.subtle.importKey('spki', binaryDer, {name: 'RSA-OAEP', hash: 'SHA-256'}, true, ['encrypt']);
+  return crypto.subtle.importKey('spki', binaryDer, { name: 'RSA-OAEP', hash: 'SHA-256' }, true, ['encrypt']);
 }
 
 /**
@@ -775,14 +926,14 @@ export function cleanBase32mi(s: string) {
  */
 export function packageEncryptDict(dict: Dictionary, publicKeyPEM: string, callback: CallableFunction) {
   const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
-  const aesAlgorithmKeyGen = {name: 'AES-GCM', length: 256};
-  const aesAlgorithmEncrypt = {name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(16))};
+  const aesAlgorithmKeyGen = { name: 'AES-GCM', length: 256 };
+  const aesAlgorithmEncrypt = { name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(16)) };
   if (!publicKeyPEM) publicKeyPEM = defaultPublicKeyPEM;
   // Create a key generator to produce a one-time-use AES key to encrypt some data
   crypto.subtle.generateKey(aesAlgorithmKeyGen, true, ['encrypt']).then((aesKey) => {
     // we are exporting the symmetric AES key so we can encrypt it using pub key
     crypto.subtle.exportKey('raw', aesKey).then((theKey) => {
-      const rsaAlgorithmEncrypt = {name: 'RSA-OAEP'};
+      const rsaAlgorithmEncrypt = { name: 'RSA-OAEP' };
       importPublicKey(publicKeyPEM).then((publicKey) => {
         return crypto.subtle.encrypt(rsaAlgorithmEncrypt, publicKey, theKey);
       }).then((buf) => {
@@ -895,7 +1046,7 @@ export function assemblePayload(data: Dictionary): BodyInit | null {
     for (const key in data) {
       if (data.key) {
         keyCount++;
-        metadata[keyCount.toString()] = {name: key, start: startIndex, size: data[key].byteLength};
+        metadata[keyCount.toString()] = { name: key, start: startIndex, size: data[key].byteLength };
         startIndex += data[key].byteLength;
       }
     }
@@ -1017,7 +1168,7 @@ class Crypto {
    */
   extractPubKey(privateKey: JsonWebKey): JsonWebKey | null {
     try {
-      const pubKey: JsonWebKey = {...privateKey};
+      const pubKey: JsonWebKey = { ...privateKey };
       delete pubKey.d;
       delete pubKey.dp;
       delete pubKey.dq;
@@ -1051,8 +1202,8 @@ class Crypto {
    */
   importKey(format: KeyFormat, key: BufferSource | JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey> {
     const keyAlgorithms = {
-      ECDH: {name: 'ECDH', namedCurve: 'P-384'},
-      AES: {name: 'AES-GCM'},
+      ECDH: { name: 'ECDH', namedCurve: 'P-384' },
+      AES: { name: 'AES-GCM' },
       PBKDF2: 'PBKDF2'
     }
     if (format === 'jwk') {
@@ -1076,9 +1227,9 @@ class Crypto {
       };
       try {
         resolve(await crypto.subtle.deriveKey({
-            name: 'ECDH',
-            public: publicKey
-          },
+          name: 'ECDH',
+          public: publicKey
+        },
           privateKey,
           keyAlgorithms[type],
           extractable,
@@ -1104,7 +1255,7 @@ class Crypto {
           'salt': _salt,
           'iterations': 100000, // small is fine, we want it snappy
           'hash': 'SHA-256'
-        }, keyMaterial, {'name': 'AES-GCM', 'length': 256}, true, ['encrypt', 'decrypt']);
+        }, keyMaterial, { 'name': 'AES-GCM', 'length': 256 }, true, ['encrypt', 'decrypt']);
         // return key;
         resolve(key);
       } catch (e) {
@@ -1138,7 +1289,7 @@ class Crypto {
         console.log(encrypted)
         resolve((outputType === 'string') ? {
           content: encodeURIComponent(arrayBufferToBase64(encrypted)), iv: encodeURIComponent(arrayBufferToBase64(iv))
-        } : {content: encrypted, iv: iv});
+        } : { content: encrypted, iv: iv });
       } catch (e) {
         console.error(e);
         reject(e);
@@ -1293,6 +1444,9 @@ class Identity implements SnackabraKeys {
   }
 }
 
+interface resolveKeyFunction {
+  (arg0: ChannelKeys | Promise<ChannelKeys>): void
+}
 
 interface SBMessageContents {
   sender_pubKey?: JsonWebKey,
@@ -1313,9 +1467,8 @@ interface SBMessageContents {
  */
 class SBMessage {
   ready
-  signKey: CryptoKey
   identity?: Identity
-  contents: SBMessageContents = {encrypted: false, body: '', sign: '', image: '', imageMetaData: {}}
+  contents: SBMessageContents = { encrypted: false, body: '', sign: '', image: '', imageMetaData: {} }
 
   constructor(channel: Channel, body: string, identity?: Identity) {
     console.log("creating SBMessage on channel:")
@@ -1332,16 +1485,19 @@ class SBMessage {
       _sb_exception('SBMessage()', 'No Identity (and thus no encryption keys) given')
     }
 
-    this.signKey = channel.keys.personal_signKey
     this.ready = new Promise<SBMessage>((resolve) => {
-      const sign = SB_Crypto.sign(this.signKey, body);
-      const image_sign = SB_Crypto.sign(this.signKey, this.contents.image);
-      const imageMetadata_sign = SB_Crypto.sign(this.signKey, JSON.stringify(this.contents.imageMetaData))
-      Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
-        this.contents.sign = values[0]
-        this.contents.image_sign = values[1]
-        this.contents.imageMetadata_sign = values[2]
-        resolve(this)
+      channel.keys.then((keys) => {
+        keys.signKey.then((signKey) => {
+          const sign = SB_Crypto.sign(signKey, body)
+          const image_sign = SB_Crypto.sign(signKey, this.contents.image)
+          const imageMetadata_sign = SB_Crypto.sign(signKey, JSON.stringify(this.contents.imageMetaData))
+          Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
+            this.contents.sign = values[0]
+            this.contents.image_sign = values[1]
+            this.contents.imageMetadata_sign = values[2]
+            resolve(this)
+          })
+        })
       })
     })
   }
@@ -1470,9 +1626,9 @@ class SBFile {
    * restrictPhoto
    */
   async #restrictPhoto(photo: ArrayBuffer,
-                       maxSize: number, // in KB
-                       imageType: 'image/jpeg',
-                       qualityArgument: number): Promise<Blob | null> {
+    maxSize: number, // in KB
+    imageType: 'image/jpeg',
+    qualityArgument: number): Promise<Blob | null> {
     // latest and greatest JS version is in:
     // 384-snackabra-webclient/src/utils/ImageProcessor.js
     throw new Error('restrictPhoto() needs TS version')
@@ -1625,7 +1781,7 @@ class SBWebSocket {
             this.ready.then(() => {
               crypto.subtle.digest('SHA-256', new TextEncoder().encode(m)).then((hash) => {
                 const _id = arrayBufferToBase64(hash)
-                const ackPayload = {timestamp: Date.now(), type: 'ack', _id: _id}
+                const ackPayload = { timestamp: Date.now(), type: 'ack', _id: _id }
                 this.#ack[_id] = resolve
                 this.#websocket.send(m);
                 // TODO: update protocol so server acks on message
@@ -1832,13 +1988,16 @@ class Channel {
   sbServer: Snackabra
   channel_id
   defaultIdentity?: Identity
+  motd?: string
+  locked?: boolean
 
   owner: boolean = false;
   admin: boolean = false;
   verifiedGuest: boolean = false;
-  metaData: Dictionary = {};
+  // metaData: Dictionary = {};
   // #keys!: Dictionary;
-  #keys!: ChannelKeys
+
+  #keys: Promise<ChannelKeys>
   #api!: ChannelApi;
   #socket!: ChannelSocket;
 
@@ -1869,18 +2028,31 @@ class Channel {
     }
     _sb_assert(channel_id != null, 'channel_id cannot be null') // TODO: this can be done with types
     this.channel_id = channel_id
+
+    let resolveKeys: resolveKeyFunction
+
+    this.#keys = new Promise<ChannelKeys>((resolve) => resolveKeys = resolve)
+
     this.#api = new ChannelApi(this.sbServer, this, this.defaultIdentity!)
     this.#socket = new ChannelSocket(this.sbServer, this, this.defaultIdentity!)
-    this.#socket.onJoin = (message: Dictionary) => {
-      if (message?.ready) {
-        console.log("Got setup keys for channel:")
-        console.log(message);
-        this.metaData = message;
-        this.loadKeys(message.keys).then(() => {
-          this.socket.isReady();
-          // resolve(this);
-        });
-      }
+    this.#socket.onJoin = (m: string) => {
+      const message: ChannelKeysMessage = deserializeMessage(m, 'channelKeys')! as ChannelKeysMessage
+      // note: we will only return from above if all is well
+      _sb_assert(message.ready, 'got roomKeys but channel reports it is not ready (?)')
+      resolveKeys(message.keys)
+      this.motd = message.motd
+      this.locked = message.roomLocked
+
+      console.log("Got setup keys for channel:")
+      console.log(message);
+
+      // if (message?.ready) {
+      //   // this.metaData = message;
+      //   this.loadKeys(message.keys).then(() => {
+      //     this.socket.isReady();
+      //     // resolve(this);
+      //   });
+      // }
     }
 
     // we're ready when the ChannelSocket is ready, but note that the ready function can change
@@ -1899,9 +2071,9 @@ class Channel {
   /**
    * Channel.keys()
    *
-   * Return keys
+   * Return (promise to) keys
    */
-  get keys(): ChannelKeys {
+  get keys(): Promise<ChannelKeys> {
     return this.#keys;
   }
 
@@ -1948,98 +2120,102 @@ class Channel {
    *     "roomLocked":false}
    *
    */
-  loadKeys(keys: Dictionary) {
-    return new Promise(async (resolve, reject) => {
-      const _self = this
-      if (keys.ownerKey === null) {
-        console.error('did not receive owner keys - probably means no such channel')
-        reject(new Error('Channel does not exist'));
-      }
-      let _exportable_owner_pubKey: Dictionary = jsonParseWrapper(keys.ownerKey || JSON.stringify({}), 'L1460');
-      if (_exportable_owner_pubKey.key) {
-        _exportable_owner_pubKey = typeof _exportable_owner_pubKey.key === 'object' ? _exportable_owner_pubKey.key : jsonParseWrapper(_exportable_owner_pubKey.key, 'L1463');
-      }
-      try {
-        _exportable_owner_pubKey.key_ops = [];
-      } catch (error) {
-        reject(error);
-      }
-      const _exportable_room_signKey: JsonWebKey = jsonParseWrapper(keys.signKey, 'L1470');
-      const _exportable_encryption_key: JsonWebKey = jsonParseWrapper(keys.encryptionKey, 'L1471');
-      let _exportable_verifiedGuest_pubKey: JsonWebKey = jsonParseWrapper(keys.guestKey || null, 'L1472');
-      const _exportable_pubKey: JsonWebKey = await _self.defaultIdentity!.exportable_pubKey.then();
-      const _privateKey: CryptoKey = await _self.defaultIdentity!.privateKey.then();
-      let isVerifiedGuest = false;
-      const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
-      const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
 
-      // TODO: this handles the cookie/admin mechanism from an SSO
-      // BROWSER
-      // hardcoded to only trust cookies from 'privacy.app' SSO (MI):
-      // const isAdmin: boolean = (document.cookie.split('; ').find((row: string) =>
-      //     row.startsWith('token_' + this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
-      // NODE? not sure what fallback this is:
-      //   const isAdmin: boolean = (this.url !== 'https://s_socket.privacy.app' && isOwner);
-      // and this might be local dev override?
-      //   const isAdmin = (process.env.REACT_APP_ROOM_SERVER !== 's_socket.privacy.app' && isOwner);
+  //   ... all of this is getting rolled in elsewhere ...
+  //   loadKeys(keys: Dictionary) {
+  //     return new Promise(async (resolve, reject) => {
+  //       const _self = this
+  //       if (keys.ownerKey === null) {
+  //         console.error('did not receive owner keys - probably means no such channel')
+  //         reject(new Error('Channel does not exist'));
+  //       }
+  //       let _exportable_owner_pubKey: Dictionary = jsonParseWrapper(keys.ownerKey || JSON.stringify({}), 'L1460');
+  //       if (_exportable_owner_pubKey.key) {
+  //         _exportable_owner_pubKey = typeof _exportable_owner_pubKey.key === 'object' ? _exportable_owner_pubKey.key : jsonParseWrapper(_exportable_owner_pubKey.key, 'L1463');
+  //       }
+  //       try {
+  //         _exportable_owner_pubKey.key_ops = [];
+  //       } catch (error) {
+  //         reject(error);
+  //       }
+  //       const _exportable_room_signKey: JsonWebKey = jsonParseWrapper(keys.signKey, 'L1470');
+  //       const _exportable_encryption_key: JsonWebKey = jsonParseWrapper(keys.encryptionKey, 'L1471');
+  //       let _exportable_verifiedGuest_pubKey: JsonWebKey = jsonParseWrapper(keys.guestKey || null, 'L1472');
+  //       const _exportable_pubKey: JsonWebKey = await _self.defaultIdentity!.exportable_pubKey.then();
+  //       const _privateKey: CryptoKey = await _self.defaultIdentity!.privateKey.then();
+  //       let isVerifiedGuest = false;
+  //       const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
+  //       const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
 
-      // for now disabled feature (TODO this is for SSO support which adds an 'admin' status)
-      const isAdmin: boolean = false
+  //       // TODO: this handles the cookie/admin mechanism from an SSO
+  //       // BROWSER
+  //       // hardcoded to only trust cookies from 'privacy.app' SSO (MI):
+  //       // const isAdmin: boolean = (document.cookie.split('; ').find((row: string) =>
+  //       //     row.startsWith('token_' + this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
+  //       // NODE? not sure what fallback this is:
+  //       //   const isAdmin: boolean = (this.url !== 'https://s_socket.privacy.app' && isOwner);
+  //       // and this might be local dev override?
+  //       //   const isAdmin = (process.env.REACT_APP_ROOM_SERVER !== 's_socket.privacy.app' && isOwner);
 
-      if (!isOwner && !isAdmin) {
-        if (_exportable_verifiedGuest_pubKey === null) {
-          this.api.postPubKey(_exportable_pubKey);
-          _exportable_verifiedGuest_pubKey = {..._exportable_pubKey};
-        }
-        if (SB_Crypto.areKeysSame(_exportable_verifiedGuest_pubKey, _exportable_pubKey)) {
-          isVerifiedGuest = true;
-        }
-      }
+  //       // for now disabled feature (TODO this is for SSO support which adds an 'admin' status)
+  //       const isAdmin: boolean = false
 
-      const _encryption_key: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_encryption_key, 'AES', false, ['encrypt', 'decrypt']);
+  //       if (!isOwner && !isAdmin) {
+  //         if (_exportable_verifiedGuest_pubKey === null) {
+  //           // PSM: actually this appears to be an old bug, there's a race condition here
+  //           this.api.postPubKey(_exportable_pubKey);
+  //           _exportable_verifiedGuest_pubKey = { ..._exportable_pubKey };
+  //         }
+  //         if (SB_Crypto.areKeysSame(_exportable_verifiedGuest_pubKey, _exportable_pubKey)) {
+  //           isVerifiedGuest = true;
+  //         }
+  //       }
 
-      const _room_privateSignKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signKey, 'ECDH', true, ['deriveKey']);
-      const _exportable_room_signPubKey: JsonWebKey | null = SB_Crypto.extractPubKey(_exportable_room_signKey);
+  //       const _encryption_key: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_encryption_key, 'AES', false, ['encrypt', 'decrypt']);
 
-      const _room_signPubKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signPubKey!, 'ECDH', true, []);
-      const _personal_signKey: CryptoKey = await SB_Crypto.deriveKey(_privateKey, _room_signPubKey, 'HMAC', false, ['sign', 'verify']);
-      let _shared_key: CryptoKey | null;
+  //       const _room_privateSignKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signKey, 'ECDH', true, ['deriveKey']);
+  //       const _exportable_room_signPubKey: JsonWebKey | null = SB_Crypto.extractPubKey(_exportable_room_signKey);
 
-      if (!isOwner) {
-        _shared_key = await SB_Crypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
-      }
+  //       const _room_signPubKey: CryptoKey = await SB_Crypto.importKey('jwk', _exportable_room_signPubKey!, 'ECDH', true, []);
+  //       const _personal_signKey: CryptoKey = await SB_Crypto.deriveKey(_privateKey, _room_signPubKey, 'HMAC', false, ['sign', 'verify']);
+  //       let _shared_key: CryptoKey | null;
 
-      let _locked_key
-      // if (process.browser) {
-      let _exportable_locked_key: string | null = await _localStorage.getItem(this.channel_id + '_lockedKey');
-      // } else {
-      //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
-      // }
-      if (_exportable_locked_key !== null) {
-        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
-      } else if (keys.locked_key) {
-        const _string_locked_key: string = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
-        _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
-        _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key!, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
-      }
+  //       if (!isOwner) {
+  //         _shared_key = await SB_Crypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
+  //       }
 
-      this.#keys = {
-        shared_key: _shared_key!,
-        exportable_owner_pubKey: _exportable_owner_pubKey,
-        exportable_verifiedGuest_pubKey: _exportable_verifiedGuest_pubKey,
-        personal_signKey: _personal_signKey,
-        room_privateSignKey: _room_privateSignKey,
-        encryptionKey: _encryption_key,
-        locked_key: _locked_key,
-        exportable_locked_key: _exportable_locked_key
-      };
-      this.owner = isOwner;
-      this.admin = isAdmin;
-      this.verifiedGuest = isVerifiedGuest;
-      resolve(true);
-    });
-  };
-}
+  //       let _locked_key
+  //       // if (process.browser) {
+  //       let _exportable_locked_key: string | null = await _localStorage.getItem(this.channel_id + '_lockedKey');
+  //       // } else {
+  //       //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
+  //       // }
+  //       if (_exportable_locked_key !== null) {
+  //         _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
+  //       } else if (keys.locked_key) {
+  //         const _string_locked_key: string = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key!, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
+  //         _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
+  //         _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key!, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
+  //       }
+
+  //       this.#keys = {
+  //         shared_key: _shared_key!,
+  //         exportable_owner_pubKey: _exportable_owner_pubKey,
+  //         exportable_verifiedGuest_pubKey: _exportable_verifiedGuest_pubKey,
+  //         personal_signKey: _personal_signKey,
+  //         room_privateSignKey: _room_privateSignKey,
+  //         encryptionKey: _encryption_key,
+  //         locked_key: _locked_key,
+  //         exportable_locked_key: _exportable_locked_key
+  //       };
+  //       this.owner = isOwner;
+  //       this.admin = isAdmin;
+  //       this.verifiedGuest = isVerifiedGuest;
+  //       resolve(true);
+  //     });
+  //   };
+
+} /* class channel */
 
 /** Class managing connections */
 class ChannelSocket {
@@ -2085,24 +2261,31 @@ class ChannelSocket {
   //   this.#channel.loadKeys(_keys);
   // }
 
-  #wrap(sbMessage: SBMessage): Promise<string> {
-    sbMessage.ready.then(() => {
-      // TODO - in progress
-      SB_Crypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), this.#channel.keys, 'string').then((c) => {
-        const msg = {encrypted_contents: c}
+  #wrap(sbMessage: SBMessage): Promise<Dictionary> {
+    return new Promise<Dictionary>((resolve) => {
+      sbMessage.ready.then(() => {
+        // TODO - in progress
+        this.#channel.keys.then((keys) => {
+          keys.encryptionKey.then((encryptionKey) => {
+            SB_Crypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), encryptionKey, 'string').then((c) => {
+              resolve({ encrypted_contents: c })
+            })
+          })
+        })
       })
     })
-
-    // return new Promise(async (resolve, reject) => {
-    //   try {
-    //     const msg = {encrypted_contents: await SB_Crypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
-    //     resolve(JSON.stringify(msg));
-    //   } catch (e) {
-    //     console.error(e);
-    //     reject(new Error('Unable to encrypt payload.'));
-    //   }
-    // });
   }
+
+  // return new Promise(async (resolve, reject) => {
+  //   try {
+  //     const msg = {encrypted_contents: await SB_Crypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
+  //     resolve(JSON.stringify(msg));
+  //   } catch (e) {
+  //     console.error(e);
+  //     reject(new Error('Unable to encrypt payload.'));
+  //   }
+  // });
+
 
   async unwrap(payload: Dictionary, key: CryptoKey) {
     try {
@@ -2113,7 +2296,7 @@ class ChannelSocket {
       // }
       return msg;
     } catch (e) {
-      return {error: `Error: ${e}`};
+      return { error: `Error: ${e}` };
     }
   }
 
@@ -2127,13 +2310,13 @@ class ChannelSocket {
       url: this.#url + '/api/room/' + this.channelId + '/websocket',
       onOpen: async (event: WebSocketEventMap) => {
         console.info('websocket opened');
-        this.init = {name: JSON.stringify(this.#identity.exportable_pubKey)};
+        this.init = { name: JSON.stringify(this.#identity.exportable_pubKey) };
         await this.sbWebSocket.send(JSON.stringify(this.init));
         if (typeof this.onOpen === 'function') {
           this.onOpen(event);
         }
       },
-      onMessage: async (event: ChannelMessage) => {
+      onMessage: async (event: ChannelMessage2) => {
         console.log("****** start: onMessage() *****")
         console.log(event)
         console.log("****** end: onMessage() *****")
@@ -2171,22 +2354,22 @@ class ChannelSocket {
   /**
    * ChannelSocket.close()
    */
-  close() {
-    this.sbWebSocket.close();
-  }
+  // close() {
+  //   this.sbWebSocket.close();
+  // }
 
   /**
    * ChannelSocket.isReady()
    */
-  isReady() {
-    console.info('SB Socket ready');
-    this.ready = true;
-    if (this.#queue.length > 0) {
-      this.#queue.forEach((message) => {
-        this.send(message);
-      });
-    }
-  }
+  // isReady() {
+  //   console.info('SB Socket ready');
+  //   this.ready = true;
+  //   if (this.#queue.length > 0) {
+  //     this.#queue.forEach((message) => {
+  //       this.send(message);
+  //     });
+  //   }
+  // }
 
   /**
    * ChannelSocket.send()
@@ -2194,19 +2377,26 @@ class ChannelSocket {
    * @param {SBMessage} the message object to send
    */
   async send(message: SBMessage) {
-
-    // message.ready.then(() => {
-    //   if (this.ready) {
-    // 	let payload;
-    // 	this.#payload.wrap(
-    //       message,
-    //       this.#channel.keys.encryptionKey
-    // 	).then((payload) => { this.socket.send(payload) });
-    //   } else {
-    // 	this.#queue.push(message);
-    //   }
-    // });
+    message.ready.then(() => {
+      this.#wrap(message).then((payload) => {
+        this.sbWebSocket.send(JSON.stringify(payload))
+      })
+    })
+    // TODO: i've punted on queue here
   }
+
+  // message.ready.then(() => {
+  //   if (this.ready) {
+  // 	let payload;
+  // 	this.#payload.wrap(
+  //       message,
+  //       this.#channel.keys.encryptionKey
+  // 	).then((payload) => { this.socket.send(payload) });
+  //   } else {
+  // 	this.#queue.push(message);
+  //   }
+  // });
+
 
 
   /**
@@ -2233,18 +2423,18 @@ class ChannelSocket {
    * psm: updating using new cool types
    * (it will arrive mostly unwrapped)
    */
-  async receive(message: ChannelMessage) {
+  async receive(message: ChannelMessage2) {
     // 'id' will be first message
     const id = Object.keys(message)[0];
     let unwrapped: string
     if (message.encrypted_contents) {
       try {
-        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey,
-          message[id].encrypted_contents, 'string');
+          unwrapped = await SB_Crypto.decrypt(await (await this.#channel.keys.then()).encryptionKey.then(),
+          message.encrypted_contents!, 'string');
       } catch (e) {
         console.warn(e);
-        unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key,
-          message[id].encrypted_contents, 'string');
+          unwrapped = await SB_Crypto.decrypt(await (await this.#channel.keys.then()).lockedKey,
+          message.encrypted_contents, 'string');
       }
     } else {
       unwrapped = jsonParseWrapper(unwrapped, 'L1702');
@@ -2284,7 +2474,7 @@ class StorageApi {
     // TODO: We should probably discuss this in more detail
     Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
       results.forEach((controlData) => {
-        channel.socket.sendSbObject({...controlData, control: true});
+        channel.socket.sendSbObject({ ...controlData, control: true });
       });
       // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
       channel.socket.sendSbObject(sbFile);
@@ -2304,7 +2494,7 @@ class StorageApi {
       'salt': _salt,
       'iterations': 100000, // small is fine, we want it snappy
       'hash': 'SHA-256'
-    }, keyMaterial, {'name': 'AES-GCM', 'length': 256}, true, ['encrypt', 'decrypt']);
+    }, keyMaterial, { 'name': 'AES-GCM', 'length': 256 }, true, ['encrypt', 'decrypt']);
     // return key;
     return key;
   }
@@ -2324,8 +2514,8 @@ class StorageApi {
         .then((data: ArrayBuffer) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2354,8 +2544,8 @@ class StorageApi {
         .then((data) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2388,8 +2578,8 @@ class StorageApi {
         .then((data: ArrayBuffer) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2406,20 +2596,20 @@ class StorageApi {
    * retrieves an object from storage
    */
   async retrieveData(msgId: string,
-                     messages: Array<ChannelMessage2>,
-                     controlMessages: Array<ChannelMessage2>): Promise<Dictionary> {
+    messages: Array<ChannelMessage2>,
+    controlMessages: Array<ChannelMessage2>): Promise<Dictionary> {
     console.log("... need to code up retrieveData() with new typing ..")
     console.log(msgId)
     console.log(messages)
     console.log(controlMessages)
     console.error("... need to code up retrieveData() with new typing ..")
 
-    const imageMetaData = messages.find((msg: ChannelMessage) => msg!._id === msgId)!.imageMetaData
+    const imageMetaData = messages.find((msg: ChannelMessageV1) => msg!._id === msgId)!.imageMetaData
     const image_id = imageMetaData!.previewId;
     // const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id.startsWith(image_id));
     const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id)!
     if (!control_msg) {
-      return {'error': 'Failed to fetch data - missing control message for that image'};
+      return { 'error': 'Failed to fetch data - missing control message for that image' };
     }
     // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
     const imageFetch = await this.fetchData(control_msg.id!, control_msg.verificationToken);
@@ -2439,7 +2629,7 @@ class StorageApi {
     //   console.error('(Image error: ' + img.error + ')');
     //   throw new Error('Failed to fetch data - authentication or formatting error');
     // }
-    return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
+    return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
   }
 
   /**
@@ -2450,7 +2640,7 @@ class StorageApi {
     const image_id = imageMetaData.previewId;
     const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id === image_id);
     if (!control_msg) {
-      return {'error': 'Failed to fetch data - missing control message for that image'};
+      return { 'error': 'Failed to fetch data - missing control message for that image' };
     }
     const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
     const data = extractPayload(imageFetch);
@@ -2469,7 +2659,7 @@ class StorageApi {
     //   throw new Error('Failed to fetch data - authentication or formatting error');
     // }
 
-    return {'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img)};
+    return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
   }
 
   /* Unused Currently
@@ -2609,8 +2799,8 @@ class ChannelApi {
           }
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2631,8 +2821,8 @@ class ChannelApi {
         .then((data: Dictionary) => {
           resolve(data.locked);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2643,7 +2833,7 @@ class ChannelApi {
     return new Promise((resolve, reject) => {
       //if (this.#channel.owner) {
       fetch(this.#channelServer + this.#channel.channel_id + '/motd', {
-        method: 'POST', body: JSON.stringify({motd: motd}), headers: {
+        method: 'POST', body: JSON.stringify({ motd: motd }), headers: {
           'Content-Type': 'application/json'
         }
       })
@@ -2656,8 +2846,8 @@ class ChannelApi {
         .then((data: Dictionary) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
       //} else {
       //  reject(new Error('Must be channel owner to get admin data'));
       //}
@@ -2689,8 +2879,8 @@ class ChannelApi {
           }
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
       ///} else {
       ///  reject(new Error('Must be channel owner to get admin data'));
       //}
@@ -2716,8 +2906,8 @@ class ChannelApi {
         .then((data: Dictionary) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2737,8 +2927,8 @@ class ChannelApi {
         .then((data: Dictionary) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2746,7 +2936,7 @@ class ChannelApi {
     return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel.channel_id + '/authorizeRoom', {
         method: 'POST',
-        body: JSON.stringify({roomId: this.#channel.channel_id, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey})
+        body: JSON.stringify({ roomId: this.#channel.channel_id, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey })
       })
         .then((response: Response) => {
           if (!response.ok) {
@@ -2757,11 +2947,12 @@ class ChannelApi {
         .then((data: Dictionary) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
+  // we post our pub key if we're first
   postPubKey(_exportable_pubKey: Dictionary) {
     return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel.channel_id + '/postPubKey?type=guestKey', {
@@ -2780,8 +2971,8 @@ class ChannelApi {
         .then((data: Dictionary) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2801,8 +2992,8 @@ class ChannelApi {
         .then((data: Dictionary) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2831,10 +3022,10 @@ class ChannelApi {
             if (data.locked) {
               await this.acceptVisitor(JSON.stringify(_identity.exportable_pubKey));
             }
-            resolve({locked: data.locked, lockedKey: _exportable_locked_key});
+            resolve({ locked: data.locked, lockedKey: _exportable_locked_key });
           }).catch((error: Error) => {
-          reject(error);
-        });
+            reject(error);
+          });
       }
     });
   }
@@ -2851,7 +3042,7 @@ class ChannelApi {
       const _encrypted_locked_key = await SB_Crypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.exportable_locked_key)), shared_key, 'string')
       fetch(this.#channelServer + this.#channel.channel_id + '/acceptVisitor', {
         method: 'POST',
-        body: JSON.stringify({pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key)}),
+        body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
         headers: {
           'Content-Type': 'application/json'
         },
@@ -2866,8 +3057,8 @@ class ChannelApi {
         .then((data: Dictionary) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2887,8 +3078,8 @@ class ChannelApi {
         .then((data: Dictionary) => {
           resolve(data);
         }).catch((error: Error) => {
-        reject(error);
-      });
+          reject(error);
+        });
     });
   }
 
@@ -2967,7 +3158,7 @@ class IndexedKV {
 
     openReq.onupgradeneeded = (event: Dictionary) => {
       this.db = event.target.result;
-      this.db.createObjectStore(this.options.table, {keyPath: 'key'});
+      this.db.createObjectStore(this.options.table, { keyPath: 'key' });
       this.#useDatabase();
       this.events.publish('ready');
     };
@@ -3025,7 +3216,7 @@ class IndexedKV {
             resolve(data.value);
           };
         } else {
-          const requestAdd = objectStore.add({key: key, value: value});
+          const requestAdd = objectStore.add({ key: key, value: value });
           requestAdd.onsuccess = (event: Dictionary) => {
             resolve(event.target.result);
           };
@@ -3052,7 +3243,7 @@ class IndexedKV {
         if (data?.value) {
           resolve(data.value);
         } else {
-          const requestAdd = objectStore.add({key: key, value: value});
+          const requestAdd = objectStore.add({ key: key, value: value });
           requestAdd.onsuccess = (event: Dictionary) => {
             resolve(event.target.result);
           };
@@ -3276,18 +3467,6 @@ class Snackabra {
 
   get channel(): Channel {
     return this.#channel;
-  }
-
-  get storage() {
-    return this.#storage;
-  }
-
-  get crypto() {
-    return SB_Crypto;
-  }
-
-  get identity() {
-    return this.#identity;
   }
 
   get storage(): StorageApi {
