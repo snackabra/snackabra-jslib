@@ -41,7 +41,7 @@ interface SnackabraOptions {
   storage_server: string,
 }
 
-// TODO: phasing out 
+// TODO: phasing out
 interface SnackabraKeys {
   exportable_pubKey: JsonWebKey | Promise<JsonWebKey | null>
   exportable_privateKey: JsonWebKey | Promise<JsonWebKey | null>
@@ -83,7 +83,7 @@ interface ChannelData {
 }
 
 
-// psm: replacing this old stuff ... 
+// psm: replacing this old stuff ...
 // interface ChannelKeys {
 //   exportable_owner_pubKey: CryptoKey;
 //   exportable_verifiedGuest_pubKey: CryptoKey;
@@ -216,7 +216,7 @@ export type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArra
 
 /**
  * deserializeMessage()
- * 
+ *
  * @param {string} m raw message string
  * @param {ChannelMessageTypes} expect expected (required) type (exception if it's not)
  */
@@ -1509,6 +1509,8 @@ class SBMessage {
  * @constructor
  * @public
  */
+/* mtg: I think we landed on the SBFile is a type and all the functionality here is performed elsewhere and passed to SB
+
 class SBFile {
   encrypted = false;
   contents: string = ''
@@ -1537,9 +1539,9 @@ class SBFile {
     }
   }
 
-  /**
+  /!**
    * asImage
-   */
+   *!/
   #asImage(image: File, signKey: CryptoKey) {
     // psm: this should all be replaced by SBImage
     throw new Error('#asImage() needs carryover from SBImage etc')
@@ -1561,9 +1563,9 @@ class SBFile {
     // this.imageMetadata_sign = await SB_Crypto.sign(signKey, this.imageMetaData)
   }
 
-  /**
+  /!**
    * getFileData
-   */
+   *!/
   #getFileData(file: File, outputType: string | ArrayBuffer) {
     try {
       const reader = new FileReader();
@@ -1583,9 +1585,9 @@ class SBFile {
     }
   }
 
-  /**
+  /!**
    * padImage
-   */
+   *!/
   #padImage(image_buffer: ArrayBuffer) {
     let _sizes: Array<number> = [128, 256, 512, 1024, 2048, 4096]; // in KB
     _sizes = _sizes.map((size) => size * 1024);
@@ -1622,9 +1624,9 @@ class SBFile {
     return final_data;
   }
 
-  /**
+  /!**
    * restrictPhoto
-   */
+   *!/
   async #restrictPhoto(photo: ArrayBuffer,
     maxSize: number, // in KB
     imageType: 'image/jpeg',
@@ -1635,9 +1637,9 @@ class SBFile {
     return null;
   }
 
-  /**
+  /!**
    * scaleCanvas
-   */
+   *!/
   #scaleCanvas(canvas: HTMLCanvasElement, scale: number) {
     // latest and greatest JS version is in:
     // 384-snackabra-webclient/src/utils/ImageProcessor.js
@@ -1654,18 +1656,18 @@ class SBFile {
     return scaledCanvas;
   }
 
-  /**
+  /!**
    * generateImageHash
-   */
+   *!/
   async #generateImageHash(image: ArrayBuffer): Promise<{ id: string, key: string } | {}> {
     // latest and greatest JS version is in:
     // 384-snackabra-webclient/src/utils/ImageProcessor.js
     throw new Error('generateImageHash() needs TS version')
   }
 
-  /**
+  /!**
    * readPhoto
-   */
+   *!/
   async #readPhoto(photo: ImageData) {
     const canvas: HTMLCanvasElement = document.createElement('canvas');
     const img: HTMLImageElement = document.createElement('img');
@@ -1696,11 +1698,13 @@ class SBFile {
     return canvas
   }
 }
+*/
 
 class SBWebSocket {
   ready
   #closed = false
   #url: string
+  #protocolVersion = 1
   #websocket: WebSocket
   #timeout = 30000
   onMessage: CallableFunction
@@ -2001,8 +2005,8 @@ class Channel {
   #api!: ChannelApi;
   #socket!: ChannelSocket;
 
-  storage?: StorageApi // TODO: in principle should be optional?
-
+  //storage?: StorageApi // TODO: in principle should be optional?
+  // mtg: I think this ^ is part of the mess that was brought from 0.4 I don't think we should have a storage property here at all
   // constructor(https: string, wss: string, identity: Identity) {
   //   this.url = https;
   //   this.wss = wss;
