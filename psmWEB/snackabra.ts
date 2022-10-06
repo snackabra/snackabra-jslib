@@ -55,12 +55,17 @@ interface IndexedKVOptions {
 }
 
 interface WSProtocolOptions {
+  version?: number,
   url: string,
   onOpen?: null | CallableFunction,
+  ready: boolean,
   onMessage?: null | CallableFunction,
   onClose?: null | CallableFunction,
   onError?: null | CallableFunction,
-  timeout?: number
+  timeout?: number,
+  identity?: Identity,
+  closed: boolean,
+  init?: { name: string },
 }
 
 type StorableDataType = string | number | bigint | boolean | symbol | object
@@ -1780,165 +1785,6 @@ export class SBFile {
 
 } /* SBFile */
 
-class SBWebSocket {
-  ready
-  init?: { name: string }
-  #closed = false
-  #url: string
-  #identity: Identity
-  #timeout = 30000
-  // #protocolVersion = 1
-  #websocket?: WebSocket
-  onMessage: CallableFunction
-
-  constructor(url: string, onMessage: CallableFunction, identity: Identity) {
-    console.log(`SBWebSocket(${url})`)
-    this.#url = url
-    this.onMessage = onMessage
-    this.#identity = identity
-    // this.#websocket = new WebSocket(url) // this one will be discarded
-    this.ready = this.#readyPromise(url)
-    console.error(this)
-  }
-
-  #ack: Dictionary = []
-
-  #processMessage(m: any) {
-    // receives the message, can be of any type
-    console.log("got raw message:")
-    console.log(m)
-    const data = jsonParseWrapper(m, 'L1489')
-    console.log("... unwrapped:")
-    console.log(data)
-    if (data.ack) {
-      const r = this.#ack[data._id]
-      if (r) {
-        delete this.#ack[data._id]
-        r() // resolve
-      }
-    } else if (data.nack) {
-      console.error('Nack received')
-      this.#closed = true
-      if (this.#websocket) this.#websocket.close()
-    } else if (typeof this.onMessage === 'function') {
-      // typically this will call ChannelSocket.receive()
-      // if (this.onMessage(data)) this.onMessage(data)
-      // update: pass the string so it can deserialize on its own
-      if (this.onMessage) this.onMessage(m)
-    } else {
-      _sb_exception('SBWebSocket', 'received message but there is no handler')
-    }
-  }
-
-  #readyPromise(url: string) {
-    return new Promise<SBWebSocket>((resolve, reject) => {
-      try {
-        if (this.#websocket) this.#websocket.close() // keep clean
-        const ws = this.#websocket = new WebSocket(url)
-        ws.addEventListener('open', () => {
-          this.#closed = false;
-          this.init = { name: JSON.stringify(this.#identity.exportable_pubKey) }
-          ws.send(JSON.stringify(this.init))
-          resolve(this)
-        })
-        ws.addEventListener('message', (e: MessageEvent) => this.#processMessage(e.data))
-        ws.addEventListener('close', (e: CloseEvent) => {
-          this.#closed = true
-          if (!e.wasClean) {
-            console.log('sbWebSocket() was closed (and NOT cleanly): ', e.reason)
-          } else {
-            console.log('sbWebSocket() was closed (cleanly): ', e.reason)
-          }
-          reject('wbSocket() closed before it was opened (?)')
-        })
-        ws.addEventListener('error', (e) => {
-          this.#closed = true
-          console.log('sbWebSocket() error: ', e)
-          reject('sbWebSocket creation error (see log)')
-        })
-      } catch (e) {
-        this.#closed = true
-        console.log(e)
-        reject('failed to create sbWebSocket, see log')
-      }
-    })
-  }
-
-  // /** ChannelSocket.open() */
-  // #open(ws: WebSocket) {
-  //   const options: WSProtocolOptions = {
-  //     url: this.#url + '/api/room/' + this.channelId + '/websocket',
-  //     onOpen: async (event: WebSocketEventMap) => {
-  //       console.log('websocket opened');
-  //       if (typeof this.onOpen === 'function') this.onOpen(event)
-  //     },
-  //     onMessage: async (event: ChannelMessage2) => {
-  //       console.log("****** start: onMessage() *****")
-  //       console.log(event)
-  //       console.log("****** end: onMessage() *****")
-  //       if (event?.ready) {
-  //         if (typeof this.onJoin === 'function') {
-  //           this.onJoin(event);
-  //           if (typeof this.onSystemInfo === 'function') this.onSystemInfo(event)
-  //         }
-  //       } else if (event?.system) {
-  //         if (typeof this.onSystemInfo === 'function') this.onSystemInfo(event)
-  //       } else {
-  //         if (typeof this.onMessage === 'function') this.onMessage(await this.receive(event))
-  //       }
-  //     },
-  //     onClose: (event: WebSocketEventMap) => {
-  //       if (typeof this.onClose === 'function') this.onClose(event)
-  //     },
-  //     onError: (event: WebSocketEventMap) => {
-  //       if (typeof this.onError === 'function') this.onError(event)
-  //     }
-  //   };
-  //   // this.sbWebSocket = new WS_Protocol(options);
-  //   this.#options = Object.assign(this.#options, options)
-  // }
-
-  send(m: string) {
-    // for future inspiration here are more thoughts on making this more iron clad:
-    // https://stackoverflow.com/questions/29881957/websocket-connection-timeout
-    console.log("send(): " + m)
-    return new Promise((resolve, reject) => {
-      if (this.#closed) this.ready = this.#readyPromise(this.#url)
-      this.ready.then(() => {
-        switch (this.#websocket!.readyState) {
-          case 1: // OPEN
-            this.ready.then(() => {
-              crypto.subtle.digest('SHA-256', new TextEncoder().encode(m)).then((hash) => {
-                const _id = arrayBufferToBase64(hash)
-                const ackPayload = { timestamp: Date.now(), type: 'ack', _id: _id }
-                this.#ack[_id] = resolve
-                this.#websocket!.send(m);
-                // TODO: update protocol so server acks on message
-                this.#websocket!.send(JSON.stringify(ackPayload));
-                setTimeout(() => {
-                  if (this.#ack[_id]) {
-                    delete this.#ack[_id]
-                    const error = `Websocket request timed out after ${this.#timeout}ms (${_id})`
-                    console.error(error)
-                    reject(new Error(error))
-                  } else {
-                    // normal behavior
-                    resolve("success")
-                  }
-                }, this.#timeout)
-              })
-            })
-            break
-          case 3: // CLOSED
-          case 0: // CONNECTING
-          case 2: // CLOSING
-            const errMsg = 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING'
-            _sb_exception('sbWebSocket', 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING')
-        }
-      })
-    })
-  }
-}
 
 
 // /**
@@ -2316,76 +2162,204 @@ class Channel {
   //     });
   //   };
 
-} /* class channel */
+} /* Channel */
 
-/** Class managing connections */
+
+/**
+ *
+ * ChannelSocket
+ *
+ *  Class managing connections
+ */
 class ChannelSocket {
   ready
+
+  channelId: string
+  #channel: Channel
+
+  #wsOptions: WSProtocolOptions
+
   // socket!: WS_Protocol;
-  sbWebSocket: SBWebSocket
-  #url: string;
-  init!: Dictionary;
-  channelId: string;
-  #channel: Channel;
-  #identity: Identity;
+  // sbWebSocket: SBWebSocket
   // #payload: Payload;
   // #queue: Array<SBMessage> = [];
   // ready = false;
-  #options: WSProtocolOptions = {
-    url: '', onOpen: null, onMessage: null, onClose: null, onError: null, timeout: 30000
-  };
-  onOpen!: CallableFunction;
-  onJoin?: CallableFunction;
-  onMessage!: CallableFunction;
-  onSystemInfo!: CallableFunction;
+
+  // which go to wsOptions?
+  // onOpen!: CallableFunction;
+  // onJoin?: CallableFunction;
+  onMessage: CallableFunction
+  // onSystemInfo!: CallableFunction;
 
   // channelCryptoKey: CryptoKey
 
-  constructor(sbServer: Snackabra, channel: Channel, identity: Identity) {
-    this.channelId = channel.channel_id
-    // this.url = sbServer.SnackabraOptions.channel_ws
-    this.#channel = channel
-    this.#identity = identity
-    // this.#payload = new Payload();
-    // this.open()  ... oops here it was haha
-    console.log("ChannelSocket()")
+  #ack: Dictionary = []
 
-    console.log(sbServer)
-    this.#url = sbServer.options.channel_ws + '/api/room/' + this.channelId + '/websocket'
-    this.sbWebSocket = new SBWebSocket(this.#url, this.receive, identity)
-    // this.sbWebSocket.ready.then((ws) => this.#open(ws))
-    this.ready = (() => {
-      // we're ready when the socket is ready, but note that the ready function can change
-      return this.sbWebSocket.ready;
+  #processMessage(m: any) {
+    // receives the message, can be of any type
+    console.log("got raw message:")
+    console.log(m)
+    const data = jsonParseWrapper(m, 'L1489')
+    console.log("... unwrapped:")
+    console.log(data)
+    if (data.ack) {
+      const r = this.#ack[data._id]
+      if (r) {
+        delete this.#ack[data._id]
+        r() // resolve
+      }
+    } else if (data.nack) {
+      console.error('Nack received')
+      this.#closed = true
+      if (this.#websocket) this.#websocket.close()
+    } else if (typeof this.onMessage === 'function') {
+      // typically this will call ChannelSocket.receive()
+      // if (this.onMessage(data)) this.onMessage(data)
+      // update: pass the string so it can deserialize on its own
+      if (this.onMessage) this.onMessage(m)
+    } else {
+      _sb_exception('SBWebSocket', 'received message but there is no handler')
+    }
+  }
+
+  #readyPromise(url: string) {
+    return new Promise<SBWebSocket>((resolve, reject) => {
+      try {
+        if (this.#websocket) this.#websocket.close() // keep clean
+        const ws = this.#websocket = new WebSocket(url)
+        ws.addEventListener('open', () => {
+          this.#closed = false;
+          this.init = { name: JSON.stringify(this.#identity.exportable_pubKey) }
+          ws.send(JSON.stringify(this.init))
+          resolve(this)
+        })
+        ws.addEventListener('message', (e: MessageEvent) => this.#processMessage(e.data))
+        ws.addEventListener('close', (e: CloseEvent) => {
+          this.#closed = true
+          if (!e.wasClean) {
+            console.log('sbWebSocket() was closed (and NOT cleanly): ', e.reason)
+          } else {
+            console.log('sbWebSocket() was closed (cleanly): ', e.reason)
+          }
+          reject('wbSocket() closed before it was opened (?)')
+        })
+        ws.addEventListener('error', (e) => {
+          this.#closed = true
+          console.log('sbWebSocket() error: ', e)
+          reject('sbWebSocket creation error (see log)')
+        })
+      } catch (e) {
+        this.#closed = true
+        console.log(e)
+        reject('failed to create sbWebSocket, see log')
+      }
     })
   }
 
+  // MERGING: starting with SBWebSocket construction
+  constructor(url: string, onMessage: CallableFunction, identity: Identity) {
+  }
+
+  // MERGING: CHANNEL_SOCKET CONSTRUCTOR:
+  constructor(sbServer: Snackabra, channel: Channel, identity: Identity) {
+    console.log("@@@@@@@@@@@@@@@@ ChannelSocket() start:")
+    console.log(sbServer)
+    console.log(channel)
+    console.log(identity)
+    console.log("@@@@@@@@@@@@@@@@ ChannelSocket() ... end")
+
+    this.channelId = channel.channel_id
+
+    // this.url = sbServer.SnackabraOptions.channel_ws
+
+    this.#channel = channel
+    this.#identity = identity
+
+    // this.#payload = new Payload();
+    // this.open()  ... oops here it was haha
 
 
-  // /**
-  //  * setKeys
-  //  */
-  // setKeys(_keys: Dictionary) {
-  //   this.#channel.loadKeys(_keys);
-  // }
+    this.sbWebSocket = new SBWebSocket(this.#url, this.receive, identity)
+    // this.sbWebSocket.ready.then((ws) => this.#open(ws))
+    this.#wsOptions = {
+      url: sbServer.options.channel_ws + '/api/room/' + this.channelId + '/websocket',
+      ready: false,
+      identity: identity,
+      onMessage: this.receive,
+      timeout: 30000
+    };
 
-  #wrap(sbMessage: SBMessage): Promise<Dictionary> {
-    console.log("#wrap()")
+    this.#url = url
+    this.onMessage = onMessage
+    this.#identity = identity
+
+    this.ready = this.#readyPromise(url)
+
+  })
+}
+
+
+// /** ChannelSocket.open() */
+// #open(ws: WebSocket) {
+//   const options: WSProtocolOptions = {
+//     url: this.#url + '/api/room/' + this.channelId + '/websocket',
+//     onOpen: async (event: WebSocketEventMap) => {
+//       console.log('websocket opened');
+//       if (typeof this.onOpen === 'function') this.onOpen(event)
+//     },
+//     onMessage: async (event: ChannelMessage2) => {
+//       console.log("****** start: onMessage() *****")
+//       console.log(event)
+//       console.log("****** end: onMessage() *****")
+//       if (event?.ready) {
+//         if (typeof this.onJoin === 'function') {
+//           this.onJoin(event);
+//           if (typeof this.onSystemInfo === 'function') this.onSystemInfo(event)
+//         }
+//       } else if (event?.system) {
+//         if (typeof this.onSystemInfo === 'function') this.onSystemInfo(event)
+//       } else {
+//         if (typeof this.onMessage === 'function') this.onMessage(await this.receive(event))
+//       }
+//     },
+//     onClose: (event: WebSocketEventMap) => {
+//       if (typeof this.onClose === 'function') this.onClose(event)
+//     },
+//     onError: (event: WebSocketEventMap) => {
+//       if (typeof this.onError === 'function') this.onError(event)
+//     }
+//   };
+//   // this.sbWebSocket = new WS_Protocol(options);
+//   this.#options = Object.assign(this.#options, options)
+// }
+
+
+
+
+// /**
+//  * ChannelSocket.setKeys()
+//  */
+// setKeys(_keys: Dictionary) {
+//   this.#channel.loadKeys(_keys);
+// }
+
+#wrap(sbMessage: SBMessage): Promise < Dictionary > {
+  console.log("#wrap()")
     return new Promise<Dictionary>((resolve) => {
-      sbMessage.ready.then(() => {
-        // TODO - in progress
-        this.#channel.keys.then((keys) => {
-          keys.encryptionKey.then((encryptionKey) => {
-            sbCrypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), encryptionKey, 'string').then((c) => {
-              console.log("#wrap() resolved to:")
-              console.log(c)
-              resolve({ encrypted_contents: c })
-            })
+    sbMessage.ready.then(() => {
+      // TODO - in progress
+      this.#channel.keys.then((keys) => {
+        keys.encryptionKey.then((encryptionKey) => {
+          sbCrypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), encryptionKey, 'string').then((c) => {
+            console.log("#wrap() resolved to:")
+            console.log(c)
+            resolve({ encrypted_contents: c })
           })
         })
       })
     })
-  }
+  })
+}
 
   // onError() {
   //   this.currentWebSocket.addEventListener('error', (event) => {
@@ -2447,24 +2421,6 @@ class ChannelSocket {
   //   }
   // }
 
-  /**
-   * ChannelSocket.send()
-   *
-   * @param {SBMessage} the message object to send
-   */
-  async send(message: SBMessage) {
-    console.log("SBMessage.send()")
-    console.log(message)
-    message.ready.then(() => {
-      this.#wrap(message).then((payload) => {
-        console.log("SBMessage.send() payload:")
-        console.log(payload)
-        this.sbWebSocket.send(JSON.stringify(payload))
-      })
-    })
-    // TODO: i've punted on queue here
-  }
-
   // message.ready.then(() => {
   //   if (this.ready) {
   // 	let payload;
@@ -2485,16 +2441,79 @@ class ChannelSocket {
    * Send SB object (file) on channel socket
    */
   async sendSbObject(file: SBFile) {
-    // TODO
-    // if (this.ready) {
-    //   this.#payload.wrap(
-    //     file,
-    //     this.#channel.keys.encryptionKey
-    //   ).then((payload) => this.socket.send(payload));
-    // } else {
-    //   this.#queue.push(file);
-    // }
-  }
+  // TODO
+  // if (this.ready) {
+  //   this.#payload.wrap(
+  //     file,
+  //     this.#channel.keys.encryptionKey
+  //   ).then((payload) => this.socket.send(payload));
+  // } else {
+  //   this.#queue.push(file);
+  // }
+}
+
+  /**
+   * ChannelSocket.send()
+   *
+   * @param {SBMessage} the message object to send
+   */
+  async #socketSend(message: SBMessage) {
+  console.log("SBMessage.send()")
+  console.log(message)
+  message.ready.then(() => {
+    this.#wrap(message).then((payload) => {
+      console.log("SBMessage.send() payload:")
+      console.log(payload)
+      this.sbWebSocket.send(JSON.stringify(payload))
+    })
+  })
+  // TODO: i've punted on queue here
+}
+
+
+/**
+  * ChannelSocket.send()
+  */
+send(m: string) {
+  // for future inspiration here are more thoughts on making this more iron clad:
+  // https://stackoverflow.com/questions/29881957/websocket-connection-timeout
+  console.log("send(): " + m)
+  return new Promise((resolve, reject) => {
+    if (this.#closed) this.ready = this.#readyPromise(this.#url)
+    this.ready.then(() => {
+      switch (this.#websocket!.readyState) {
+        case 1: // OPEN
+          this.ready.then(() => {
+            crypto.subtle.digest('SHA-256', new TextEncoder().encode(m)).then((hash) => {
+              const _id = arrayBufferToBase64(hash)
+              const ackPayload = { timestamp: Date.now(), type: 'ack', _id: _id }
+              this.#ack[_id] = resolve
+              this.#socketSend(m);
+              // TODO: update protocol so server acks on message
+              this.#socketSend(JSON.stringify(ackPayload));
+              setTimeout(() => {
+                if (this.#ack[_id]) {
+                  delete this.#ack[_id]
+                  const error = `Websocket request timed out after ${this.#timeout}ms (${_id})`
+                  console.error(error)
+                  reject(new Error(error))
+                } else {
+                  // normal behavior
+                  resolve("success")
+                }
+              }, this.#timeout)
+            })
+          })
+          break
+        case 3: // CLOSED
+        case 0: // CONNECTING
+        case 2: // CLOSING
+          const errMsg = 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING'
+          _sb_exception('sbWebSocket', 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING')
+      }
+    })
+  })
+}
 
   /**
     * ChannelSocket.receive()
@@ -2504,50 +2523,50 @@ class ChannelSocket {
     * Moving to new message types
     */
   async receive(message: ChannelMessage2) {
-    // 'id' will be first property
-    console.log("receive()")
-    const id = Object.keys(message)[0];
-    console.log("(note .. 'id' was:)")
-    console.log(id)
-    let unwrapped: string = ''
-    if (message.encrypted_contents) {
-      try {
-        unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).encryptionKey.then(), message.encrypted_contents, 'string');
-        console.log("unwrapped:")
-        console.log(unwrapped)
-      } catch (e) {
-        console.warn(e);
-        // TODO: locked key might never resolve (if we don't have it)
-        unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).lockedKey!, message.encrypted_contents, 'string')
-      }
-      return (unwrapped);
-    } else {
-      console.log("Got message:")
-      console.log(message)
-      if (this.onJoin) {
-        console.log("calling channel join")
-        this.onJoin(message)
-        // if (message?.ready) {
-        //   // this.metaData = message;
-        //   this.loadKeys(message.keys).then(() => {
-        //     this.socket.isReady();
-        //     // resolve(this);
-        //   });
-        // }
-      } else {
-        console.log("on join not set? (error) on this socket:")
-        console.log(this)
-      }
-
-      return (message)
-      // unwrapped = jsonParseWrapper(, 'L1702');
-      // // psm: TODO, i don't know what messages are really supposed to look like in all cases
-      // unwrapped._id = id;
-      // _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', id.slice(this.#channel.channel_id.length));
-      // if (message._id) _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', message._id)
-      // return JSON.stringify(unwrapped);
+  // 'id' will be first property
+  console.log("receive()")
+  const id = Object.keys(message)[0];
+  console.log("(note .. 'id' was:)")
+  console.log(id)
+  let unwrapped: string = ''
+  if (message.encrypted_contents) {
+    try {
+      unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).encryptionKey.then(), message.encrypted_contents, 'string');
+      console.log("unwrapped:")
+      console.log(unwrapped)
+    } catch (e) {
+      console.warn(e);
+      // TODO: locked key might never resolve (if we don't have it)
+      unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).lockedKey!, message.encrypted_contents, 'string')
     }
+    return (unwrapped);
+  } else {
+    console.log("Got message:")
+    console.log(message)
+    if (this.onJoin) {
+      console.log("calling channel join")
+      this.onJoin(message)
+      // if (message?.ready) {
+      //   // this.metaData = message;
+      //   this.loadKeys(message.keys).then(() => {
+      //     this.socket.isReady();
+      //     // resolve(this);
+      //   });
+      // }
+    } else {
+      console.log("on join not set? (error) on this socket:")
+      console.log(this)
+    }
+
+    return (message)
+    // unwrapped = jsonParseWrapper(, 'L1702');
+    // // psm: TODO, i don't know what messages are really supposed to look like in all cases
+    // unwrapped._id = id;
+    // _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', id.slice(this.#channel.channel_id.length));
+    // if (message._id) _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', message._id)
+    // return JSON.stringify(unwrapped);
   }
+}
 
 } // ChannelSocket
 
@@ -2577,10 +2596,10 @@ class StorageApi {
     Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
       results.forEach((controlData) => {
         // @ts-ignore
-        channel.socket.sendSbObject({ ...controlData, control: true });
+        channel.sendSbObject({ ...controlData, control: true });
       });
       // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
-      channel.socket.sendSbObject(sbFile);
+      channel.sendSbObject(sbFile);
     });
 
   }
@@ -3542,7 +3561,7 @@ class Snackabra {
         });
         resp = await resp.json();
         if (resp.success) {
-          await this.connect(channelId, identity);
+          // await this.connect(channelId, identity);
           _localStorage.setItem(channelId, JSON.stringify(exportable_privateKey));
           resolve(channelId);
         } else {
@@ -3591,7 +3610,7 @@ class Snackabra {
 
   // These are just helper methods, we can still access from SB.channel.socket.send externally
   sendMessage(message: SBMessage) {
-    this.channel.socket.send(message);
+    this.channel.send(message);
   }
 
   sendFile(file: SBFile) {

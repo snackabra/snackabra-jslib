@@ -445,16 +445,6 @@ export declare class SBFile {
     imageMetadata_sign: string;
     constructor(file: File, signKey: CryptoKey, key: CryptoKey);
 }
-declare class SBWebSocket {
-    #private;
-    ready: Promise<SBWebSocket>;
-    init?: {
-        name: string;
-    };
-    onMessage: CallableFunction;
-    constructor(url: string, onMessage: CallableFunction, identity: Identity);
-    send(m: string): Promise<unknown>;
-}
 /**
  * Channel
  *
@@ -464,7 +454,7 @@ declare class SBWebSocket {
  */
 declare class Channel {
     #private;
-    ready: () => () => Promise<SBWebSocket>;
+    ready: () => Promise<SBWebSocket>;
     sbServer: Snackabra;
     channel_id: string;
     defaultIdentity?: Identity;
@@ -489,18 +479,20 @@ declare class Channel {
      */
     get socket(): ChannelSocket;
 }
-/** Class managing connections */
+/**
+ *
+ * ChannelSocket
+ *
+ *  Class managing connections
+ */
 declare class ChannelSocket {
     #private;
-    ready: () => Promise<SBWebSocket>;
-    sbWebSocket: SBWebSocket;
+    ready: Promise<SBWebSocket>;
     init: Dictionary;
     channelId: string;
-    onOpen: CallableFunction;
-    onJoin?: CallableFunction;
     onMessage: CallableFunction;
-    onSystemInfo: CallableFunction;
-    constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
+    foo: any;
+    foo: any;
     /**
      * ChannelSocket.close()
      */
@@ -508,17 +500,15 @@ declare class ChannelSocket {
      * ChannelSocket.isReady()
      */
     /**
-     * ChannelSocket.send()
-     *
-     * @param {SBMessage} the message object to send
-     */
-    send(message: SBMessage): Promise<void>;
-    /**
      * ChannelSocket.sendSbObject()
      *
      * Send SB object (file) on channel socket
      */
     sendSbObject(file: SBFile): Promise<void>;
+    /**
+      * ChannelSocket.send()
+      */
+    send(m: string): Promise<unknown>;
     /**
       * ChannelSocket.receive()
       *
