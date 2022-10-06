@@ -1,57 +1,4 @@
-/*
-  THIS HEADER HAS INFO WHILE WE ARE REFACTORING
-
-  currently experimenting with
-  tsc -lib dom,es5,es6,es2021 -t es6 --explainFiles --pretty false --strict ./main.ts
-
-  main target options are (default is es3)
-  es3, es5, es6/es2015, es2016, es2017, es2018, es2019, es2020,
-  es2021, es2022, esnext
-
-  TODO list:
-  * look for "ts-ignore" in the code below for lingering issues
-  * latest (fast) code for image loading etc is in the JS client:
-    384-snackabra-webclient/src/utils/ImageProcessor.js
-    384-snackabra-webclient/src/utils/ImageWorker.js
-    that JS code needs to carry over, below the "most modified"
-    parts of that code will throw an error
-
-  Long Term Todo:
-  * eventually defined the protocol, potentially registering with:
-    https://www.iana.org/assignments/websocket/websocket.xml#subprotocol-name
-
-*/
-version = 1,
-    url;
-string,
-    onOpen ?  : null | CallableFunction,
-    ready = false,
-    onMessage ?  : null | CallableFunction,
-    onClose ?  : null | CallableFunction,
-    onError ?  : null | CallableFunction,
-    timeout ?  : number,
-    identity ?  : Identity,
-    init ?  : { name: string },
-    closed = false,
-;
-// psm: replacing this old stuff ...
-// interface ChannelKeys {
-//   exportable_owner_pubKey: CryptoKey;
-//   exportable_verifiedGuest_pubKey: CryptoKey;
-//   personal_signKey: CryptoKey;
-//   room_privateSignKey: CryptoKey;
-//   encryptionKey: CryptoKey;
-//   locked_key: CryptoKey;
-//   shared_key: CryptoKey;
-//   exportable_locked_key: Dictionary;
-// }
-/*
-  format is a single string:
-
-  dZbuNAeDnuMOLPYcfExi4RIUVPljFZUZLE3tUo3zl1-avzxmm9nBhtRPVOwu6kK4
-  011000001101110010110011101001000001101001
-*/
-const msgIdRegex = /^([A-Za-z0-9+/_\-=]{64})*([01]{42})$/;
+/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
 /**
  * deserializeMessage()
  *
@@ -1247,151 +1194,7 @@ export class SBFile {
             throw new Error('Unsupported file type: ' + file.type);
         }
     }
-    /**
-     * asImage
-     */
-    #asImage(image, signKey) {
-        // TODO: the getfile/restrict should be done by SBImage etc, other stuff is SB messaging
-        throw new Error(`#asImage() needs carryover from SBImage etc (${image}, ${signKey})`);
-        // this.data.previewImage = this.#padImage(await (await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
-        // const previewHash: Dictionary = await this.#generateImageHash(this.data.previewImage);
-        // this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await (await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
-        // const fullHash: Dictionary = await this.#generateImageHash(this.data.fullImage);
-        // this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
-        // this.image_sign = await sbCrypto.sign(signKey, this.image);
-        // this.imageMetaData = JSON.stringify({
-        //   imageId: fullHash.id,
-        //   previewId: previewHash.id,
-        //   imageKey: fullHash.key,
-        //   previewKey: previewHash.key
-        // });
-        // this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
-    }
-} /* SBFile */
-// /**
-//  * mtg: Protocol code that we wrap our WebSocket in
-//  * I will be updating this to send messages and remove
-//  * the wait to send messages only when ack received
-//  * The benefit is reduced latency in communication protocol
-//  */
-// class WS_Protocol {
-//   currentWebSocket!: WebSocket;
-//   _id!: string;
-//   events = new MessageBus();
-//   #options: WSProtocolOptions = {
-//     url: '', onOpen: null, onMessage: null, onClose: null, onError: null, timeout: 30000
-//   };
-//   constructor(options: WSProtocolOptions) {
-//     if (!options.url) {
-//       throw new Error('URL must be set');
-//     }
-//     this.#options = Object.assign(this.options, options);
-//     this.join();
-//   }
-//   /**
-//    * WS_Protocol
-//    * Get options
-//    */
-//   get options() {
-//     return this.#options;
-//   }
-//   /**
-//    * WS_Protocol
-//    * join
-//    */
-//   join(): Promise<boolean> {
-//     return new Promise((resolve, reject) => {
-//       try {
-//         this.currentWebSocket = new WebSocket(this.options.url);
-//         this.onError();
-//         this.onClose();
-//         this.onOpen();
-//         this.onMessage();
-//         resolve(true);
-//       } catch (e) {
-//         console.error(e);
-//         reject(e);
-//       }
-//     });
-//   }
-//   /**
-//    * WS_Protocol
-//    * close
-//    */
-//   close() {
-//     this.currentWebSocket.close();
-//   }
-//   send = (message: string): Promise<boolean> => {
-//     return new Promise(async (resolve, reject) => {
-//       try {
-//         if (this.currentWebSocket.readyState === 1) {
-//           const hash = await crypto.subtle
-//             .digest('SHA-256', new TextEncoder().encode(message));
-//           const ackPayload = {
-//             timestamp: Date.now(), type: 'ack', _id: arrayBufferToBase64(hash)
-//           };
-//           this.currentWebSocket.send(message);
-// 	  // TODO: update protocol so server acks on message
-//           this.currentWebSocket.send(JSON.stringify(ackPayload));
-//           const timeout = setTimeout(() => {
-//             const error = `Websocket request timed out after ${this.options.timeout}ms`;
-//             console.error(error, 'ws_ack_' + ackPayload._id);
-//             reject(new Error(error));
-//           }, this.options.timeout);
-//           const ackResponse = () => {
-//             clearTimeout(timeout);
-//             this.events.unsubscribe('ws_ack_' + ackPayload._id, ackResponse);
-//             resolve(true);
-//           };
-//           this.events.subscribe('ws_ack_' + ackPayload._id, ackResponse);
-//         }
-//       } catch (e) {
-//         console.error(e);
-//       }
-//     });
-//   };
-//   /**
-//    * WS_Protocol
-//    * onMessage
-//    */
-//   onMessage() {
-//     this.currentWebSocket.addEventListener('message', (event) => {
-//       const data = jsonParseWrapper(event.data, 'L1342');
-//       // console.log(data)
-//       dispatchMessage(data)
-//       if (data.ack) {
-//         this.events.publish('ws_ack_' + data._id);
-//         return;
-//       }
-//       if (data.nack) {
-//         console.error('Nack received');
-//         this.close();
-//         return;
-//       }
-//       if (typeof this.options.onMessage === 'function') {
-//         this.options.onMessage(data);
-//       }
-//     });
-//   }
-//   /**
-//    * WS_Protocol
-//    * readyState
-//    */
-//   get readyState() {
-//     return this.currentWebSocket.readyState;
-//   }
-//   /**
-//    * WS_Protocol
-//    * onOpen
-//    */
-//   onOpen() {
-//     this.currentWebSocket.addEventListener('open', (event) => {
-//       if (typeof this.options.onOpen === 'function') {
-//         this.options.onOpen(event);
-//       }
-//     });
-//   }
-// }
+}
 /**
  * Channel
  *
@@ -1500,37 +1303,20 @@ class Channel {
  */
 class ChannelSocket {
     ready;
-    // socket!: WS_Protocol;
-    // sbWebSocket: SBWebSocket
-    #url;
-    init;
     channelId;
     #channel;
-    #identity;
+    #wsOptions;
+    // socket!: WS_Protocol;
+    // sbWebSocket: SBWebSocket
     // #payload: Payload;
     // #queue: Array<SBMessage> = [];
     // ready = false;
-    #wsOptions = {
-        url: '', onOpen: null, onMessage: null, onClose: null, onError: null, timeout: 30000
-    };
     // which go to wsOptions?
     // onOpen!: CallableFunction;
     // onJoin?: CallableFunction;
     onMessage;
     // onSystemInfo!: CallableFunction;
     // channelCryptoKey: CryptoKey
-    foo;
-    foo;
-    // MERGING: starting with SBWebSocket construction
-    constructor(url, onMessage, identity) {
-        console.log(`SBWebSocket(${url})`);
-        this.#url = url;
-        this.onMessage = onMessage;
-        this.#identity = identity;
-        // this.#websocket = new WebSocket(url) // this one will be discarded
-        this.ready = this.#readyPromise(url);
-        console.error(this);
-    }
     #ack = [];
     #processMessage(m) {
         // receives the message, can be of any type
@@ -1599,57 +1385,36 @@ class ChannelSocket {
             }
         });
     }
+    // MERGING: starting with SBWebSocket construction
+    // constructor(url: string, onMessage: CallableFunction, identity: Identity) {
+    // }
     // MERGING: CHANNEL_SOCKET CONSTRUCTOR:
     constructor(sbServer, channel, identity) {
+        console.log("@@@@@@@@@@@@@@@@ ChannelSocket() start:");
+        console.log(sbServer);
+        console.log(channel);
+        console.log(identity);
+        console.log("@@@@@@@@@@@@@@@@ ChannelSocket() ... end");
         this.channelId = channel.channel_id;
         // this.url = sbServer.SnackabraOptions.channel_ws
         this.#channel = channel;
         this.#identity = identity;
         // this.#payload = new Payload();
         // this.open()  ... oops here it was haha
-        console.log("ChannelSocket()");
-        console.log(sbServer);
-        this.#url = sbServer.options.channel_ws + '/api/room/' + this.channelId + '/websocket';
-        this.sbWebSocket = new SBWebSocket(this.#url, this.receive, identity);
+        // this.sbWebSocket = new SBWebSocket(this.#url, this.receive, identity)
         // this.sbWebSocket.ready.then((ws) => this.#open(ws))
-        this.ready = (() => {
-            // we're ready when the socket is ready, but note that the ready function can change
-            return this.sbWebSocket.ready;
-        });
+        this.#wsOptions = {
+            url: sbServer.options.channel_ws + '/api/room/' + this.channelId + '/websocket',
+            ready: false,
+            identity: identity,
+            onMessage: this.receive,
+            timeout: 30000
+        };
+        this.#url = url;
+        this.onMessage = onMessage;
+        this.#identity = identity;
+        this.ready = this.#readyPromise(url);
     }
-    // /** ChannelSocket.open() */
-    // #open(ws: WebSocket) {
-    //   const options: WSProtocolOptions = {
-    //     url: this.#url + '/api/room/' + this.channelId + '/websocket',
-    //     onOpen: async (event: WebSocketEventMap) => {
-    //       console.log('websocket opened');
-    //       if (typeof this.onOpen === 'function') this.onOpen(event)
-    //     },
-    //     onMessage: async (event: ChannelMessage2) => {
-    //       console.log("****** start: onMessage() *****")
-    //       console.log(event)
-    //       console.log("****** end: onMessage() *****")
-    //       if (event?.ready) {
-    //         if (typeof this.onJoin === 'function') {
-    //           this.onJoin(event);
-    //           if (typeof this.onSystemInfo === 'function') this.onSystemInfo(event)
-    //         }
-    //       } else if (event?.system) {
-    //         if (typeof this.onSystemInfo === 'function') this.onSystemInfo(event)
-    //       } else {
-    //         if (typeof this.onMessage === 'function') this.onMessage(await this.receive(event))
-    //       }
-    //     },
-    //     onClose: (event: WebSocketEventMap) => {
-    //       if (typeof this.onClose === 'function') this.onClose(event)
-    //     },
-    //     onError: (event: WebSocketEventMap) => {
-    //       if (typeof this.onError === 'function') this.onError(event)
-    //     }
-    //   };
-    //   // this.sbWebSocket = new WS_Protocol(options);
-    //   this.#options = Object.assign(this.#options, options)
-    // }
     // /**
     //  * ChannelSocket.setKeys()
     //  */
@@ -1673,69 +1438,6 @@ class ChannelSocket {
             });
         });
     }
-    // onError() {
-    //   this.currentWebSocket.addEventListener('error', (event) => {
-    //     console.error('WebSocket error, reconnecting:', event);
-    //     if (typeof this.options.onError === 'function') this.options.onError(event)
-    //   });
-    // }
-    // onClose() {
-    //   this.currentWebSocket.addEventListener('close', (event) => {
-    //     console.info('Websocket closed', event);
-    //     if (typeof this.options.onClose === 'function') this.options.onClose(event)
-    //   });
-    // }
-    // return new Promise(async (resolve, reject) => {
-    //   try {
-    //     const msg = {encrypted_contents: await sbCrypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
-    //     resolve(JSON.stringify(msg));
-    //   } catch (e) {
-    //     console.error(e);
-    //     reject(new Error('Unable to encrypt payload.'));
-    //   }
-    // });
-    // moved to SBCrypto
-    // async unwrap(payload: Dictionary, key: CryptoKey) {
-    //   try {
-    //     const msg = await sbCrypto.decrypt(key, payload.encrypted_contents);
-    //     // psm: i think this throws in case of error
-    //     // if (msg['error']) {
-    //     //   return {error: msg['error']};
-    //     // }
-    //     return msg;
-    //   } catch (e) {
-    //     return { error: `Error: ${e}` };
-    //   }
-    // }
-    /**
-     * ChannelSocket.close()
-     */
-    // close() {
-    //   this.sbWebSocket.close();
-    // }
-    /**
-     * ChannelSocket.isReady()
-     */
-    // isReady() {
-    //   console.info('SB Socket ready');
-    //   this.ready = true;
-    //   if (this.#queue.length > 0) {
-    //     this.#queue.forEach((message) => {
-    //       this.send(message);
-    //     });
-    //   }
-    // }
-    // message.ready.then(() => {
-    //   if (this.ready) {
-    // 	let payload;
-    // 	this.#payload.wrap(
-    //       message,
-    //       this.#channel.keys.encryptionKey
-    // 	).then((payload) => { this.socket.send(payload) });
-    //   } else {
-    // 	this.#queue.push(message);
-    //   }
-    // });
     /**
      * ChannelSocket.sendSbObject()
      *
@@ -2588,33 +2290,6 @@ class Snackabra {
             }
         }
     }
-    // psm: this is no longer global
-    // /** Snackabra.setIdentity()
-    //     @param {JsonWebKey} sets public key (identity) you're joining channel with
-    //  */
-    // setIdentity(keys: JsonWebKey) {
-    //   return new Promise(async (resolve, reject) => {
-    //     try {
-    //       await this.#identity.mountKeys(keys);
-    //       resolve(this.#identity);
-    //     } catch (e) {
-    //       reject(e);
-    //     }
-    //   });
-    // }
-    // /** Snackabra.createIdentity
-    //     Creates a random (new) identity
-    //  */
-    // createIdentity() {
-    //   return new Promise(async (resolve, reject) => {
-    //     try {
-    //       this.#identity = await new Identity();
-    //       resolve(this.#identity);
-    //     } catch (e) {
-    //       reject(e);
-    //     }
-    //   });
-    // }
     /**
      * Snackabra.connect()
      * Connects to :term:`Channel Name` on this SB config.
@@ -2731,17 +2406,6 @@ class Snackabra {
         this.storage.saveFile(file, this.#channel);
     }
 }
-// export {
-//   Snackabra,
-//   SBMessage,
-//   SBFile,
-//   SB_libraryVersion,
-//   ab2str,
-//   str2ab,
-//   base64ToArrayBuffer,
-//   arrayBufferToBase64,
-//   getRandomValues
-// };
 export { 
 // ChannelMessage,
 Channel, Identity, SBMessage, Snackabra, };

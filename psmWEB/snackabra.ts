@@ -1,15 +1,15 @@
+/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
+
+/* Distributed under GPL-v03, see 'LICENSE' file for details */
+
+
 /*
-  THIS HEADER HAS INFO WHILE WE ARE REFACTORING
-
-  currently experimenting with
-  tsc -lib dom,es5,es6,es2021 -t es6 --explainFiles --pretty false --strict ./main.ts
-
-  main target options are (default is es3)
-  es3, es5, es6/es2015, es2016, es2017, es2018, es2019, es2020,
-  es2021, es2022, esnext
+  current tsc command-line settings:
+  tsc -t es2022 --pretty false --strict ./snackabra.ts
 
   TODO list:
-  * look for "ts-ignore" in the code below for lingering issues
+  * cut code (some still relevant) in
+  
   * latest (fast) code for image loading etc is in the JS client:
     384-snackabra-webclient/src/utils/ImageProcessor.js
     384-snackabra-webclient/src/utils/ImageWorker.js
@@ -21,15 +21,6 @@
     https://www.iana.org/assignments/websocket/websocket.xml#subprotocol-name
 
 */
-
-/*
-  BELOW HERE is what eventually becomes final code ..
-*/
-
-/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
-
-/* Distributed under GPL-v03, see 'LICENSE' file for details */
-
 
 /**
  * Interfaces
@@ -66,6 +57,8 @@ interface WSProtocolOptions {
   identity?: Identity,
   closed: boolean,
   init?: { name: string },
+  motd?: string,
+  locked?: boolean,
 }
 
 type StorableDataType = string | number | bigint | boolean | symbol | object
@@ -325,7 +318,7 @@ export class MessageBus {
   #select(event: string) {
     return this.bus[event] || (this.bus[event] = []);
   }
-
+  
   /**
    * Subscribe. 'event' is a string, special case '*' means everything
    *  (in which case the handler is also given the message)
@@ -1268,6 +1261,7 @@ class SBCrypto {
     // });
   }
 
+
   /**
    * SBCrypto.unwrap
    *
@@ -1523,12 +1517,14 @@ export class SBFile {
     this.senderPubKey = key;
     // psm: again, why are we signing empty contents?
     this.sign = sbCrypto.sign(signKey, this.contents);
-    if (file.type.match(/^image/i)) {
-      this.#asImage(file, signKey)
-    } else {
-      throw new Error('Unsupported file type: ' + file.type);
-    }
+    // if (file.type.match(/^image/i)) {
+    //   this.#asImage(file, signKey)
+    // } else {
+    //   throw new Error('Unsupported file type: ' + file.type);
+    // }
   }
+}
+
 
 /**
  * Channel
@@ -1593,19 +1589,6 @@ class Channel {
     this.#socket = new ChannelSocket(this.sbServer, this, this.defaultIdentity!)
     console.log("... setting onJoin on socket:")
     console.log(this.#socket)
-    this.#socket.onJoin = (m: string) => {
-      console.log("onJoin()")
-      const message: ChannelKeysMessage = deserializeMessage(m, 'channelKeys')! as ChannelKeysMessage
-      // note: we will only return from above if all is well
-      _sb_assert(message.ready, 'got roomKeys but channel reports it is not ready (?)')
-      resolveKeys(message.keys)
-      this.motd = message.motd
-      this.locked = message.roomLocked
-
-      console.log("Got setup keys for channel:")
-      console.log(message);
-
-    }
 
     // we're ready when the ChannelSocket is ready, but note that the ready function can change
     this.ready = (() => {
@@ -1722,8 +1705,8 @@ class ChannelSocket {
       }
     } else if (data.nack) {
       console.error('Nack received')
-      this.#closed = true
-      if (this.#websocket) this.#websocket.close()
+      this.#wsOptions.closed = true
+      // if (this.#websocket) this.#websocket.close()
     } else if (typeof this.onMessage === 'function') {
       // typically this will call ChannelSocket.receive()
       // if (this.onMessage(data)) this.onMessage(data)
@@ -1735,17 +1718,31 @@ class ChannelSocket {
   }
 
   #readyPromise(url: string) {
-    return new Promise<SBWebSocket>((resolve, reject) => {
+    return new Promise<ChannelSocket>((resolve, reject) => {
       try {
         if (this.#websocket) this.#websocket.close() // keep clean
         const ws = this.#websocket = new WebSocket(url)
         ws.addEventListener('open', () => {
           this.#closed = false;
-          this.init = { name: JSON.stringify(this.#identity.exportable_pubKey) }
+          // this.init = { name: JSON.stringify({}) }
           ws.send(JSON.stringify(this.init))
           resolve(this)
         })
-        ws.addEventListener('message', (e: MessageEvent) => this.#processMessage(e.data))
+        ws.addEventListener('message', (e: MessageEvent) => {
+          // const message: ChannelKeysMessage = deserializeMessage(m, 'channelKeys')! as ChannelKeysMessage
+          // _sb_assert(message.ready, 'got roomKeys but channel reports it is not ready (?)')
+          
+          const message: ChannelMessage2 = e.data as ChannelMessage2
+
+          resolveKeys(message.keys)
+          this.motd = message.motd
+          this.locked = message.roomLocked
+
+          console.log("Got setup keys for channel:")
+          console.log(message);
+
+          ws.addEventListener('message', (e: MessageEvent) => this.#processMessage(e.data))
+        })
         ws.addEventListener('close', (e: CloseEvent) => {
           this.#closed = true
           if (!e.wasClean) {
@@ -1769,8 +1766,8 @@ class ChannelSocket {
   }
 
   // MERGING: starting with SBWebSocket construction
-  constructor(url: string, onMessage: CallableFunction, identity: Identity) {
-  }
+  // constructor(url: string, onMessage: CallableFunction, identity: Identity) {
+  // }
 
   // MERGING: CHANNEL_SOCKET CONSTRUCTOR:
   constructor(sbServer: Snackabra, channel: Channel, identity: Identity) {
@@ -1791,7 +1788,7 @@ class ChannelSocket {
     // this.open()  ... oops here it was haha
 
 
-    this.sbWebSocket = new SBWebSocket(this.#url, this.receive, identity)
+    // this.sbWebSocket = new SBWebSocket(this.#url, this.receive, identity)
     // this.sbWebSocket.ready.then((ws) => this.#open(ws))
     this.#wsOptions = {
       url: sbServer.options.channel_ws + '/api/room/' + this.channelId + '/websocket',
@@ -1799,7 +1796,7 @@ class ChannelSocket {
       identity: identity,
       onMessage: this.receive,
       timeout: 30000
-    };
+    }
 
     this.#url = url
     this.onMessage = onMessage
@@ -1807,19 +1804,17 @@ class ChannelSocket {
 
     this.ready = this.#readyPromise(url)
 
-  })
-}
+  }
 
+  
+  // /**
+  //  * ChannelSocket.setKeys()
+  //  */
+  // setKeys(_keys: Dictionary) {
+  //   this.#channel.loadKeys(_keys);
+  // }
 
-
-// /**
-//  * ChannelSocket.setKeys()
-//  */
-// setKeys(_keys: Dictionary) {
-//   this.#channel.loadKeys(_keys);
-// }
-
-#wrap(sbMessage: SBMessage): Promise < Dictionary > {
+  #wrap(sbMessage: SBMessage): Promise < Dictionary > {
   console.log("#wrap()")
     return new Promise<Dictionary>((resolve) => {
     sbMessage.ready.then(() => {
@@ -2991,7 +2986,6 @@ class Snackabra {
     this.storage.saveFile(file, this.#channel);
   }
 }
-
 
 export {
   // ChannelMessage,

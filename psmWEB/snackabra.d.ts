@@ -433,7 +433,6 @@ declare class SBMessage {
  * @public
  */
 export declare class SBFile {
-    #private;
     encrypted: boolean;
     contents: string;
     senderPubKey: CryptoKey;
@@ -488,17 +487,9 @@ declare class Channel {
 declare class ChannelSocket {
     #private;
     ready: Promise<SBWebSocket>;
-    init: Dictionary;
     channelId: string;
     onMessage: CallableFunction;
-    foo: any;
-    foo: any;
-    /**
-     * ChannelSocket.close()
-     */
-    /**
-     * ChannelSocket.isReady()
-     */
+    constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
     /**
      * ChannelSocket.sendSbObject()
      *
