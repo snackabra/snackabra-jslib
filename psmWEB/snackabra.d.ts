@@ -22,16 +22,6 @@ interface ChannelData {
     signKey: string;
     SERVER_SECRET: string;
 }
-interface ChannelKeys {
-    exportable_owner_pubKey: CryptoKey;
-    exportable_verifiedGuest_pubKey: CryptoKey;
-    personal_signKey: CryptoKey;
-    room_privateSignKey: CryptoKey;
-    encryptionKey: CryptoKey;
-    locked_key: CryptoKey;
-    shared_key: CryptoKey;
-    exportable_locked_key: Dictionary;
-}
 interface ImageMetaData {
     imageId?: string;
     previewId?: string;
@@ -43,6 +33,7 @@ interface ChannelMessage2 {
     keys?: {
         ownerKey: Dictionary;
         encryptionKey: Dictionary;
+        guestKey?: Dictionary;
         signKey: Dictionary;
     };
     _id?: string;
@@ -51,7 +42,7 @@ interface ChannelMessage2 {
     timestampPrefix?: string;
     channelID?: string;
     control?: boolean;
-    encrypted_contents?: string;
+    encrypted_contents?: EncryptedContents;
     image?: string;
     imageMetaData?: ImageMetaData;
     motd?: string;
@@ -59,40 +50,71 @@ interface ChannelMessage2 {
     roomLocked?: boolean;
     sender_pubKey?: JsonWebKey;
     system?: boolean;
-    verficationToken?: string;
+    verificationToken?: string;
 }
 interface ChannelAckMessage {
     type: 'ack';
     _id: string;
 }
-interface ChannelRoomKeys {
-    type: 'roomKeys';
-    encryptionKey: JsonWebKey;
-    guestKey: JsonWebKey;
-    ownerKey: JsonWebKey;
-    signKey: JsonWebKey;
+interface ChannelKeys {
+    encryptionKey: Promise<CryptoKey>;
+    guestKey?: Promise<CryptoKey>;
+    ownerKey: Promise<CryptoKey>;
+    signKey: Promise<CryptoKey>;
+    lockedKey?: Promise<CryptoKey>;
+}
+interface ChannelKeysMessage {
+    type: 'channelKeys';
+    ready: boolean;
+    keys: ChannelKeys;
+    motd: string;
+    roomLocked: boolean;
+}
+/** Encryptedcontents
+
+    SB standard wrapping encrypted messages.
+
+    Encryption is done with AES-GCM, 16 bytes of salt (iv), The
+    ``contents`` are base64 and made web/net safe by running through
+    encodeURIComponent. Same thing with the nonce (iv).
+ */
+export interface EncryptedContents {
+    content: string;
+    iv: string;
 }
 interface ChannelEncryptedMessage {
-    type: 'channelMssage';
-    channelID: string;
-    timestampPrefix: string;
-    encrypted_contents: {
-        content: string;
-        iv: string;
-    };
+    type: 'channelMessage';
+    channelID?: string;
+    timestampPrefix?: string;
+    encrypted_contents: EncryptedContents;
 }
 interface ChannelEncryptedMessageArray {
     type: 'channelMessageArray';
     messages: ChannelEncryptedMessageArray[];
 }
-export declare type ChannelMessageV2 = ChannelRoomKeys | ChannelEncryptedMessage | ChannelEncryptedMessageArray;
+export declare type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void;
+export declare type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys';
+/**
+ * deserializeMessage()
+ *
+ * @param {string} m raw message string
+ * @param {ChannelMessageTypes} expect expected (required) type (exception if it's not)
+ */
+export declare function deserializeMessage(m: string, expect?: ChannelMessageTypes): ChannelMessage;
+/**
+ * serializeMessage()
+ *
+ * Serializes any SB message type.
+ *
+ * @param {ChannelMessage} SB message object
+ */
 interface ChannelMessage1 {
     [key: string]: ChannelMessage2;
     message: {
         [prop: string]: any;
     };
 }
-export declare type ChannelMessage = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage;
+export declare type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage;
 export declare function SB_libraryVersion(): string;
 /**
  * SB simple events (mesage bus) class
@@ -234,7 +256,12 @@ export declare function cleanBase32mi(s: string): string;
  * Takes an arbitrary dict object, a public key in PEM
  * format, and a callback function: generates a random AES key,
  * wraps that in (RSA) key, and when all done will call the
- * callback function with the results
+ * callback function with the results.
+ *
+ * This function is for direct use in a web page, for example
+ * capturing a 'form' input set of data about a user, and
+ * sending towards a backend in such a way that the contents
+ * can only be decrypted and read off-line (air gapped).
  *
  * @param {dict} dictionary (payload)
  * @param {publicKeyPEM} public key (PEM format)
@@ -275,51 +302,80 @@ export declare function encodeB64Url(input: string): string;
  */
 export declare function decodeB64Url(input: string): string;
 /**
- * Crypto is a class that contains all the SB specific crypto functions
+ * SBCrypto is a class that contains all the SB specific crypto functions
  *
  * @class
  * @constructor
  * @public
  */
-declare class Crypto {
+declare class SBCrypto {
     /**
      * Extracts (generates) public key from a private key.
      */
     extractPubKey(privateKey: JsonWebKey): JsonWebKey | null;
     /**
+     * SBCrypto.generatekeys()
+     *
      * Generates standard ``ECDH`` keys using ``P-384``.
      */
     generateKeys(): Promise<CryptoKeyPair>;
     /**
+     * SBCrypto.importKey()
+     *
      * Import keys
      */
     importKey(format: KeyFormat, key: BufferSource | JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
     /**
+     * SBCrypto.deriveKey()
+     *
      * Derive key.
      */
     deriveKey(privateKey: CryptoKey, publicKey: CryptoKey, type: string, extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
     /**
+     * SBCrypto.getFileKey()
+     *
      * Get file key
      */
     getFileKey(fileHash: string, _salt: ArrayBuffer): Promise<unknown>;
     /**
+     * SBCrypto.encrypt()
+     *
      * Encrypt
      */
     encrypt(contents: BufferSource, secret_key: CryptoKey, outputType?: string, _iv?: ArrayBuffer | null): Promise<Dictionary | string>;
     /**
-     * Decrypt
+     * SBCrypto.decrypt()
+     *
+     * Decrypt. Defunct, replaced by unwrap()
      */
     decrypt(secretKey: CryptoKey, contents: Dictionary, outputType?: string): Promise<string>;
     /**
+     * SBCrypto.unwrap
+     *
+     * Decrypts a wrapped object, returns decrypted contents
+     */
+    unwrap(k: CryptoKey, o: EncryptedContents): Promise<string>;
+    /**
+     * SBCrypto.wrap
+     *
+     * Encrypts
+     */
+    /**
+     * SBCrypto.sign()
+     *
      * Sign
      */
     sign(secretKey: CryptoKey, contents: string): Promise<string>;
     /**
+     * SBCrypto.verify()
+     *
      * Verify
      */
     verify(secretKey: CryptoKey, sign: string, contents: string): Promise<unknown>;
     /**
-     * Compare keys
+     * SBCrypto.areKeysSame()
+     *
+     * Compare keys. (TODO: deprecate/ change)
      */
     areKeysSame(key1: Dictionary, key2: Dictionary): boolean;
 }
@@ -366,7 +422,6 @@ interface SBMessageContents {
  */
 declare class SBMessage {
     ready: Promise<SBMessage>;
-    signKey: CryptoKey;
     identity?: Identity;
     contents: SBMessageContents;
     constructor(channel: Channel, body: string, identity?: Identity);
@@ -377,7 +432,7 @@ declare class SBMessage {
  * @constructor
  * @public
  */
-declare class SBFile {
+export declare class SBFile {
     #private;
     encrypted: boolean;
     contents: string;
@@ -393,8 +448,11 @@ declare class SBFile {
 declare class SBWebSocket {
     #private;
     ready: Promise<SBWebSocket>;
+    init?: {
+        name: string;
+    };
     onMessage: CallableFunction;
-    constructor(url: string, onMessage: CallableFunction);
+    constructor(url: string, onMessage: CallableFunction, identity: Identity);
     send(m: string): Promise<unknown>;
 }
 /**
@@ -410,18 +468,18 @@ declare class Channel {
     sbServer: Snackabra;
     channel_id: string;
     defaultIdentity?: Identity;
+    motd?: string;
+    locked?: boolean;
     owner: boolean;
     admin: boolean;
     verifiedGuest: boolean;
-    metaData: Dictionary;
-    storage?: StorageApi;
     constructor(sbServer: Snackabra, channel_id: string, identity?: Identity);
     /**
      * Channel.keys()
      *
-     * Return keys
+     * Return (promise to) keys
      */
-    get keys(): ChannelKeys;
+    get keys(): Promise<ChannelKeys>;
     /**
      * Channel.api()
      */
@@ -430,36 +488,6 @@ declare class Channel {
      * Channel.socket()
      */
     get socket(): ChannelSocket;
-    /**
-     * Channel.loadKeys()
-     *
-     * When connecting to a channel server, the first thing it replies with is a set of
-     * keys for operating against the channel. Here we load those into the channel.
-     *
-     * Specifically the server will respond with something like this: ::
-     *
-     *   {"ready":true,
-     *    "keys":{
-     *            "ownerKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
-     *                        \"x\":\"9s17B4i0Cuf_w9XN_uAq2DFePOr6S3sMFMA95KjLN8akBUWEhPAcuMEMwNUlrrkN\",
-     *                        \"y\":\"6dAtcyMbtsO5ufKvlhxRsvjTmkABGlTYG1BrEjTpwrAgtmn6k25GR7akklz9klBr\"}",
-     *            "guestKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
-     *                         \"x\":\"Lx0eJcbNuyEfHDobWaZqgy9UO7ppxVIsEpEtvbzkAlIjySh9lY2AvgnACREO6QXD\",
-     *                         \"y\":\"zEHPgpsl4jge_Q-K6ekuzi2bQOybnaPT1MozCFQJnXEePBX8emkHriOiwl6P8BAS\"}",
-     *            "encryptionKey":"{\"alg\":\"A256GCM\",\"ext\":true,
-     *                             \"k\":\"F0sQTTLXDhuvvmgGQLzMoeHPD-SJlFyhfOD-cqejEOU\",
-     *                             \"key_ops\":[\"encrypt\",\"decrypt\"],\"kty\":\"oct\"}",
-     *            "signKey":"{\"crv\":\"P-384\",
-     *                        \"d\":\"KCJHDZ34XgVFsS9-sU09HFzXZhnGCvnDgJ5a8GTSfjuJQaq-1N2acvchPRhknk8B\",
-     *                        \"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",
-     *                        \"x\":\"rdsyBle0DD1hvp2OE2mINyyI87Cyg7FS3tCQUIeVkfPiNOACtFxi6iP8oeYt-Dge\",
-     *                        \"y\":\"qW9VP72uf9rgUU117G7AfTkCMncJbT5scIaIRwBXfqET6FYcq20fwSP7R911J2_t\"}"
-     *             },
-     *     "motd":"",
-     *     "roomLocked":false}
-     *
-     */
-    loadKeys(keys: Dictionary): Promise<unknown>;
 }
 /** Class managing connections */
 declare class ChannelSocket {
@@ -469,28 +497,16 @@ declare class ChannelSocket {
     init: Dictionary;
     channelId: string;
     onOpen: CallableFunction;
-    onJoin: CallableFunction;
-    onClose: CallableFunction;
-    onError: CallableFunction;
+    onJoin?: CallableFunction;
     onMessage: CallableFunction;
     onSystemInfo: CallableFunction;
     constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
-    unwrap(payload: Dictionary, key: CryptoKey): Promise<string | {
-        error: string;
-    }>;
-    /**
-     * ChannelSocket.open()
-     *
-     */
-    open(): void;
     /**
      * ChannelSocket.close()
      */
-    close(): void;
     /**
      * ChannelSocket.isReady()
      */
-    isReady(): void;
     /**
      * ChannelSocket.send()
      *
@@ -502,15 +518,15 @@ declare class ChannelSocket {
      *
      * Send SB object (file) on channel socket
      */
-    sendSbObject(file: SBMessage): Promise<void>;
+    sendSbObject(file: SBFile): Promise<void>;
     /**
-     * ChannelSocket.receive()
-     *
-     * Receive message on channel socket
-     * psm: updating using new cool types
-     * (it will arrive mostly unwrapped)
-     */
-    receive(message: ChannelMessage): Promise<string | ChannelMessage | undefined>;
+      * ChannelSocket.receive()
+      *
+      * Receive message on channel socket.
+      *
+      * Moving to new message types
+      */
+    receive(message: ChannelMessage2): Promise<string | ChannelMessage2>;
 }
 /**
  * Storage API
@@ -541,12 +557,12 @@ declare class StorageApi {
     /**
      * StorageApi().fetchData()
      */
-    fetchData(msgId: string, verificationToken: string): Promise<ArrayBuffer>;
+    fetchData(msgId: string, verificationToken: string | undefined): Promise<ArrayBuffer>;
     /**
      * StorageApi().retrieveData()
      * retrieves an object from storage
      */
-    retrieveData(msgId: string, messages: Array<ChannelMessage>, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
+    retrieveData(msgId: string, messages: Array<ChannelMessage2>, controlMessages: Array<ChannelMessage2>): Promise<Dictionary>;
     /**
      * StorageApi().retrieveDataFromMessage()
      */
@@ -607,24 +623,7 @@ declare class ChannelApi {
     authorize(ownerPublicKey: Dictionary, serverSecret: string): Promise<unknown>;
     postPubKey(_exportable_pubKey: Dictionary): Promise<unknown>;
     storageRequest(byteLength: number): Promise<Dictionary>;
-    lock(): Promise<unknown>;
-    acceptVisitor(pubKey: string): Promise<unknown>;
-    ownerKeyRotation(): Promise<unknown>;
 }
-/**
- * QueueItem class
- *
- * @class
- * @constructor
- * @public
- */
-/**
- * Queue Class
- *
- * @class
- * @constructor
- * @public
- */
 declare class Snackabra {
     #private;
     defaultIdentity?: Identity;
@@ -661,9 +660,10 @@ declare class Snackabra {
     create(serverSecret: string, identity: Identity): Promise<string>;
     get channel(): Channel;
     get storage(): StorageApi;
-    get crypto(): Crypto;
+    get crypto(): SBCrypto;
     get identity(): Identity;
+    set identity(identity: Identity);
     sendMessage(message: SBMessage): void;
     sendFile(file: SBFile): void;
 }
-export { Channel, Identity, SBFile, SBMessage, Snackabra, };
+export { Channel, Identity, SBMessage, Snackabra, };

@@ -290,7 +290,6 @@ const key = {
 //   });
 // }
 
-
 // new tiny 'hello'
 if (test_list.includes('test04a')) {
   // "me", note 'key' is set above as a const
@@ -315,39 +314,42 @@ if (test_list.includes('test04a')) {
       // const messages = [];
       // const controlMessages = [];
 
-      console.log("@@@@@@@@@@@@@@@@ channel has keys:")
-      console.log(c.keys)
+      c.keys.then((k) => {
+        console.log("@@@@@@@@@@@@@@@@ channel has keys:")
+        console.log(k)
+        console.log(c.keys)
 
-      console.log("@@@@@@@@@@@@@@@@ trying to send message!")
+        console.log("@@@@@@@@@@@@@@@@ trying to send message!")
 
-      let sbm = new SBMessage(c, "Hello from test04b!")
+        let sbm = new SBMessage(c, "Hello from test04b!")
 
-      console.log("@@@@@@@@@@@@@@@@ will try to send this message:")
-      console.log(sbm)
+        console.log("@@@@@@@@@@@@@@@@ will try to send this message:")
+        console.log(sbm)
 
-      c.socket.send(sbm).then((c) => {
-        console.log("back from send promise? got response:")
-        console.log(c)
-        console.log("@@@@@@@@@@@@@@@@ end of test")
+        c.socket.send(sbm).then((c) => {
+          console.log("back from send promise? got response:")
+          console.log(c)
+          console.log("@@@@@@@@@@@@@@@@ end of test")
+        })
+
+        // in parallel, handle incoming messages:
+        c.socket.onMessage = async (message: any) => {
+          console.log('Message Received:')
+          console.log(message)
+        }
+
+        // // send more hello
+        // let messageCount = 0
+        // getElement('sayHello').onclick = (() => {
+        //   messageCount++
+        //   let msg = new SBMessage(c, `message number ${messageCount}!`)
+        //   // @ts-ignore
+        //   sbm.sender_pubKey = JSON.stringify(myPubKey)
+        //   console.log(`================ sending message number ${messageCount}:`)
+        //   console.log(sbm)
+        //   c.socket.send(sbm).then((c) => console.log("back from send promise?"))
+        // })
       })
-
-      // in parallel, handle incoming messages:
-      c.socket.onMessage = async (message: any) => {
-        console.log('Message Received:')
-        console.log(message)
-      }
-
-      // // send more hello
-      // let messageCount = 0
-      // getElement('sayHello').onclick = (() => {
-      //   messageCount++
-      //   let msg = new SBMessage(c, `message number ${messageCount}!`)
-      //   // @ts-ignore
-      //   sbm.sender_pubKey = JSON.stringify(myPubKey)
-      //   console.log(`================ sending message number ${messageCount}:`)
-      //   console.log(sbm)
-      //   c.socket.send(sbm).then((c) => console.log("back from send promise?"))
-      // })
 
     });
   });

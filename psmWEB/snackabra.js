@@ -21,6 +21,17 @@
     https://www.iana.org/assignments/websocket/websocket.xml#subprotocol-name
 
 */
+// psm: replacing this old stuff ...
+// interface ChannelKeys {
+//   exportable_owner_pubKey: CryptoKey;
+//   exportable_verifiedGuest_pubKey: CryptoKey;
+//   personal_signKey: CryptoKey;
+//   room_privateSignKey: CryptoKey;
+//   encryptionKey: CryptoKey;
+//   locked_key: CryptoKey;
+//   shared_key: CryptoKey;
+//   exportable_locked_key: Dictionary;
+// }
 /*
   format is a single string:
 
@@ -28,6 +39,38 @@
   011000001101110010110011101001000001101001
 */
 const msgIdRegex = /^([A-Za-z0-9+/_\-=]{64})*([01]{42})$/;
+/**
+ * deserializeMessage()
+ *
+ * @param {string} m raw message string
+ * @param {ChannelMessageTypes} expect expected (required) type (exception if it's not)
+ */
+export function deserializeMessage(m, expect) {
+    try {
+        if ((expect) && (expect == 'channelKeys')) {
+            let m0 = JSON.parse(m); // no wrapping because we want the exception here
+            let keys = {
+                ownerKey: sbCrypto.importKey('jwk', JSON.parse(m0.keys.ownerKey), 'ECDH', false, []),
+                encryptionKey: sbCrypto.importKey('jwk', JSON.parse(m0.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
+                signKey: sbCrypto.importKey('jwk', JSON.parse(m0.keys.importKey), 'ECDH', true, ['deriveKey']),
+            };
+            if (m0.keys.guestKey)
+                keys.guestKey = sbCrypto.importKey('jwk', JSON.parse(m0.keys.guestKey), 'ECDH', false, []);
+            let m1 = {
+                type: 'channelKeys',
+                ready: m0.ready,
+                keys: keys,
+                motd: m0.motd,
+                roomLocked: m0.roomLocked,
+            };
+            return m1;
+        }
+    }
+    catch (e) {
+        console.error(e);
+        throw new Error('Failed to parse message, see log for details');
+    }
+}
 // function dictToMessage(d:  Dictionary | undefined): ChannelMessage {
 //   let r: ChannelMessage = {type: 'invalid'} // default
 //   if (typeof d == 'undefined') return r
@@ -554,7 +597,12 @@ export function cleanBase32mi(s) {
  * Takes an arbitrary dict object, a public key in PEM
  * format, and a callback function: generates a random AES key,
  * wraps that in (RSA) key, and when all done will call the
- * callback function with the results
+ * callback function with the results.
+ *
+ * This function is for direct use in a web page, for example
+ * capturing a 'form' input set of data about a user, and
+ * sending towards a backend in such a way that the contents
+ * can only be decrypted and read off-line (air gapped).
  *
  * @param {dict} dictionary (payload)
  * @param {publicKeyPEM} public key (PEM format)
@@ -788,13 +836,13 @@ export function decodeB64Url(input) {
 //   }
 // }
 /**
- * Crypto is a class that contains all the SB specific crypto functions
+ * SBCrypto is a class that contains all the SB specific crypto functions
  *
  * @class
  * @constructor
  * @public
  */
-class Crypto {
+class SBCrypto {
     /**
      * Extracts (generates) public key from a private key.
      */
@@ -815,6 +863,8 @@ class Crypto {
         }
     }
     /**
+     * SBCrypto.generatekeys()
+     *
      * Generates standard ``ECDH`` keys using ``P-384``.
      */
     generateKeys() {
@@ -830,6 +880,8 @@ class Crypto {
         });
     }
     /**
+     * SBCrypto.importKey()
+     *
      * Import keys
      */
     importKey(format, key, type, extractable, keyUsages) {
@@ -846,6 +898,8 @@ class Crypto {
         }
     }
     /**
+     * SBCrypto.deriveKey()
+     *
      * Derive key.
      */
     deriveKey(privateKey, publicKey, type, extractable, keyUsages) {
@@ -870,6 +924,8 @@ class Crypto {
         });
     }
     /**
+     * SBCrypto.getFileKey()
+     *
      * Get file key
      */
     getFileKey(fileHash, _salt) {
@@ -892,6 +948,8 @@ class Crypto {
         });
     }
     /**
+     * SBCrypto.encrypt()
+     *
      * Encrypt
      */
     encrypt(contents, secret_key, outputType = 'string', _iv = null) {
@@ -925,17 +983,34 @@ class Crypto {
         });
     }
     /**
-     * Decrypt
+     * SBCrypto.decrypt()
+     *
+     * Decrypt. Defunct, replaced by unwrap()
      */
     decrypt(secretKey, contents, outputType = 'string') {
+        throw new Error(`decrypt() - replaced by wrap. params (${secretKey}, ${contents}, ${outputType})`);
+        // return new Promise(async (resolve, reject) => {
+        //   try {
+        //     const ciphertext: BufferSource = typeof contents.content === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.content)) : contents.content;
+        //     const iv: ArrayBuffer = typeof contents.iv === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.iv)) : contents.iv;
+        //     const decrypted: ArrayBuffer = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, secretKey, ciphertext);
+        //     resolve(new TextDecoder().decode(decrypted));
+        //   } catch (e) {
+        //     reject(e);
+        //   }
+        // });
+    }
+    /**
+     * SBCrypto.unwrap
+     *
+     * Decrypts a wrapped object, returns decrypted contents
+     */
+    unwrap(k, o) {
         return new Promise(async (resolve, reject) => {
             try {
-                const ciphertext = typeof contents.content === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.content)) : contents.content;
-                const iv = typeof contents.iv === 'string' ? base64ToArrayBuffer(decodeURIComponent(contents.iv)) : contents.iv;
-                const decrypted = await crypto.subtle.decrypt({
-                    name: 'AES-GCM', iv: iv
-                }, secretKey, ciphertext);
-                resolve(new TextDecoder().decode(decrypted));
+                const t = base64ToArrayBuffer(decodeURIComponent(o.content));
+                const iv = base64ToArrayBuffer(decodeURIComponent(o.iv));
+                crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, k, t).then((d) => resolve(new TextDecoder().decode(d)));
             }
             catch (e) {
                 reject(e);
@@ -943,6 +1018,13 @@ class Crypto {
         });
     }
     /**
+     * SBCrypto.wrap
+     *
+     * Encrypts
+     */
+    /**
+     * SBCrypto.sign()
+     *
      * Sign
      */
     sign(secretKey, contents) {
@@ -965,6 +1047,8 @@ class Crypto {
         });
     }
     /**
+     * SBCrypto.verify()
+     *
      * Verify
      */
     verify(secretKey, sign, contents) {
@@ -987,7 +1071,9 @@ class Crypto {
         });
     }
     /**
-     * Compare keys
+     * SBCrypto.areKeysSame()
+     *
+     * Compare keys. (TODO: deprecate/ change)
      */
     areKeysSame(key1, key2) {
         if (key1 != null && key2 != null && typeof key1 === 'object' && typeof key2 === 'object') {
@@ -995,8 +1081,8 @@ class Crypto {
         }
         return false;
     }
-}
-const SB_Crypto = new Crypto();
+} /* SBCrypto */
+const sbCrypto = new SBCrypto();
 /**
  * Identity (key for use in SB)
  * @class
@@ -1023,6 +1109,8 @@ class Identity {
             // as soon as any source of crypto resolves the Identity, we're ready
             this.exportable_pubKey.then(() => resolve(_self));
         });
+        if (keys)
+            this.mountKeys(keys);
     }
     /**
      * Mint keys
@@ -1031,7 +1119,7 @@ class Identity {
         return new Promise(async (resolve, reject) => {
             const _self = this;
             try {
-                SB_Crypto.generateKeys().then((keyPair) => {
+                sbCrypto.generateKeys().then((keyPair) => {
                     crypto.subtle.exportKey('jwk', keyPair.publicKey).then((k) => this.resolve_exportable_pubKey(k));
                     crypto.subtle.exportKey('jwk', keyPair.privateKey).then((k) => this.resolve_exportable_privateKey(k));
                     this.resolve_privateKey(keyPair.privateKey);
@@ -1051,8 +1139,8 @@ class Identity {
             const _self = this;
             try {
                 this.resolve_exportable_privateKey(key);
-                this.resolve_exportable_pubKey(SB_Crypto.extractPubKey(key));
-                SB_Crypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
+                this.resolve_exportable_pubKey(sbCrypto.extractPubKey(key));
+                sbCrypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
                     this.resolve_privateKey(k);
                     resolve(_self);
                 });
@@ -1074,7 +1162,6 @@ class Identity {
  */
 class SBMessage {
     ready;
-    signKey;
     identity;
     contents = { encrypted: false, body: '', sign: '', image: '', imageMetaData: {} };
     constructor(channel, body, identity) {
@@ -1091,27 +1178,36 @@ class SBMessage {
         else {
             _sb_exception('SBMessage()', 'No Identity (and thus no encryption keys) given');
         }
-        this.signKey = channel.keys.personal_signKey;
         this.ready = new Promise((resolve) => {
-            const sign = SB_Crypto.sign(this.signKey, body);
-            const image_sign = SB_Crypto.sign(this.signKey, this.contents.image);
-            const imageMetadata_sign = SB_Crypto.sign(this.signKey, JSON.stringify(this.contents.imageMetaData));
-            Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
-                this.contents.sign = values[0];
-                this.contents.image_sign = values[1];
-                this.contents.imageMetadata_sign = values[2];
-                resolve(this);
+            console.log("SBMessage: waiting on keys... ");
+            channel.keys.then((keys) => {
+                console.log("SBMessage: ... got keys .. waiting for Sign key ");
+                keys.signKey.then((signKey) => {
+                    console.log("SBMessage: ... got sign key ... waiting on closure");
+                    const sign = sbCrypto.sign(signKey, body);
+                    const image_sign = sbCrypto.sign(signKey, this.contents.image);
+                    const imageMetadata_sign = sbCrypto.sign(signKey, JSON.stringify(this.contents.imageMetaData));
+                    Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
+                        console.log("SBMessage: ... got everything, about to resolve");
+                        this.contents.sign = values[0];
+                        this.contents.image_sign = values[1];
+                        this.contents.imageMetadata_sign = values[2];
+                        resolve(this);
+                    });
+                });
             });
         });
     }
 }
+/* mtg: I think we landed on the SBFile is a type and all the
+ * functionality here is performed elsewhere and passed to SB */
 /**
  * SBFile
  * @class
  * @constructor
  * @public
  */
-class SBFile {
+export class SBFile {
     encrypted = false;
     contents = '';
     senderPubKey;
@@ -1130,7 +1226,7 @@ class SBFile {
     constructor(file, signKey, key) {
         this.senderPubKey = key;
         // psm: again, why are we signing empty contents?
-        this.sign = SB_Crypto.sign(signKey, this.contents);
+        this.sign = sbCrypto.sign(signKey, this.contents);
         if (file.type.match(/^image/i)) {
             this.#asImage(file, signKey);
         }
@@ -1142,162 +1238,41 @@ class SBFile {
      * asImage
      */
     #asImage(image, signKey) {
-        // psm: this should all be replaced by SBImage
-        throw new Error('#asImage() needs carryover from SBImage etc');
+        // TODO: the getfile/restrict should be done by SBImage etc, other stuff is SB messaging
+        throw new Error(`#asImage() needs carryover from SBImage etc (${image}, ${signKey})`);
         // this.data.previewImage = this.#padImage(await (await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
         // const previewHash: Dictionary = await this.#generateImageHash(this.data.previewImage);
         // this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await (await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
         // const fullHash: Dictionary = await this.#generateImageHash(this.data.fullImage);
-        // // psm: not sure what this does next, but the new SBImage class should do all this for you
-        // // @ts-ignore
         // this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
-        // this.image_sign = await SB_Crypto.sign(signKey, this.image);
+        // this.image_sign = await sbCrypto.sign(signKey, this.image);
         // this.imageMetaData = JSON.stringify({
         //   imageId: fullHash.id,
         //   previewId: previewHash.id,
         //   imageKey: fullHash.key,
         //   previewKey: previewHash.key
         // });
-        // this.imageMetadata_sign = await SB_Crypto.sign(signKey, this.imageMetaData)
+        // this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
     }
-    /**
-     * getFileData
-     */
-    #getFileData(file, outputType) {
-        try {
-            const reader = new FileReader();
-            if (file.size === 0) {
-                return null;
-            }
-            outputType === 'url' ? reader.readAsDataURL(file) : reader.readAsArrayBuffer(file);
-            return new Promise((resolve) => {
-                reader.onloadend = () => {
-                    const the_blob = reader.result;
-                    resolve(the_blob);
-                };
-            });
-        }
-        catch (e) {
-            console.log(e);
-            return null;
-        }
-    }
-    /**
-     * padImage
-     */
-    #padImage(image_buffer) {
-        let _sizes = [128, 256, 512, 1024, 2048, 4096]; // in KB
-        _sizes = _sizes.map((size) => size * 1024);
-        const image_size = image_buffer.byteLength;
-        // console.log('BEFORE PADDING: ', image_size)
-        let _target = 0;
-        if (image_size < _sizes[_sizes.length - 1]) {
-            for (let i = 0; i < _sizes.length; i++) {
-                if (image_size + 21 < _sizes[i]) {
-                    _target = _sizes[i];
-                    break;
-                }
-            }
-        }
-        else {
-            _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
-            if (image_size + 21 >= _target) {
-                _target += 1024;
-            }
-        }
-        const _padding_array = [128];
-        _target = _target - image_size - 21;
-        // We will finally convert to Uint32Array where each element is 4 bytes
-        // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
-        // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
-        for (let i = 0; i < _target; i++) {
-            _padding_array.push(0);
-        }
-        // _padding_array.push(image_size);
-        const _padding = new Uint8Array(_padding_array).buffer;
-        // console.log('Padding size: ', _padding.byteLength)
-        let final_data = _appendBuffer(image_buffer, _padding);
-        final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
-        // console.log('AFTER PADDING: ', final_data.byteLength)
-        return final_data;
-    }
-    /**
-     * restrictPhoto
-     */
-    async #restrictPhoto(photo, maxSize, // in KB
-    imageType, qualityArgument) {
-        // latest and greatest JS version is in:
-        // 384-snackabra-webclient/src/utils/ImageProcessor.js
-        throw new Error('restrictPhoto() needs TS version');
-        return null;
-    }
-    /**
-     * scaleCanvas
-     */
-    #scaleCanvas(canvas, scale) {
-        // latest and greatest JS version is in:
-        // 384-snackabra-webclient/src/utils/ImageProcessor.js
-        throw new Error('scaleCanvas() needs TS version');
-        const scaledCanvas = document.createElement('canvas');
-        scaledCanvas.width = canvas.width * scale;
-        scaledCanvas.height = canvas.height * scale;
-        // console.log(`#### scaledCanvas target W ${scaledCanvas.width} x H ${scaledCanvas.height}`);
-        scaledCanvas
-            .getContext('2d')
-            .drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-        // console.log(`#### scaledCanvas actual W ${scaledCanvas.width} x H ${scaledCanvas.height}`);
-        return scaledCanvas;
-    }
-    /**
-     * generateImageHash
-     */
-    async #generateImageHash(image) {
-        // latest and greatest JS version is in:
-        // 384-snackabra-webclient/src/utils/ImageProcessor.js
-        throw new Error('generateImageHash() needs TS version');
-    }
-    /**
-     * readPhoto
-     */
-    async #readPhoto(photo) {
-        const canvas = document.createElement('canvas');
-        const img = document.createElement('img');
-        // create img element from File object
-        img.src = await new Promise((resolve) => {
-            const reader = new FileReader();
-            // TODO: the entire readPhoto stuff is replaced by SBImage
-            // @ts-ignore
-            reader.onload = (e) => resolve(e.target?.result);
-            // TODO: ditto
-            // @ts-ignore
-            reader.readAsDataURL(photo);
-        });
-        await new Promise((resolve) => {
-            img.onload = resolve;
-        });
-        // console.log("img object");
-        // console.log(img);
-        // console.log("canvas object");
-        // console.log(canvas);
-        // draw image in canvas element
-        canvas.width = img.width;
-        canvas.height = img.height;
-        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        return canvas;
-    }
-}
+} /* SBFile */
 class SBWebSocket {
     ready;
+    init;
     #closed = false;
     #url;
-    #websocket;
+    #identity;
     #timeout = 30000;
+    // #protocolVersion = 1
+    #websocket;
     onMessage;
-    constructor(url, onMessage) {
+    constructor(url, onMessage, identity) {
+        console.log(`SBWebSocket(${url})`);
         this.#url = url;
         this.onMessage = onMessage;
-        this.#websocket = new WebSocket(url); // this one will be discarded
+        this.#identity = identity;
+        // this.#websocket = new WebSocket(url) // this one will be discarded
         this.ready = this.#readyPromise(url);
+        console.error(this);
     }
     #ack = [];
     #processMessage(m) {
@@ -1317,14 +1292,18 @@ class SBWebSocket {
         else if (data.nack) {
             console.error('Nack received');
             this.#closed = true;
-            this.#websocket.close();
+            if (this.#websocket)
+                this.#websocket.close();
         }
         else if (typeof this.onMessage === 'function') {
-            if (this.onMessage(data))
-                this.onMessage(data);
+            // typically this will call ChannelSocket.receive()
+            // if (this.onMessage(data)) this.onMessage(data)
+            // update: pass the string so it can deserialize on its own
+            if (this.onMessage)
+                this.onMessage(m);
         }
         else {
-            _sb_exception('SBWebSocket', 'received message but there is no hander');
+            _sb_exception('SBWebSocket', 'received message but there is no handler');
         }
     }
     #readyPromise(url) {
@@ -1335,6 +1314,8 @@ class SBWebSocket {
                 const ws = this.#websocket = new WebSocket(url);
                 ws.addEventListener('open', () => {
                     this.#closed = false;
+                    this.init = { name: JSON.stringify(this.#identity.exportable_pubKey) };
+                    ws.send(JSON.stringify(this.init));
                     resolve(this);
                 });
                 ws.addEventListener('message', (e) => this.#processMessage(e.data));
@@ -1361,9 +1342,43 @@ class SBWebSocket {
             }
         });
     }
+    // /** ChannelSocket.open() */
+    // #open(ws: WebSocket) {
+    //   const options: WSProtocolOptions = {
+    //     url: this.#url + '/api/room/' + this.channelId + '/websocket',
+    //     onOpen: async (event: WebSocketEventMap) => {
+    //       console.log('websocket opened');
+    //       if (typeof this.onOpen === 'function') this.onOpen(event)
+    //     },
+    //     onMessage: async (event: ChannelMessage2) => {
+    //       console.log("****** start: onMessage() *****")
+    //       console.log(event)
+    //       console.log("****** end: onMessage() *****")
+    //       if (event?.ready) {
+    //         if (typeof this.onJoin === 'function') {
+    //           this.onJoin(event);
+    //           if (typeof this.onSystemInfo === 'function') this.onSystemInfo(event)
+    //         }
+    //       } else if (event?.system) {
+    //         if (typeof this.onSystemInfo === 'function') this.onSystemInfo(event)
+    //       } else {
+    //         if (typeof this.onMessage === 'function') this.onMessage(await this.receive(event))
+    //       }
+    //     },
+    //     onClose: (event: WebSocketEventMap) => {
+    //       if (typeof this.onClose === 'function') this.onClose(event)
+    //     },
+    //     onError: (event: WebSocketEventMap) => {
+    //       if (typeof this.onError === 'function') this.onError(event)
+    //     }
+    //   };
+    //   // this.sbWebSocket = new WS_Protocol(options);
+    //   this.#options = Object.assign(this.#options, options)
+    // }
     send(m) {
         // for future inspiration here are more thoughts on making this more iron clad:
         // https://stackoverflow.com/questions/29881957/websocket-connection-timeout
+        console.log("send(): " + m);
         return new Promise((resolve, reject) => {
             if (this.#closed)
                 this.ready = this.#readyPromise(this.#url);
@@ -1387,6 +1402,7 @@ class SBWebSocket {
                                     }
                                     else {
                                         // normal behavior
+                                        resolve("success");
                                     }
                                 }, this.#timeout);
                             });
@@ -1486,30 +1502,6 @@ class SBWebSocket {
 //   };
 //   /**
 //    * WS_Protocol
-//    * onError
-//    */
-//   onError() {
-//     this.currentWebSocket.addEventListener('error', (event) => {
-//       console.error('WebSocket error, reconnecting:', event);
-//       if (typeof this.options.onError === 'function') {
-//         this.options.onError(event);
-//       }
-//     });
-//   }
-//   /**
-//    * WS_Protocol
-//    * onClose
-//    */
-//   onClose() {
-//     this.currentWebSocket.addEventListener('close', (event) => {
-//       console.info('Websocket closed', event);
-//       if (typeof this.options.onClose === 'function') {
-//         this.options.onClose(event);
-//       }
-//     });
-//   }
-//   /**
-//    * WS_Protocol
 //    * onMessage
 //    */
 //   onMessage() {
@@ -1564,15 +1556,18 @@ class Channel {
     sbServer;
     channel_id;
     defaultIdentity;
+    motd;
+    locked;
     owner = false;
     admin = false;
     verifiedGuest = false;
-    metaData = {};
+    // metaData: Dictionary = {};
     // #keys!: Dictionary;
     #keys;
     #api;
     #socket;
-    storage; // TODO: in principle should be optional?
+    //storage?: StorageApi // TODO: in principle should be optional?
+    // mtg: I think this ^ is part of the mess that was brought from 0.4 I don't think we should have a storage property here at all
     // constructor(https: string, wss: string, identity: Identity) {
     //   this.url = https;
     //   this.wss = wss;
@@ -1599,18 +1594,22 @@ class Channel {
         }
         _sb_assert(channel_id != null, 'channel_id cannot be null'); // TODO: this can be done with types
         this.channel_id = channel_id;
+        let resolveKeys;
+        this.#keys = new Promise((resolve) => resolveKeys = resolve);
         this.#api = new ChannelApi(this.sbServer, this, this.defaultIdentity);
         this.#socket = new ChannelSocket(this.sbServer, this, this.defaultIdentity);
-        this.#socket.onJoin = (message) => {
-            if (message?.ready) {
-                console.log("Got setup keys for channel:");
-                console.log(message);
-                this.metaData = message;
-                this.loadKeys(message.keys).then(() => {
-                    this.socket.isReady();
-                    // resolve(this);
-                });
-            }
+        console.log("... setting onJoin on socket:");
+        console.log(this.#socket);
+        this.#socket.onJoin = (m) => {
+            console.log("onJoin()");
+            const message = deserializeMessage(m, 'channelKeys');
+            // note: we will only return from above if all is well
+            _sb_assert(message.ready, 'got roomKeys but channel reports it is not ready (?)');
+            resolveKeys(message.keys);
+            this.motd = message.motd;
+            this.locked = message.roomLocked;
+            console.log("Got setup keys for channel:");
+            console.log(message);
         };
         // we're ready when the ChannelSocket is ready, but note that the ready function can change
         this.ready = (() => {
@@ -1625,7 +1624,7 @@ class Channel {
     /**
      * Channel.keys()
      *
-     * Return keys
+     * Return (promise to) keys
      */
     get keys() {
         return this.#keys;
@@ -1642,121 +1641,7 @@ class Channel {
     get socket() {
         return this.#socket;
     }
-    /**
-     * Channel.loadKeys()
-     *
-     * When connecting to a channel server, the first thing it replies with is a set of
-     * keys for operating against the channel. Here we load those into the channel.
-     *
-     * Specifically the server will respond with something like this: ::
-     *
-     *   {"ready":true,
-     *    "keys":{
-     *            "ownerKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
-     *                        \"x\":\"9s17B4i0Cuf_w9XN_uAq2DFePOr6S3sMFMA95KjLN8akBUWEhPAcuMEMwNUlrrkN\",
-     *                        \"y\":\"6dAtcyMbtsO5ufKvlhxRsvjTmkABGlTYG1BrEjTpwrAgtmn6k25GR7akklz9klBr\"}",
-     *            "guestKey":"{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
-     *                         \"x\":\"Lx0eJcbNuyEfHDobWaZqgy9UO7ppxVIsEpEtvbzkAlIjySh9lY2AvgnACREO6QXD\",
-     *                         \"y\":\"zEHPgpsl4jge_Q-K6ekuzi2bQOybnaPT1MozCFQJnXEePBX8emkHriOiwl6P8BAS\"}",
-     *            "encryptionKey":"{\"alg\":\"A256GCM\",\"ext\":true,
-     *                             \"k\":\"F0sQTTLXDhuvvmgGQLzMoeHPD-SJlFyhfOD-cqejEOU\",
-     *                             \"key_ops\":[\"encrypt\",\"decrypt\"],\"kty\":\"oct\"}",
-     *            "signKey":"{\"crv\":\"P-384\",
-     *                        \"d\":\"KCJHDZ34XgVFsS9-sU09HFzXZhnGCvnDgJ5a8GTSfjuJQaq-1N2acvchPRhknk8B\",
-     *                        \"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",
-     *                        \"x\":\"rdsyBle0DD1hvp2OE2mINyyI87Cyg7FS3tCQUIeVkfPiNOACtFxi6iP8oeYt-Dge\",
-     *                        \"y\":\"qW9VP72uf9rgUU117G7AfTkCMncJbT5scIaIRwBXfqET6FYcq20fwSP7R911J2_t\"}"
-     *             },
-     *     "motd":"",
-     *     "roomLocked":false}
-     *
-     */
-    loadKeys(keys) {
-        return new Promise(async (resolve, reject) => {
-            const _self = this;
-            if (keys.ownerKey === null) {
-                console.error('did not receive owner keys - probably means no such channel');
-                reject(new Error('Channel does not exist'));
-            }
-            let _exportable_owner_pubKey = jsonParseWrapper(keys.ownerKey || JSON.stringify({}), 'L1460');
-            if (_exportable_owner_pubKey.key) {
-                _exportable_owner_pubKey = typeof _exportable_owner_pubKey.key === 'object' ? _exportable_owner_pubKey.key : jsonParseWrapper(_exportable_owner_pubKey.key, 'L1463');
-            }
-            try {
-                _exportable_owner_pubKey.key_ops = [];
-            }
-            catch (error) {
-                reject(error);
-            }
-            const _exportable_room_signKey = jsonParseWrapper(keys.signKey, 'L1470');
-            const _exportable_encryption_key = jsonParseWrapper(keys.encryptionKey, 'L1471');
-            let _exportable_verifiedGuest_pubKey = jsonParseWrapper(keys.guestKey || null, 'L1472');
-            const _exportable_pubKey = await _self.defaultIdentity.exportable_pubKey.then();
-            const _privateKey = await _self.defaultIdentity.privateKey.then();
-            let isVerifiedGuest = false;
-            const _owner_pubKey = await SB_Crypto.importKey('jwk', _exportable_owner_pubKey, 'ECDH', false, []);
-            const isOwner = SB_Crypto.areKeysSame(_exportable_pubKey, _exportable_owner_pubKey);
-            // TODO: this handles the cookie/admin mechanism from an SSO
-            // BROWSER
-            // hardcoded to only trust cookies from 'privacy.app' SSO (MI):
-            // const isAdmin: boolean = (document.cookie.split('; ').find((row: string) =>
-            //     row.startsWith('token_' + this._id)) !== undefined) || (this.url !== 'https://s_socket.privacy.app' && isOwner);
-            // NODE? not sure what fallback this is:
-            //   const isAdmin: boolean = (this.url !== 'https://s_socket.privacy.app' && isOwner);
-            // and this might be local dev override?
-            //   const isAdmin = (process.env.REACT_APP_ROOM_SERVER !== 's_socket.privacy.app' && isOwner);
-            // for now disabled feature (TODO this is for SSO support which adds an 'admin' status)
-            const isAdmin = false;
-            if (!isOwner && !isAdmin) {
-                if (_exportable_verifiedGuest_pubKey === null) {
-                    this.api.postPubKey(_exportable_pubKey);
-                    _exportable_verifiedGuest_pubKey = { ..._exportable_pubKey };
-                }
-                if (SB_Crypto.areKeysSame(_exportable_verifiedGuest_pubKey, _exportable_pubKey)) {
-                    isVerifiedGuest = true;
-                }
-            }
-            const _encryption_key = await SB_Crypto.importKey('jwk', _exportable_encryption_key, 'AES', false, ['encrypt', 'decrypt']);
-            const _room_privateSignKey = await SB_Crypto.importKey('jwk', _exportable_room_signKey, 'ECDH', true, ['deriveKey']);
-            const _exportable_room_signPubKey = SB_Crypto.extractPubKey(_exportable_room_signKey);
-            const _room_signPubKey = await SB_Crypto.importKey('jwk', _exportable_room_signPubKey, 'ECDH', true, []);
-            const _personal_signKey = await SB_Crypto.deriveKey(_privateKey, _room_signPubKey, 'HMAC', false, ['sign', 'verify']);
-            let _shared_key;
-            if (!isOwner) {
-                _shared_key = await SB_Crypto.deriveKey(_privateKey, _owner_pubKey, 'AES', false, ['encrypt', 'decrypt']);
-            }
-            let _locked_key;
-            // if (process.browser) {
-            let _exportable_locked_key = await _localStorage.getItem(this.channel_id + '_lockedKey');
-            // } else {
-            //   _exportable_locked_key = await _localStorage.getItem(this._id + '_lockedKey');
-            // }
-            if (_exportable_locked_key !== null) {
-                _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1517'), 'AES', false, ['encrypt', 'decrypt']);
-            }
-            else if (keys.locked_key) {
-                const _string_locked_key = await SB_Crypto.decrypt(isOwner ? await SB_Crypto.deriveKey(keys.privateKey, await SB_Crypto.importKey('jwk', keys.exportable_pubKey, 'ECDH', true, []), 'AES', false, ['decrypt']) : _shared_key, jsonParseWrapper(keys.locked_key, 'L1519'), 'string');
-                _exportable_locked_key = jsonParseWrapper(_string_locked_key, 'L1520');
-                _locked_key = await SB_Crypto.importKey('jwk', jsonParseWrapper(_exportable_locked_key, 'L1521'), 'AES', false, ['encrypt', 'decrypt']);
-            }
-            this.#keys = {
-                shared_key: _shared_key,
-                exportable_owner_pubKey: _exportable_owner_pubKey,
-                exportable_verifiedGuest_pubKey: _exportable_verifiedGuest_pubKey,
-                personal_signKey: _personal_signKey,
-                room_privateSignKey: _room_privateSignKey,
-                encryptionKey: _encryption_key,
-                locked_key: _locked_key,
-                exportable_locked_key: _exportable_locked_key
-            };
-            this.owner = isOwner;
-            this.admin = isAdmin;
-            this.verifiedGuest = isVerifiedGuest;
-            resolve(true);
-        });
-    }
-    ;
-}
+} /* class channel */
 /** Class managing connections */
 class ChannelSocket {
     ready;
@@ -1768,12 +1653,13 @@ class ChannelSocket {
     #channel;
     #identity;
     // #payload: Payload;
-    #queue = [];
+    // #queue: Array<SBMessage> = [];
     // ready = false;
+    #options = {
+        url: '', onOpen: null, onMessage: null, onClose: null, onError: null, timeout: 30000
+    };
     onOpen;
     onJoin;
-    onClose;
-    onError;
     onMessage;
     onSystemInfo;
     // channelCryptoKey: CryptoKey
@@ -1783,11 +1669,14 @@ class ChannelSocket {
         this.#channel = channel;
         this.#identity = identity;
         // this.#payload = new Payload();
-        // this.open()
-        this.#url = sbServer.options.channel_server + '/api/room/' + this.channelId + '/websocket',
-            this.sbWebSocket = new SBWebSocket(this.#url, this.receive);
-        // we're ready when the socket is ready, but note that the ready function can change
+        // this.open()  ... oops here it was haha
+        console.log("ChannelSocket()");
+        console.log(sbServer);
+        this.#url = sbServer.options.channel_ws + '/api/room/' + this.channelId + '/websocket';
+        this.sbWebSocket = new SBWebSocket(this.#url, this.receive, identity);
+        // this.sbWebSocket.ready.then((ws) => this.#open(ws))
         this.ready = (() => {
+            // we're ready when the socket is ready, but note that the ready function can change
             return this.sbWebSocket.ready;
         });
     }
@@ -1798,122 +1687,102 @@ class ChannelSocket {
     //   this.#channel.loadKeys(_keys);
     // }
     #wrap(sbMessage) {
-        sbMessage.ready.then(() => {
-            // TODO - in progress
-            SB_Crypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), this.#channel.keys, 'string').then((c) => {
-                const msg = { encrypted_contents: c };
+        console.log("#wrap()");
+        return new Promise((resolve) => {
+            sbMessage.ready.then(() => {
+                // TODO - in progress
+                this.#channel.keys.then((keys) => {
+                    keys.encryptionKey.then((encryptionKey) => {
+                        sbCrypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), encryptionKey, 'string').then((c) => {
+                            console.log("#wrap() resolved to:");
+                            console.log(c);
+                            resolve({ encrypted_contents: c });
+                        });
+                    });
+                });
             });
         });
-        // return new Promise(async (resolve, reject) => {
-        //   try {
-        //     const msg = {encrypted_contents: await SB_Crypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
-        //     resolve(JSON.stringify(msg));
-        //   } catch (e) {
-        //     console.error(e);
-        //     reject(new Error('Unable to encrypt payload.'));
-        //   }
-        // });
     }
-    async unwrap(payload, key) {
-        try {
-            const msg = await SB_Crypto.decrypt(key, payload.encrypted_contents);
-            // psm: i think this throws in case of error
-            // if (msg['error']) {
-            //   return {error: msg['error']};
-            // }
-            return msg;
-        }
-        catch (e) {
-            return { error: `Error: ${e}` };
-        }
-    }
-    /**
-     * ChannelSocket.open()
-     *
-     */
-    open() {
-        const options = {
-            url: this.#url + '/api/room/' + this.channelId + '/websocket',
-            onOpen: async (event) => {
-                console.info('websocket opened');
-                this.init = { name: JSON.stringify(this.#identity.exportable_pubKey) };
-                await this.sbWebSocket.send(JSON.stringify(this.init));
-                if (typeof this.onOpen === 'function') {
-                    this.onOpen(event);
-                }
-            },
-            onMessage: async (event) => {
-                console.log("****** start: onMessage() *****");
-                console.log(event);
-                console.log("****** end: onMessage() *****");
-                if (event?.ready) {
-                    if (typeof this.onJoin === 'function') {
-                        this.onJoin(event);
-                        if (typeof this.onSystemInfo === 'function') {
-                            this.onSystemInfo(event);
-                        }
-                    }
-                }
-                else if (event?.system) {
-                    if (typeof this.onSystemInfo === 'function') {
-                        this.onSystemInfo(event);
-                    }
-                }
-                else {
-                    if (typeof this.onMessage === 'function') {
-                        this.onMessage(await this.receive(event));
-                    }
-                }
-            },
-            onClose: (event) => {
-                if (typeof this.onClose === 'function') {
-                    this.onClose(event);
-                }
-            },
-            onError: (event) => {
-                if (typeof this.onError === 'function') {
-                    this.onError(event);
-                }
-            }
-        };
-        // this.sbWebSocket = new WS_Protocol(options);
-    }
+    // onError() {
+    //   this.currentWebSocket.addEventListener('error', (event) => {
+    //     console.error('WebSocket error, reconnecting:', event);
+    //     if (typeof this.options.onError === 'function') this.options.onError(event)
+    //   });
+    // }
+    // onClose() {
+    //   this.currentWebSocket.addEventListener('close', (event) => {
+    //     console.info('Websocket closed', event);
+    //     if (typeof this.options.onClose === 'function') this.options.onClose(event)
+    //   });
+    // }
+    // return new Promise(async (resolve, reject) => {
+    //   try {
+    //     const msg = {encrypted_contents: await sbCrypto.encrypt(str2ab(JSON.stringify(contents)), key, 'string')};
+    //     resolve(JSON.stringify(msg));
+    //   } catch (e) {
+    //     console.error(e);
+    //     reject(new Error('Unable to encrypt payload.'));
+    //   }
+    // });
+    // moved to SBCrypto
+    // async unwrap(payload: Dictionary, key: CryptoKey) {
+    //   try {
+    //     const msg = await sbCrypto.decrypt(key, payload.encrypted_contents);
+    //     // psm: i think this throws in case of error
+    //     // if (msg['error']) {
+    //     //   return {error: msg['error']};
+    //     // }
+    //     return msg;
+    //   } catch (e) {
+    //     return { error: `Error: ${e}` };
+    //   }
+    // }
     /**
      * ChannelSocket.close()
      */
-    close() {
-        this.sbWebSocket.close();
-    }
+    // close() {
+    //   this.sbWebSocket.close();
+    // }
     /**
      * ChannelSocket.isReady()
      */
-    isReady() {
-        console.info('SB Socket ready');
-        this.ready = true;
-        if (this.#queue.length > 0) {
-            this.#queue.forEach((message) => {
-                this.send(message);
-            });
-        }
-    }
+    // isReady() {
+    //   console.info('SB Socket ready');
+    //   this.ready = true;
+    //   if (this.#queue.length > 0) {
+    //     this.#queue.forEach((message) => {
+    //       this.send(message);
+    //     });
+    //   }
+    // }
     /**
      * ChannelSocket.send()
      *
      * @param {SBMessage} the message object to send
      */
     async send(message) {
-        // message.ready.then(() => {
-        //   if (this.ready) {
-        // 	let payload;
-        // 	this.#payload.wrap(
-        //       message,
-        //       this.#channel.keys.encryptionKey
-        // 	).then((payload) => { this.socket.send(payload) });
-        //   } else {
-        // 	this.#queue.push(message);
-        //   }
-        // });
+        console.log("SBMessage.send()");
+        console.log(message);
+        message.ready.then(() => {
+            this.#wrap(message).then((payload) => {
+                console.log("SBMessage.send() payload:");
+                console.log(payload);
+                this.sbWebSocket.send(JSON.stringify(payload));
+            });
+        });
+        // TODO: i've punted on queue here
     }
+    // message.ready.then(() => {
+    //   if (this.ready) {
+    // 	let payload;
+    // 	this.#payload.wrap(
+    //       message,
+    //       this.#channel.keys.encryptionKey
+    // 	).then((payload) => { this.socket.send(payload) });
+    //   } else {
+    // 	this.#queue.push(message);
+    //   }
+    // });
     /**
      * ChannelSocket.sendSbObject()
      *
@@ -1931,37 +1800,60 @@ class ChannelSocket {
         // }
     }
     /**
-     * ChannelSocket.receive()
-     *
-     * Receive message on channel socket
-     * psm: updating using new cool types
-     * (it will arrive mostly unwrapped)
-     */
+      * ChannelSocket.receive()
+      *
+      * Receive message on channel socket.
+      *
+      * Moving to new message types
+      */
     async receive(message) {
-        // 'id' will be first message
+        // 'id' will be first property
+        console.log("receive()");
         const id = Object.keys(message)[0];
-        let unwrapped;
+        console.log("(note .. 'id' was:)");
+        console.log(id);
+        let unwrapped = '';
         if (message.encrypted_contents) {
             try {
-                unwrapped = await SB_Crypto.decrypt(this.#channel.keys.encryptionKey, message[id].encrypted_contents, 'string');
+                unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).encryptionKey.then(), message.encrypted_contents, 'string');
+                console.log("unwrapped:");
+                console.log(unwrapped);
             }
             catch (e) {
                 console.warn(e);
-                unwrapped = await SB_Crypto.decrypt(this.#channel.keys.locked_key, message[id].encrypted_contents, 'string');
+                // TODO: locked key might never resolve (if we don't have it)
+                unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).lockedKey, message.encrypted_contents, 'string');
             }
+            return (unwrapped);
         }
         else {
-            unwrapped = jsonParseWrapper(unwrapped, 'L1702');
-            // psm: TODO, i don't know what messages are really supposed to look like in all cases
-            unwrapped._id = id;
-            _localStorage.setItem(this.#channel._id + '_lastSeenMessage', id.slice(this.#channel._id.length));
-            if (message._id)
-                _localStorage.setItem(this.#channel._id + '_lastSeenMessage', message._id);
-            return JSON.stringify(unwrapped);
-            return message;
+            console.log("Got message:");
+            console.log(message);
+            if (this.onJoin) {
+                console.log("calling channel join");
+                this.onJoin(message);
+                // if (message?.ready) {
+                //   // this.metaData = message;
+                //   this.loadKeys(message.keys).then(() => {
+                //     this.socket.isReady();
+                //     // resolve(this);
+                //   });
+                // }
+            }
+            else {
+                console.log("on join not set? (error) on this socket:");
+                console.log(this);
+            }
+            return (message);
+            // unwrapped = jsonParseWrapper(, 'L1702');
+            // // psm: TODO, i don't know what messages are really supposed to look like in all cases
+            // unwrapped._id = id;
+            // _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', id.slice(this.#channel.channel_id.length));
+            // if (message._id) _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', message._id)
+            // return JSON.stringify(unwrapped);
         }
     }
-} // end of class ChannelSocket
+} // ChannelSocket
 /**
  * Storage API
  * @class
@@ -1981,8 +1873,10 @@ class StorageApi {
         const metaData = sbFile.imageMetaData;
         const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId, metaData.imageKey, 'f');
         const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId, metaData.previewKey, 'p');
+        // TODO: We should probably discuss this in more detail
         Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
             results.forEach((controlData) => {
+                // @ts-ignore
                 channel.socket.sendSbObject({ ...controlData, control: true });
             });
             // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
@@ -1993,7 +1887,7 @@ class StorageApi {
      * StorageApi().getFileKey
      */
     async #getFileKey(fileHash, _salt) {
-        const keyMaterial = await SB_Crypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+        const keyMaterial = await sbCrypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
         // @psm TODO - Support deriving from PBKDF2 in deriveKey function
         const key = await crypto.subtle.deriveKey({
             'name': 'PBKDF2',
@@ -2064,6 +1958,9 @@ class StorageApi {
      * StorageApi().fetchData()
      */
     fetchData(msgId, verificationToken) {
+        if (!verificationToken) {
+            _sb_exception('StorageApi.fetchData()', 'verificationToken is undefined');
+        }
         return new Promise((resolve, reject) => {
             fetch(this.server + '/fetchData?id=' + encodeURIComponent(msgId) + '&verification_token=' + verificationToken, {
                 method: 'GET'
@@ -2098,7 +1995,7 @@ class StorageApi {
         console.log(messages);
         console.log(controlMessages);
         console.error("... need to code up retrieveData() with new typing ..");
-        const imageMetaData = messages.find((msg) => msg._id === msgId)?.imageMetaData;
+        const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
         const image_id = imageMetaData.previewId;
         // const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id.startsWith(image_id));
         const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id);
@@ -2113,7 +2010,10 @@ class StorageApi {
         const salt = data.salt;
         const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
         const encrypted_image = data.image;
-        const padded_img = str2ab(await SB_Crypto.decrypt(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer'));
+        const padded_img = str2ab(await sbCrypto.decrypt(image_key, {
+            content: encrypted_image,
+            iv: iv
+        }, 'arrayBuffer'));
         const img = this.#unpadData(padded_img);
         // psm: issues should throw i think
         // if (img.error) {
@@ -2138,7 +2038,7 @@ class StorageApi {
         const salt = data.salt;
         const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
         const encrypted_image = data.image;
-        const padded_img = str2ab(await SB_Crypto.decrypt(image_key, {
+        const padded_img = str2ab(await sbCrypto.decrypt(image_key, {
             content: encrypted_image,
             iv: iv
         }, 'arrayBuffer'));
@@ -2329,7 +2229,7 @@ class ChannelApi {
         return new Promise(async (resolve, reject) => {
             //if (this.#channel.owner) {
             const token_data = new Date().getTime().toString();
-            const token_sign = await SB_Crypto.sign(this.#channel.keys.personal_signKey, token_data);
+            const token_sign = await sbCrypto.sign(await (await this.#channel.keys).signKey.then(), token_data);
             fetch(this.#channelServer + this.#channel.channel_id + '/getAdminData', {
                 method: 'GET', credentials: 'include', headers: {
                     'authorization': token_data + '.' + token_sign, 'Content-Type': 'application/json'
@@ -2359,7 +2259,7 @@ class ChannelApi {
      */
     downloadData() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channel4_id + '/downloadData', {
+            fetch(this.#channelServer + this.#channel.channel_id + '/downloadData', {
                 method: 'GET', credentials: 'include', headers: {
                     'Content-Type': 'application/json'
                 }
@@ -2416,6 +2316,7 @@ class ChannelApi {
             });
         });
     }
+    // we post our pub key if we're first
     postPubKey(_exportable_pubKey) {
         return new Promise((resolve, reject) => {
             fetch(this.#channelServer + this.#channel.channel_id + '/postPubKey?type=guestKey', {
@@ -2458,79 +2359,6 @@ class ChannelApi {
             });
         });
     }
-    lock() {
-        return new Promise(async (resolve, reject) => {
-            if (this.#channel.keys.locked_key == null && this.#channel.admin) {
-                const _locked_key = await crypto.subtle.generateKey({
-                    name: 'AES-GCM', length: 256
-                }, true, ['encrypt', 'decrypt']);
-                const _exportable_locked_key = await crypto.subtle.exportKey('jwk', _locked_key);
-                fetch(this.#channelServer + this.#channel.channel_id + '/lockRoom', {
-                    method: 'GET', credentials: 'include'
-                })
-                    .then((response) => {
-                    if (!response.ok) {
-                        reject(new Error('Network response was not OK'));
-                    }
-                    return response.json();
-                })
-                    .then(async (data) => {
-                    if (data.locked) {
-                        await this.acceptVisitor(JSON.stringify(this.#identity.exportable_pubKey));
-                    }
-                    resolve({ locked: data.locked, lockedKey: _exportable_locked_key });
-                }).catch((error) => {
-                    reject(error);
-                });
-            }
-        });
-    }
-    acceptVisitor(pubKey) {
-        return new Promise(async (resolve, reject) => {
-            // psm: need some "!"
-            const shared_key = await SB_Crypto.deriveKey(await this.#identity.privateKey, await SB_Crypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
-            const _encrypted_locked_key = await SB_Crypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.exportable_locked_key)), shared_key, 'string');
-            fetch(this.#channelServer + this.#channel.channel_id + '/acceptVisitor', {
-                method: 'POST',
-                body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                credentials: 'include'
-            })
-                .then((response) => {
-                if (!response.ok) {
-                    reject(new Error('Network response was not OK'));
-                }
-                return response.json();
-            })
-                .then((data) => {
-                resolve(data);
-            }).catch((error) => {
-                reject(error);
-            });
-        });
-    }
-    ownerKeyRotation() {
-        return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channel_id + '/ownerKeyRotation', {
-                method: 'GET', credentials: 'include', headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-                .then((response) => {
-                if (!response.ok) {
-                    reject(new Error('Network response was not OK'));
-                }
-                return response.json();
-            })
-                .then((data) => {
-                resolve(data);
-            }).catch((error) => {
-                reject(error);
-            });
-        });
-    }
 }
 /**
  * Augments IndexedDB to be used as a KV to easily
@@ -2549,6 +2377,7 @@ class IndexedKV {
         },
     };
     // psm: override doesn't seem to be used
+    // mtg: we have the option to expose this elswhere, but it might be better to break this out into a helper
     constructor( /* options: IndexedKVOptions */) {
         // psm: hm?
         this.options = Object.assign(this.options, this.options);
@@ -2699,183 +2528,11 @@ class IndexedKV {
     }
 }
 const _localStorage = new IndexedKV();
-/**
- * QueueItem class
- *
- * @class
- * @constructor
- * @public
- */
-/*
-class QueueItem {
-  timestamp = Date.now();
-  action;
-  args;
-  _id;
-
-  constructor(body, action) {
-    return new Promise(async (resolve, reject) => {
-      try {
-        this.action = action;
-        this.body = body;
-        this._id = arrayBufferToBase64(await crypto.subtle
-          .digest('SHA-256', new TextEncoder().encode(JSON.stringify(body))));
-        resolve(this);
-      } catch (e) {
-        reject(e.message);
-      }
-    });
-  }
-}
-
- */
-/**
- * Queue Class
- *
- * @class
- * @constructor
- * @public
- */
-/*
-class Queue {
-  cacheDb;
-  wsOptions;
-  currentWS;
-  onOffline;
-  lastProcessed = Date.now();
-  events = new MessageBus();
-  options = {
-    name: 'queue_default', processor: false
-  };
-  _memoryQueue = [];
-  ready = false;
-
-  // Needs to run from the
-  constructor(options) {
-    this.options = Object.assign(this.options, options);
-    this.cacheDb = new KV({db: 'offline_queue', table: 'items', onReady: this.init});
-  }
-
-  init = () => {
-    this.ready = true;
-    this.queueReady();
-  };
-
-  queueReady = async () => {
-    this.processQueue();
-  };
-
-  ws = (options) => {
-    return new Promise(async (resolve, reject) => {
-      try {
-        this.wsOptions = {
-          url: options.url + options._id + '/websocket', onOpen: async (event) => {
-            this.init = {name: options.init.name};
-            await this.currentWS.currentWebSocket.send(JSON.stringify(this.init));
-          }
-        };
-        this.currentWS = new ManagedWS(this.wsOptions);
-        const cachedWs = await this.cacheDb.getItem(`queue_ws_${options._id}`) || null;
-        if (!cachedWs) {
-          await this.cacheDb.add(`queue_ws_${this.wsOptions._id}`, options);
-        }
-        resolve(this.currentWS);
-      } catch (e) {
-        reject(e);
-      }
-    });
-  };
-
-  setLastProcessed = () => {
-    this.lastProcessed = Date.now();
-  };
-
-  wsSend = (_id, message, socket) => {
-    socket.send(JSON.stringify(message)).then(async () => {
-      await this.remove(_id);
-      this.setLastProcessed();
-    }).catch(() => {
-      console.info('Your client is offline, your message will be sent when you reconnect');
-      if (typeof this.onOffline === 'function') {
-        this.events.publish('offline');
-        this.onOffline(message);
-        this.setLastProcessed();
-      }
-    });
-  };
-
-  wsCallback = (_id, ws, message, ms) => {
-    return new Promise(async (resolve, reject) => {
-      if (ms) {
-        while (Date.now() <= this.lastProcessed + ms) {
-          await sleep(ms);
-        }
-      }
-      try {
-        if (!this.currentWS) {
-          const options = await this.cacheDb.getItem(`queue_ws_${ws._id}`) || false;
-          if (options) {
-            this.ws(options).then((socket) => {
-              this.wsSend(_id, message, socket);
-            });
-          } else {
-            this.ws(ws).then((socket) => {
-              this.wsSend(_id, message, socket);
-            });
-          }
-        } else {
-          if (this.currentWS.readyState !== 1) {
-            return;
-          }
-          this.wsSend(_id, message, this.currentWS);
-        }
-      } catch (e) {
-        console.error(e);
-        reject(e);
-      }
-    });
-  };
-
-  add = async (args, action) => {
-    if (!this.ready) {
-      this._memoryQueue.push(await new QueueItem(args, action));
-      return;
-    }
-    const item = await new QueueItem(args, action);
-    await this.cacheDb.add(`queued_${item._id}`, item);
-    this.processQueue();
-  };
-
-  remove = async (_id) => {
-    return await this.cacheDb.removeItem(`queued_${_id}`);
-  };
-
-  processQueue = async () => {
-    if (!this.ready || !this.options.processor) {
-      return;
-    }
-    setInterval(async () => {
-      await this.cacheDb.openCursor('queued_', async (item) => {
-        if (item.action === 'wsCallback') {
-          return await this.wsCallback(item._id, item.body.ws, item.body.message, 250);
-        } else {
-          try {
-            item.action();
-          } catch (e) {
-            console.error(e);
-          }
-        }
-      });
-    }, 2000);
-  };
-}
-
- */
 class Snackabra {
     #listOfChannels = [];
     #storage;
     #channel;
-    // #identity = new Identity();
+    #defaultIdentity = new Identity();
     defaultIdentity;
     options = {
         channel_server: '',
@@ -3042,17 +2699,21 @@ class Snackabra {
         return this.#storage;
     }
     get crypto() {
-        return SB_Crypto;
+        return sbCrypto;
     }
     get identity() {
         // return this.#identity;
-        return defaultIdentity;
+        return this.#defaultIdentity;
     }
+    set identity(identity) {
+        this.#defaultIdentity = identity;
+    }
+    // These are just helper methods, we can still access from SB.channel.socket.send externally
     sendMessage(message) {
         this.channel.socket.send(message);
     }
     sendFile(file) {
-        this.storage.saveFile(file);
+        this.storage.saveFile(file, this.#channel);
     }
 }
 // export {
@@ -3068,5 +2729,5 @@ class Snackabra {
 // };
 export { 
 // ChannelMessage,
-Channel, Identity, SBFile, SBMessage, Snackabra, };
+Channel, Identity, SBMessage, Snackabra, };
 //# sourceMappingURL=snackabra.js.map
