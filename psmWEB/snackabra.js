@@ -336,7 +336,7 @@ export function arrayBufferToBase64(buffer) {
     else {
         // const view = bs2dv(bufferSource)
         // const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-        console.log(buffer);
+        // console.log(buffer)
         // const view = new DataView(buffer)
         const view = bs2dv(buffer);
         const len = view.byteLength;
@@ -1104,8 +1104,8 @@ class SBMessage {
             _sb_exception('SBMessage()', 'No Identity (and thus no encryption keys) given');
         }
         this.ready = new Promise((resolve) => {
-            console.log("SBMessage: waiting on channel keys... ");
-            channel.keys.then((keys) => {
+            console.log("SBMessage: waiting on channel to be ready... ");
+            channel.ready.then(() => {
                 console.log("SBMessage: ... got keys .. waiting for Sign key ");
                 console.log(keys);
                 console.log(keys.signKey);
@@ -1261,9 +1261,10 @@ class Channel {
     /**
      * Channel.keys()
      *
-     * Return (promise to) keys, which will show up on socket
+     * Return keys used on socket
      */
     get keys() {
+        _sb_assert(this.#socket, "Channel.keys(): no socket (!)");
         return this.#socket.keys;
     }
     /**
@@ -1285,7 +1286,6 @@ class ChannelSocket {
     #channel;
     #ws;
     #keys;
-    processingKeys = false;
     // socket!: WS_Protocol;
     // sbWebSocket: SBWebSocket
     // #payload: Payload;
@@ -1330,6 +1330,8 @@ class ChannelSocket {
     }
     #readyPromise() {
         const url = this.#ws.url;
+        let backlog = [];
+        let processingKeys = false;
         return new Promise((resolve, reject) => {
             try {
                 // if (this.#ws.websocket) this.#ws.websocket.close() // keep clean
@@ -1352,12 +1354,13 @@ class ChannelSocket {
                     // TODO: add a try wrapper
                     console.log("received ChannelKeysMessage:");
                     console.log(e);
-                    if (this.processingKeys) {
-                        console.error("dropping message:");
+                    if (processingKeys) {
+                        backlog.push(e.data);
+                        console.log("++++++++ pushing message to backlog:");
                         console.log(e);
                         return;
                     }
-                    this.processingKeys = true;
+                    processingKeys = true; // helps not drop messages
                     // const message: ChannelKeysMessage = deserializeMessage(e.data, 'channelKeys')! as ChannelKeysMessage
                     const message = JSON.parse(e.data);
                     console.log(message);
@@ -1389,6 +1392,17 @@ class ChannelSocket {
                             // const message: ChannelMessage2 = e.data as ChannelMessage2
                             // resolveKeys(message.keys)
                             // this.#keys = message.keys
+                            if (backlog.length > 0) {
+                                // this causes queued messages to be processed ahead of ones from new callbacks
+                                console.log("we are queuing up a microtask for message processing");
+                                queueMicrotask(() => {
+                                    for (let d in backlog) {
+                                        console.log("++++++++ pulling this message from the backlog:");
+                                        console.log(e);
+                                        this.#processMessage(d);
+                                    }
+                                });
+                            }
                             // once we've gotten our keys, we substitute the message handler
                             this.#ws.websocket.addEventListener('message', (e) => this.#processMessage(e.data));
                             resolve(this);
@@ -1423,11 +1437,11 @@ class ChannelSocket {
     // }
     // MERGING: CHANNEL_SOCKET CONSTRUCTOR:
     constructor(sbServer, channel, identity) {
-        console.log("@@@@@@@@@@@@@@@@ ChannelSocket() start:");
+        console.log("----ChannelSocketc.constructor() start:");
         console.log(sbServer);
         console.log(channel);
         console.log(identity);
-        console.log("@@@@@@@@@@@@@@@@ ChannelSocket() ... end");
+        console.log("----ChannelSocketc.constructor() ... end");
         this.channelId = channel.channel_id;
         // this.url = sbServer.SnackabraOptions.channel_ws
         this.#channel = channel;
@@ -1478,19 +1492,21 @@ class ChannelSocket {
             this.#ws.onMessage = f;
         });
     }
+    /**
+     * ChannelSocket.keys
+     *
+     * Will throw an exception if keys are unknown or not yet loaded
+     */
     get keys() {
-        return new Promise((resolve) => {
-            this.ready.then((c) => {
-                _sb_assert(c.#keys, "empty keys but channel is 'ready'");
-                resolve(c.#keys);
-            });
-        });
+        _sb_assert(this.#keys, "ChannelSocket.keys: not initialized (?)");
+        return (this.#keys);
     }
     /**
      * ChannelSocket.sendSbObject()
      *
      * Send SB object (file) on channel socket
      */
+    // todo - move to API?
     async sendSbObject(file) {
         return (this.send(file));
         // this.ready.then(() => {
@@ -1565,14 +1581,14 @@ class ChannelSocket {
         let unwrapped = '';
         if (message.encrypted_contents) {
             try {
-                unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).encryptionKey, message.encrypted_contents, 'string');
+                unwrapped = await sbCrypto.decrypt(this.#channel.keys.encryptionKey, message.encrypted_contents, 'string');
                 console.log("unwrapped:");
                 console.log(unwrapped);
             }
             catch (e) {
                 console.warn(e);
                 // TODO: locked key might never resolve (if we don't have it)
-                unwrapped = await sbCrypto.decrypt(await (await this.#channel.keys.then()).lockedKey, message.encrypted_contents, 'string');
+                unwrapped = await sbCrypto.decrypt(this.#channel.keys.lockedKey, message.encrypted_contents, 'string');
             }
             return (unwrapped);
         }

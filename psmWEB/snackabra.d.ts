@@ -63,6 +63,13 @@ interface ChannelKeyStrings {
     signKey: string;
     lockedKey?: string;
 }
+interface ChannelKeysMessage {
+    type: 'channelKeys';
+    ready: boolean;
+    keys: ChannelKeyStrings;
+    motd: string;
+    roomLocked: boolean;
+}
 interface ChannelKeys {
     ownerKey: CryptoKey;
     guestKey?: CryptoKey;
@@ -70,13 +77,6 @@ interface ChannelKeys {
     signKey: CryptoKey;
     lockedKey?: CryptoKey;
     channelSignKey: CryptoKey;
-}
-interface ChannelKeysMessage {
-    type: 'channelKeys';
-    ready: boolean;
-    keys: ChannelKeyStrings;
-    motd: string;
-    roomLocked: boolean;
 }
 /** Encryptedcontents
 
@@ -463,7 +463,7 @@ export declare class SBFile extends SBMessage {
  */
 declare class Channel {
     #private;
-    ready: () => Promise<ChannelSocket>;
+    ready: Promise<ChannelSocket>;
     sbServer: Snackabra;
     channel_id: string;
     defaultIdentity?: Identity;
@@ -481,9 +481,9 @@ declare class Channel {
     /**
      * Channel.keys()
      *
-     * Return (promise to) keys, which will show up on socket
+     * Return keys used on socket
      */
-    get keys(): Promise<ChannelKeys>;
+    get keys(): ChannelKeys;
     /**
      * Channel.api()
      */
@@ -499,10 +499,14 @@ declare class ChannelSocket {
     #private;
     ready: Promise<ChannelSocket>;
     channelId: string;
-    processingKeys: boolean;
     constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
     set onMessage(f: CallableFunction);
-    get keys(): Promise<ChannelKeys>;
+    /**
+     * ChannelSocket.keys
+     *
+     * Will throw an exception if keys are unknown or not yet loaded
+     */
+    get keys(): ChannelKeys;
     /**
      * ChannelSocket.sendSbObject()
      *

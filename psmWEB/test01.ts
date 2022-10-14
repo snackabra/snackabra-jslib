@@ -303,33 +303,35 @@ if (test_list.includes('test04a')) {
     z.innerHTML += ' ... received new channel:<br\>';
     z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br\n>`;
 
-    console.log("@@@@@@@@@@@@@@@@ created ID and created room:")
+    console.log("++++test04a++++ created ID and created room:")
+    console.log("++++test04a++++ my identity:")
     console.log(myId)
+    console.log("++++test04a++++ new room URL:")
     console.log(roomUrl)
 
     SB.connect(channelId, myId).then((c) => {
-      console.log("@@@@@@@@@@@@@@@@ got ourselves a channel:")
+      console.log("++++test04a++++ got ourselves a channel:")
       console.log(c)
 
       // const messages = [];
       // const controlMessages = [];
 
       c.keys.then((k) => {
-        console.log("@@@@@@@@@@@@@@@@ channel has keys:")
+        console.log("++++test04a++++ channel has keys:")
         console.log(k)
         console.log(c.keys)
 
-        console.log("@@@@@@@@@@@@@@@@ trying to send message!")
+        console.log("++++test04a++++ trying to send message!")
 
         let sbm = new SBMessage(c, "Hello from test04b!")
 
-        console.log("@@@@@@@@@@@@@@@@ will try to send this message:")
+        console.log("++++test04a++++ will try to send this message:")
         console.log(sbm)
 
         sbm.send().then((c) => {
           console.log("back from send promise? got response:")
           console.log(c)
-          console.log("@@@@@@@@@@@@@@@@ end of test")
+          console.log("++++test04a++++ end of test")
         })
 
         // in parallel, handle incoming messages:
