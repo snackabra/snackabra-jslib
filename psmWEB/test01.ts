@@ -309,6 +309,7 @@ if (test_list.includes('test04a')) {
     console.log("++++test04a++++ new room URL:")
     console.log(roomUrl)
 
+    // we now need to connect to it
     SB.connect(channelId, myId).then((c) => {
       console.log("++++test04a++++ got ourselves a channel:")
       console.log(c)
@@ -316,14 +317,16 @@ if (test_list.includes('test04a')) {
       // const messages = [];
       // const controlMessages = [];
 
-      c.keys.then((k) => {
+      c.ready.then(() => {
+        // everything should be ready
+        const k = c.keys
         console.log("++++test04a++++ channel has keys:")
         console.log(k)
         console.log(c.keys)
 
         console.log("++++test04a++++ trying to send message!")
 
-        let sbm = new SBMessage(c, "Hello from test04b!")
+        let sbm = new SBMessage(c, "Hello from test04a!")
 
         console.log("++++test04a++++ will try to send this message:")
         console.log(sbm)
@@ -340,21 +343,20 @@ if (test_list.includes('test04a')) {
           console.log(message)
         }
 
-        // // send more hello
-        // let messageCount = 0
-        // getElement('sayHello').onclick = (() => {
-        //   messageCount++
-        //   let msg = new SBMessage(c, `message number ${messageCount}!`)
-        //   // @ts-ignore
-        //   sbm.sender_pubKey = JSON.stringify(myPubKey)
-        //   console.log(`================ sending message number ${messageCount}:`)
-        //   console.log(sbm)
-        //   c.socket.send(sbm).then((c) => console.log("back from send promise?"))
-        // })
+        // send more hello
+        let messageCount = 0
+        getElement('sayHello').onclick = (() => {
+          messageCount++
+          let msg = new SBMessage(c, `message number ${messageCount} from test04ba!`)
+          // @ts-ignore
+          // sbm.sender_pubKey = JSON.stringify(myPubKey)
+          console.log(`================ sending message number ${messageCount}:`)
+          console.log(sbm)
+          c.send(sbm).then((c) => console.log(`back from send promise? (${c})`))
+        })
       })
-
-    });
-  });
+    })
+  })
 }
 
 

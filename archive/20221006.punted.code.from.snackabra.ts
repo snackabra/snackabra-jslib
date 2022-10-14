@@ -655,3 +655,50 @@
 //   getRandomValues
 // };
 
+
+
+// ****************************************************************
+// ****************************************************************
+// ****************************************************************
+// ****************************************************************
+// ****************************************************************
+
+
+// 20221014 - abstract class refactor of Channel / ChannelSocket
+
+  /**
+   * Channel.send()
+   */
+  // send(m: SBMessage) {
+  //   return(this.#socket.send(m))
+  // }
+
+  // set onMessage(f: CallableFunction) {
+  //   this.#socket.onMessage = f
+  // }
+
+  // /**
+  //  * Channel.join()
+  //  */
+  // join(channel_id: string): Promise<Channel> {
+  // }
+
+  /**
+   * Channel.keys()
+   *
+   * Return keys used on socket
+   */
+  // get keys(): ChannelKeys {
+  //   _sb_assert(this.#socket, "Channel.keys(): no socket (!)")
+  //   return this.#socket.keys
+// }
+
+
+  /**
+   * Channel.socket()
+   */
+  // get socket() {
+  //   return this.#socket;
+  // }
+
+

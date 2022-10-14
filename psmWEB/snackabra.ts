@@ -51,16 +51,16 @@ interface WSProtocolOptions {
   websocket: WebSocket,
   onOpen?: null | CallableFunction,
   ready: boolean,
-  onMessage?: null | CallableFunction,
+  // onMessage?: null | CallableFunction,
   onClose?: null | CallableFunction,
   onError?: null | CallableFunction,
   timeout?: number,
-  identity?: Identity,
-  keys?: ChannelKeys,
   closed: boolean,
   init?: { name: string },
-  motd?: string,
-  locked?: boolean,
+  // identity?: Identity,
+  // keys?: ChannelKeys,
+  // motd?: string,
+  // locked?: boolean,
 }
 
 type StorableDataType = string | number | bigint | boolean | symbol | object
@@ -1308,8 +1308,8 @@ class SBCrypto {
         const encoded = encoder.encode(contents);
         let sign;
         try {
-          console.log("signing with:")
-          console.log(secretKey)
+          // console.log("signing with:")
+          // console.log(secretKey)
           sign = await crypto.subtle.sign('HMAC', secretKey, encoded);
           resolve(encodeURIComponent(arrayBufferToBase64(sign)));
         } catch (error) {
@@ -1458,7 +1458,7 @@ interface SBMessageContents {
 class SBMessage {
   ready
   channel: Channel
-  identity?: Identity // if omitted go with channel default
+  identity: Identity // if omitted go with channel default
   contents: SBMessageContents = { encrypted: false, body: '', sign: '', image: '', imageMetaData: {} }
 
   constructor(channel: Channel, body: string, identity?: Identity) {
@@ -1471,23 +1471,21 @@ class SBMessage {
 
     if (identity) {
       this.identity = identity
-    } else if (channel.defaultIdentity) {
-      this.identity = channel.defaultIdentity
     } else {
-      _sb_exception('SBMessage()', 'No Identity (and thus no encryption keys) given')
+      this.identity = channel.identity
     }
 
     this.ready = new Promise<SBMessage>((resolve) => {
       console.log("SBMessage: waiting on channel to be ready... ")
       channel.ready.then(() => {
-        console.log("SBMessage: ... got keys .. waiting for Sign key ")
-        console.log(keys)
-        console.log(keys.signKey)
+        console.log("SBMessage: ... got keys .. here are keys and sign key ")
+        console.log(this.channel.keys)
+        console.log(this.channel.keys.signKey)
         // const signKey = keys.signKey
         // TODO: ... why are we signing with a key provided by the room?
         // this.identity!.privateKey.then((signKey) => { ...
         // ... solved
-        const signKey = keys.channelSignKey
+        const signKey = this.channel.keys.channelSignKey
         console.log("SBMessage: ... got sign key ... waiting on closure")
         const sign = sbCrypto.sign(signKey!, body)
         const image_sign = sbCrypto.sign(signKey!, this.contents.image)
@@ -1512,14 +1510,23 @@ class SBMessage {
   send() {
     console.log("SBMessage.send()")
     console.log(this)
-    return(this.ready.then(() => {
-      this.channel.send(this)
+    return new Promise<string>((resolve, reject) => { 
+      this.ready.then(() => {
+        // message ready
+        this.channel.send(this).then((result) => {
+          if (result === "success") {
+            resolve(result)
+          } else {
+            reject(result)
+          }
+        })
+      })
       // this.#wrap(message).then((payload) => {
       //   console.log("SBMessage.send() payload:")
       //   console.log(payload)
       //   this.#ws.websocket.send(JSON.stringify(payload))
       // })
-    }))
+    })
     // TODO: i've punted on queue here
   }
 
@@ -1575,26 +1582,33 @@ export class SBFile extends SBMessage {
  * @constructor
  * @public
  */
-class Channel {
+abstract class Channel {
   // url: string;
   // wss: string;
-  ready: Promise<ChannelSocket>
+
+  abstract ready: Promise<Channel>
+
   sbServer: Snackabra
-  channel_id
-  defaultIdentity?: Identity
-  motd?: string
-  locked?: boolean
+  channel_id: string
+  // defaultIdentity: Identity 
 
-  owner: boolean = false;
-  admin: boolean = false;
-  verifiedGuest: boolean = false;
+  motd?: string = ''
+  locked?: boolean = false
+
+  owner: boolean = false
+  admin: boolean = false
+  verifiedGuest: boolean = false
+
+  identity: Identity
+  abstract get keys(): ChannelKeys
+
+  abstract send(m: SBMessage): Promise<string> // "success" or error message
+  abstract set onMessage(f: CallableFunction)
+
   // metaData: Dictionary = {};
-  // #keys!: Dictionary;
-
-  // #keys: Promise<ChannelKeys>
 
   #api!: ChannelApi;
-  #socket!: ChannelSocket;
+  // #socket!: ChannelSocket;
 
   //storage?: StorageApi // TODO: in principle should be optional?
   // mtg: I think this ^ is part of the mess that was brought from 0.4 I don't think we should have a storage property here at all
@@ -1606,59 +1620,38 @@ class Channel {
 
   /*
    * Channel()
-   * Join a channel, returns channel object
+   * Join a channel, returns channel object.
+   * 
+   * Currently, you must have an identity when connecting, because every single
+   * message is signed by sender. TODO is to look at how to provide a 'listening'
+   * mode on channels.
    *
    * @param {Snackabra} which server to join
    * @param {string} channel_id (the :term:`Channel Name`) to find on that server
    * @param {Identity} the identity which you want to present (defaults to server default)
    */
-  constructor(sbServer: Snackabra, channel_id: string, identity?: Identity) {
+  constructor(sbServer: Snackabra, channel_id: string, identity: Identity) {
     this.sbServer = sbServer
-    if (identity) {
-      this.defaultIdentity = identity
-    } else if (sbServer.defaultIdentity) {
-      this.defaultIdentity = sbServer.defaultIdentity
-    } else {
-      _sb_exception('new Channel()', 'currently a channel needs a default Identity on creation')
-    }
+    this.identity = identity
+    // if (identity) {
+    //   this.defaultIdentity = identity
+    // } else if (sbServer.defaultIdentity) {
+    //   this.defaultIdentity = sbServer.defaultIdentity
+    // } else {
+    //   _sb_exception('new Channel()', 'currently a channel needs a default Identity on creation')
+    // }
     _sb_assert(channel_id != null, 'channel_id cannot be null') // TODO: this can be done with types
     this.channel_id = channel_id
-    this.#api = new ChannelApi(this.sbServer, this, this.defaultIdentity!)
-    this.#socket = new ChannelSocket(this.sbServer, this, this.defaultIdentity!)
+    this.#api = new ChannelApi(this.sbServer, this, this.identity)
+
+    // this.#socket = new ChannelSocket(this.sbServer, this, this.defaultIdentity!)
     // console.log("... setting onJoin on socket:")
     // console.log(this.#socket)
 
     // we're ready when the ChannelSocket is ready, but note that the ready function can change
-    this.ready = (() => {
-      return this.#socket.ready
-    })
-  }
-
-  /**
-   * Channel.send()
-   */
-  send(m: SBMessage) {
-    return(this.#socket.send(m))
-  }
-
-  set onMessage(f: CallableFunction) {
-    this.#socket.onMessage = f
-  }
-
-  // /**
-  //  * Channel.join()
-  //  */
-  // join(channel_id: string): Promise<Channel> {
-  // }
-
-  /**
-   * Channel.keys()
-   *
-   * Return keys used on socket
-   */
-  get keys(): ChannelKeys {
-    _sb_assert(this.#socket, "Channel.keys(): no socket (!)")
-    return this.#socket.keys
+    // this.ready = (() => {
+    //   return this.#socket.ready
+    // })
   }
 
   /**
@@ -1667,13 +1660,6 @@ class Channel {
   get api() {
     return this.#api;
   }
-
-  /**
-   * Channel.socket()
-   */
-  // get socket() {
-  //   return this.#socket;
-  // }
 
   /**
    * Channel.loadKeys()
@@ -1715,10 +1701,13 @@ class Channel {
  *
  *  Class managing connections
  */
-class ChannelSocket {
+class ChannelSocket extends Channel {
   ready
-  channelId: string
-  #channel: Channel
+  #readyFlag: boolean = false
+
+  // channelId: string
+  // #channel: Channel
+
   #ws: WSProtocolOptions
   #keys?: ChannelKeys
 
@@ -1731,7 +1720,7 @@ class ChannelSocket {
   // which go to wsOptions?
   // onOpen!: CallableFunction;
   // onJoin?: CallableFunction;
-  // onMessage: CallableFunction
+  #onMessage: CallableFunction
   // onSystemInfo!: CallableFunction;
 
   // channelCryptoKey: CryptoKey
@@ -1755,11 +1744,11 @@ class ChannelSocket {
       console.error('Nack received')
       this.#ws.closed = true
       // if (this.#websocket) this.#websocket.close()
-    } else if (typeof this.#ws.onMessage === 'function') {
+    } else if (typeof this.#onMessage === 'function') {
       // typically this will call ChannelSocket.receive()
       // if (this.onMessage(data)) this.onMessage(data)
       // update: pass the string so it can deserialize on its own
-      if (this.#ws.onMessage) this.#ws.onMessage(m)
+      if (this.#onMessage) this.#onMessage(m)
     } else {
       _sb_exception('SBWebSocket', 'received message but there is no handler')
     }
@@ -1788,11 +1777,11 @@ class ChannelSocket {
         })
         this.#ws.websocket.addEventListener('message', (e: MessageEvent) => {
           // TODO: add a try wrapper
-          console.log("received ChannelKeysMessage:")
+          console.log("++++++++ readyPromise() received ChannelKeysMessage:")
           console.log(e)
           if (processingKeys) {
             backlog.push(e.data)
-            console.log("++++++++ pushing message to backlog:")
+            console.log("++++++++ readyPromise() pushing message to backlog:")
             console.log(e)
             return
           }
@@ -1801,15 +1790,16 @@ class ChannelSocket {
           const message = JSON.parse(e.data) as ChannelKeysMessage
           console.log(message)
           _sb_assert(message.ready, 'got roomKeys but channel reports it is not ready (?)')
-          this.#ws.motd = message.motd
-          this.#ws.locked = message.roomLocked
+          this.motd = message.motd
+          this.locked = message.roomLocked
           Promise.all([
             sbCrypto.importKey('jwk', JSON.parse(message.keys.ownerKey), 'ECDH', false, []),
             sbCrypto.importKey('jwk', JSON.parse(message.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
             sbCrypto.importKey('jwk', JSON.parse(message.keys.signKey),'ECDH', true, ['deriveKey']),
             sbCrypto.importKey('jwk', sbCrypto.extractPubKey(JSON.parse(message.keys.signKey))!, 'ECDH', true, []),
-            this.#ws.identity!.privateKey
+            this.identity!.privateKey
           ]).then((v) => {
+            console.log("++++++++ readyPromise() processed first batch of keys")
             const ownerKey = v[0]
             const encryptionKey = v[1]
             const signKey = v[2]
@@ -1818,6 +1808,7 @@ class ChannelSocket {
             Promise.all([
               sbCrypto.deriveKey(privateKey, publicSignKey, 'HMAC', false, ['sign', 'verify'])
             ]).then((w) => {
+              console.log("++++++++ readyPromise() second phase of key processing")
               const channelSignKey = w[0]
               this.#keys = {
                 ownerKey: ownerKey,
@@ -1831,17 +1822,24 @@ class ChannelSocket {
 
               if (backlog.length > 0) {
                 // this causes queued messages to be processed ahead of ones from new callbacks
-                console.log("we are queuing up a microtask for message processing")
+                console.log("++++++++ readyPromise() we are queuing up a microtask for message processing")
                 queueMicrotask(() => {
+                  console.log("++++++++ readyPromise() inside micro task")
                   for (let d in backlog) {
                     console.log("++++++++ pulling this message from the backlog:")
                     console.log(e)
                     this.#processMessage(d)
                   }
                 });
+              } else {
+                console.log("++++++++ readyPromise() there were NO messages queued up")
               }
               // once we've gotten our keys, we substitute the message handler
+              console.log("++++++++ readyPromise() changing onMessage to processMessage")
               this.#ws.websocket.addEventListener('message', (e: MessageEvent) => this.#processMessage(e.data))
+              // and now we are ready!
+              this.#readyFlag = true
+              console.log("++++++++ readyPromise() all done - resolving!")
               resolve(this)
             })
           })
@@ -1873,28 +1871,32 @@ class ChannelSocket {
   // }
 
   // MERGING: CHANNEL_SOCKET CONSTRUCTOR:
-  constructor(sbServer: Snackabra, channel: Channel, identity: Identity) {
-    console.log("----ChannelSocketc.constructor() start:")
+  constructor(sbServer: Snackabra, channel_id: string, identity: Identity) {
+    console.log("----ChannelSocket.constructor() start:")
     console.log(sbServer)
-    console.log(channel)
+    // console.log(channel)
     console.log(identity)
-    console.log("----ChannelSocketc.constructor() ... end")
-    this.channelId = channel.channel_id
+    console.log("----ChannelSocket.constructor() ... end")
+
+    super(sbServer, channel_id, identity)
+
+    // this.channelId = channel.channel_id
     // this.url = sbServer.SnackabraOptions.channel_ws
-    this.#channel = channel
+    // this.#channel = channel
     // this.#identity = identity
     // this.#payload = new Payload();
     // this.open()  ... oops here it was haha
     // this.sbWebSocket = new SBWebSocket(this.#url, this.receive, identity)
     // this.sbWebSocket.ready.then((ws) => this.#open(ws))
-    const url = sbServer.options.channel_ws + '/api/room/' + this.channelId + '/websocket'
+    const url = sbServer.options.channel_ws + '/api/room/' + this.channel_id + '/websocket'
+    this.#onMessage = this.receive
     this.#ws = {
       url: url,
       websocket: new WebSocket(url),
       ready: false,
       closed: false,
-      identity: identity,
-      onMessage: this.receive,
+      // identity: identity,
+      // onMessage: this.receive,
       timeout: 30000
     }
     // this.#url = url
@@ -1911,26 +1913,26 @@ class ChannelSocket {
   // }
 
   #wrap(sbMessage: SBMessage): Promise<Dictionary> {
-    console.log("#wrap()")
+    _sb_assert(this.#readyFlag, "#wrap called but channel not ready")
+    console.log("+++++++++ #wrap() asked to wrap:")
+    console.log(sbMessage)
     return new Promise<Dictionary>((resolve) => {
-      sbMessage.ready.then(() => {
-        // TODO - in progress
-        this.#channel.keys.then((keys) => {
-          const encryptionKey = keys.encryptionKey
-          sbCrypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), encryptionKey, 'string').then((c) => {
-            console.log("#wrap() resolved to:")
-            console.log(c)
-            resolve({ encrypted_contents: c })
-          })
-        })
+      const encryptionKey = this.keys.encryptionKey
+      sbCrypto.encrypt(str2ab(JSON.stringify(sbMessage.contents)), encryptionKey, 'string').then((c) => {
+        console.log("#wrap() resolved to:")
+        console.log(c)
+        resolve({ encrypted_contents: c })
+        // resolve(c)
       })
     })
   }
 
   set onMessage(f: CallableFunction) {
-    this.ready.then(() => {
-      this.#ws.onMessage = f
-    })
+    this.#onMessage = f
+  }
+
+  get onMessage() {
+    return this.#onMessage
   }
 
   /**
@@ -1961,28 +1963,37 @@ class ChannelSocket {
   /**
     * ChannelSocket.send()
     * 
-    * 
+    * Returns a promise that resolves to "success" when sent,
+    * or an error message if it fails.
     */
-  send(message: SBMessage) {
+  send(message: SBMessage): Promise<string> {
     // for future inspiration here are more thoughts on making this more iron clad:
     // https://stackoverflow.com/questions/29881957/websocket-connection-timeout
-    console.log("send(): ")
+    console.log("++++++++ ChannelSocket.send() this message: ")
     console.log(message)
+    if (this.#ws.closed) {
+      console.info("send() triggered reset of #readyPromise() (normal)")
+      this.ready = this.#readyPromise() // possible reset of ready 
+    }
     return new Promise((resolve, reject) => {
-      if (this.#ws.closed) this.ready = this.#readyPromise()
       this.ready.then(() => {
+        if (!this.#readyFlag) reject("ChannelSocket.send() is confused - ready or not?")
         switch (this.#ws.websocket.readyState) {
           case 1: // OPEN
-            // TODO: do we need this a second time?
-            this.ready.then(() => {
-              const m = JSON.stringify(this.#wrap(message))
+            this.#wrap(message).then((wrappedMessage) => {
+              const m = JSON.stringify(wrappedMessage)
+              console.log("++++++++ ChannelSocket.send() got this from wrap:")
+              console.log(m)
+              console.log("++++++++ ChannelSocket.send() then got this from JSON.stringify:")
+              console.log(wrappedMessage)
               crypto.subtle.digest('SHA-256', new TextEncoder().encode(m)).then((hash) => {
                 const _id = arrayBufferToBase64(hash)
                 const ackPayload = { timestamp: Date.now(), type: 'ack', _id: _id }
                 this.#ack[_id] = resolve
+                console.log(`++++++++ ChannelSocket.send() this message: '${m}' `)
                 this.#ws.websocket.send(m)
                 // TODO: update protocol so server acks on message
-                this.#ws.websocket.send(JSON.stringify(ackPayload));
+                // this.#ws.websocket.send(JSON.stringify(ackPayload));
                 setTimeout(() => {
                   if (this.#ack[_id]) {
                     delete this.#ack[_id]
@@ -1991,6 +2002,7 @@ class ChannelSocket {
                     reject(new Error(error))
                   } else {
                     // normal behavior
+                    console.log("++++++++ ChannelSocket.send() completed sending!")
                     resolve("success")
                   }
                 }, this.#ws.timeout)
@@ -2002,6 +2014,7 @@ class ChannelSocket {
           case 2: // CLOSING
             const errMsg = 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING'
             _sb_exception('sbWebSocket', errMsg)
+            reject(errMsg)
         }
       })
     })
@@ -2016,20 +2029,20 @@ class ChannelSocket {
     */
   async receive(message: ChannelMessage2) {
     // 'id' will be first property
-    console.log("receive()")
+    console.log("----ChannelSocket.receive():")
     const id = Object.keys(message)[0];
     console.log("(note .. 'id' was:)")
     console.log(id)
     let unwrapped: string = ''
     if (message.encrypted_contents) {
       try {
-        unwrapped = await sbCrypto.decrypt(this.#channel.keys.encryptionKey, message.encrypted_contents, 'string');
+        unwrapped = await sbCrypto.decrypt(this.keys.encryptionKey, message.encrypted_contents, 'string');
         console.log("unwrapped:")
         console.log(unwrapped)
       } catch (e) {
         console.warn(e);
         // TODO: locked key might never resolve (if we don't have it)
-        unwrapped = await sbCrypto.decrypt(this.#channel.keys.lockedKey!, message.encrypted_contents, 'string')
+        unwrapped = await sbCrypto.decrypt(this.keys.lockedKey!, message.encrypted_contents, 'string')
       }
       return (unwrapped);
     } else {
@@ -2915,8 +2928,8 @@ class Snackabra {
   #listOfChannels: Channel[] = []
   #storage!: StorageApi
   #channel!: Channel
-  #defaultIdentity = new Identity();
-  defaultIdentity?: Identity
+  // #defaultIdentity = new Identity();
+  // defaultIdentity?: Identity
   options: SnackabraOptions = {
     channel_server: '',
     channel_ws: '',
@@ -2962,18 +2975,18 @@ class Snackabra {
    * Snackabra.connect()
    * Connects to :term:`Channel Name` on this SB config.
    * Returns a (promise to the) channel object
-   * @param {string} channel name
-   * @param {Identity} default identity for all messages
+   * @param {string} channel_id - channel name
+   * @param {Identity} identity - default identity for all messages
    */
-  connect(channel_id: string, identity: Identity): Promise<Channel> {
-    return new Promise<Channel>((resolve, reject) => {
+  connect(channel_id: string, identity: Identity): Promise<ChannelSocket> {
+    return new Promise<ChannelSocket>((resolve, reject) => {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       // psm: changing to make this on a per-message basis
       // if (!_self.#identity.exportable_pubKey) {
       //   reject(new Error('setIdentity() must be called before connecting'));
       // }
 
-      const c = new Channel(this, channel_id, identity)
+      const c = new ChannelSocket(this, channel_id, identity)
       this.#listOfChannels.push(c)
       resolve(c)
 
@@ -3064,19 +3077,19 @@ class Snackabra {
     return sbCrypto;
   }
 
-  get identity(): Identity {
-    // return this.#identity;
-    return this.#defaultIdentity
-  }
+  // get identity(): Identity {
+  //   // return this.#identity;
+  //   return this.#defaultIdentity
+  // }
 
-  set identity(identity: Identity) {
-    this.#defaultIdentity = identity
-  }
+  // set identity(identity: Identity) {
+  //   this.#defaultIdentity = identity
+  // }
 
-  // These are just helper methods, we can still access from SB.channel.socket.send externally
-  sendMessage(message: SBMessage) {
-    this.channel.send(message);
-  }
+  // // These are just helper methods, we can still access from SB.channel.socket.send externally
+  // sendMessage(message: SBMessage) {
+  //   this.channel.send(message);
+  // }
 
   sendFile(file: SBFile) {
     this.storage.saveFile(file, this.#channel);

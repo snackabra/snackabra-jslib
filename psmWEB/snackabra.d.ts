@@ -430,7 +430,7 @@ interface SBMessageContents {
 declare class SBMessage {
     ready: Promise<SBMessage>;
     channel: Channel;
-    identity?: Identity;
+    identity: Identity;
     contents: SBMessageContents;
     constructor(channel: Channel, body: string, identity?: Identity);
     /**
@@ -438,7 +438,7 @@ declare class SBMessage {
      *
      * @param {SBMessage} message - the message object to send
      */
-    send(): Promise<void>;
+    send(): Promise<string>;
 }
 /**
  * SBFile
@@ -461,29 +461,21 @@ export declare class SBFile extends SBMessage {
  * @constructor
  * @public
  */
-declare class Channel {
+declare abstract class Channel {
     #private;
-    ready: Promise<ChannelSocket>;
+    abstract ready: Promise<Channel>;
     sbServer: Snackabra;
     channel_id: string;
-    defaultIdentity?: Identity;
     motd?: string;
     locked?: boolean;
     owner: boolean;
     admin: boolean;
     verifiedGuest: boolean;
-    constructor(sbServer: Snackabra, channel_id: string, identity?: Identity);
-    /**
-     * Channel.send()
-     */
-    send(m: SBMessage): Promise<unknown>;
-    set onMessage(f: CallableFunction);
-    /**
-     * Channel.keys()
-     *
-     * Return keys used on socket
-     */
-    get keys(): ChannelKeys;
+    identity: Identity;
+    abstract get keys(): ChannelKeys;
+    abstract send(m: SBMessage): Promise<string>;
+    abstract set onMessage(f: CallableFunction);
+    constructor(sbServer: Snackabra, channel_id: string, identity: Identity);
     /**
      * Channel.api()
      */
@@ -495,12 +487,12 @@ declare class Channel {
  *
  *  Class managing connections
  */
-declare class ChannelSocket {
+declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
-    channelId: string;
-    constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
+    constructor(sbServer: Snackabra, channel_id: string, identity: Identity);
     set onMessage(f: CallableFunction);
+    get onMessage(): CallableFunction;
     /**
      * ChannelSocket.keys
      *
@@ -512,13 +504,14 @@ declare class ChannelSocket {
      *
      * Send SB object (file) on channel socket
      */
-    sendSbObject(file: SBFile): Promise<unknown>;
+    sendSbObject(file: SBFile): Promise<string>;
     /**
       * ChannelSocket.send()
       *
-      *
+      * Returns a promise that resolves to "success" when sent,
+      * or an error message if it fails.
       */
-    send(message: SBMessage): Promise<unknown>;
+    send(message: SBMessage): Promise<string>;
     /**
       * ChannelSocket.receive()
       *
@@ -626,7 +619,6 @@ declare class ChannelApi {
 }
 declare class Snackabra {
     #private;
-    defaultIdentity?: Identity;
     options: SnackabraOptions;
     /**
      * Constructor expects an object with the names of the matching servers, for example
@@ -648,10 +640,10 @@ declare class Snackabra {
      * Snackabra.connect()
      * Connects to :term:`Channel Name` on this SB config.
      * Returns a (promise to the) channel object
-     * @param {string} channel name
-     * @param {Identity} default identity for all messages
+     * @param {string} channel_id - channel name
+     * @param {Identity} identity - default identity for all messages
      */
-    connect(channel_id: string, identity: Identity): Promise<Channel>;
+    connect(channel_id: string, identity: Identity): Promise<ChannelSocket>;
     /**
      * Creates a new channel. Currently uses trivial authentication.
      * Returns the :term:`Channel Name`.
@@ -661,9 +653,6 @@ declare class Snackabra {
     get channel(): Channel;
     get storage(): StorageApi;
     get crypto(): SBCrypto;
-    get identity(): Identity;
-    set identity(identity: Identity);
-    sendMessage(message: SBMessage): void;
     sendFile(file: SBFile): void;
 }
 export { Channel, Identity, SBMessage, Snackabra, };
