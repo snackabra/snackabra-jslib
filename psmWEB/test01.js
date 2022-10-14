@@ -276,13 +276,13 @@ if (test_list.includes('test04a')) {
                 let sbm = new SBMessage(c, "Hello from test04b!");
                 console.log("@@@@@@@@@@@@@@@@ will try to send this message:");
                 console.log(sbm);
-                c.socket.send(sbm).then((c) => {
+                sbm.send().then((c) => {
                     console.log("back from send promise? got response:");
                     console.log(c);
                     console.log("@@@@@@@@@@@@@@@@ end of test");
                 });
                 // in parallel, handle incoming messages:
-                c.socket.onMessage = async (message) => {
+                c.onMessage = async (message) => {
                     console.log('Message Received:');
                     console.log(message);
                 };

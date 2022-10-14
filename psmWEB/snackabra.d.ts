@@ -56,17 +56,25 @@ interface ChannelAckMessage {
     type: 'ack';
     _id: string;
 }
+interface ChannelKeyStrings {
+    encryptionKey: string;
+    guestKey?: string;
+    ownerKey: string;
+    signKey: string;
+    lockedKey?: string;
+}
 interface ChannelKeys {
-    encryptionKey: Promise<CryptoKey>;
-    guestKey?: Promise<CryptoKey>;
-    ownerKey: Promise<CryptoKey>;
-    signKey: Promise<CryptoKey>;
-    lockedKey?: Promise<CryptoKey>;
+    ownerKey: CryptoKey;
+    guestKey?: CryptoKey;
+    encryptionKey: CryptoKey;
+    signKey: CryptoKey;
+    lockedKey?: CryptoKey;
+    channelSignKey: CryptoKey;
 }
 interface ChannelKeysMessage {
     type: 'channelKeys';
     ready: boolean;
-    keys: ChannelKeys;
+    keys: ChannelKeyStrings;
     motd: string;
     roomLocked: boolean;
 }
@@ -100,7 +108,6 @@ export declare type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMes
  * @param {string} m raw message string
  * @param {ChannelMessageTypes} expect expected (required) type (exception if it's not)
  */
-export declare function deserializeMessage(m: string, expect?: ChannelMessageTypes): ChannelMessage;
 /**
  * serializeMessage()
  *
@@ -274,7 +281,7 @@ export declare function packageEncryptDict(dict: Dictionary, publicKeyPEM: strin
  */
 export declare function partition(str: string, n: number): string[];
 /**
- * There are o many problems with JSON parsing, adding a wrapper to capture more info.
+ * There are many problems with JSON parsing, adding a wrapper to capture more info.
  * The 'loc' parameter should be a (unique) string that allows you to find the usage
  * in the code; one approach is the line number in the file (at some point).
  */
@@ -422,9 +429,16 @@ interface SBMessageContents {
  */
 declare class SBMessage {
     ready: Promise<SBMessage>;
+    channel: Channel;
     identity?: Identity;
     contents: SBMessageContents;
     constructor(channel: Channel, body: string, identity?: Identity);
+    /**
+     * SBMessage.send()
+     *
+     * @param {SBMessage} message - the message object to send
+     */
+    send(): Promise<void>;
 }
 /**
  * SBFile
@@ -432,17 +446,13 @@ declare class SBMessage {
  * @constructor
  * @public
  */
-export declare class SBFile {
-    encrypted: boolean;
-    contents: string;
-    senderPubKey: CryptoKey;
-    sign: Promise<string>;
+export declare class SBFile extends SBMessage {
     data: Dictionary;
     image: string;
     image_sign: string;
     imageMetaData: ImageMetaData;
     imageMetadata_sign: string;
-    constructor(file: File, signKey: CryptoKey, key: CryptoKey);
+    constructor(channel: Channel, file: File, identity?: Identity);
 }
 /**
  * Channel
@@ -453,7 +463,7 @@ export declare class SBFile {
  */
 declare class Channel {
     #private;
-    ready: () => Promise<SBWebSocket>;
+    ready: () => Promise<ChannelSocket>;
     sbServer: Snackabra;
     channel_id: string;
     defaultIdentity?: Identity;
@@ -464,19 +474,20 @@ declare class Channel {
     verifiedGuest: boolean;
     constructor(sbServer: Snackabra, channel_id: string, identity?: Identity);
     /**
+     * Channel.send()
+     */
+    send(m: SBMessage): Promise<unknown>;
+    set onMessage(f: CallableFunction);
+    /**
      * Channel.keys()
      *
-     * Return (promise to) keys
+     * Return (promise to) keys, which will show up on socket
      */
     get keys(): Promise<ChannelKeys>;
     /**
      * Channel.api()
      */
     get api(): ChannelApi;
-    /**
-     * Channel.socket()
-     */
-    get socket(): ChannelSocket;
 }
 /**
  *
@@ -486,20 +497,24 @@ declare class Channel {
  */
 declare class ChannelSocket {
     #private;
-    ready: Promise<SBWebSocket>;
+    ready: Promise<ChannelSocket>;
     channelId: string;
-    onMessage: CallableFunction;
+    processingKeys: boolean;
     constructor(sbServer: Snackabra, channel: Channel, identity: Identity);
+    set onMessage(f: CallableFunction);
+    get keys(): Promise<ChannelKeys>;
     /**
      * ChannelSocket.sendSbObject()
      *
      * Send SB object (file) on channel socket
      */
-    sendSbObject(file: SBFile): Promise<void>;
+    sendSbObject(file: SBFile): Promise<unknown>;
     /**
       * ChannelSocket.send()
+      *
+      *
       */
-    send(m: string): Promise<unknown>;
+    send(message: SBMessage): Promise<unknown>;
     /**
       * ChannelSocket.receive()
       *
@@ -634,7 +649,7 @@ declare class Snackabra {
      */
     connect(channel_id: string, identity: Identity): Promise<Channel>;
     /**
-     * Creates a channel. Currently uses trivial authentication.
+     * Creates a new channel. Currently uses trivial authentication.
      * Returns the :term:`Channel Name`.
      * (TODO: token-based approval of storage spend)
      */

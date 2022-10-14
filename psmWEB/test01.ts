@@ -326,14 +326,14 @@ if (test_list.includes('test04a')) {
         console.log("@@@@@@@@@@@@@@@@ will try to send this message:")
         console.log(sbm)
 
-        c.socket.send(sbm).then((c) => {
+        sbm.send().then((c) => {
           console.log("back from send promise? got response:")
           console.log(c)
           console.log("@@@@@@@@@@@@@@@@ end of test")
         })
 
         // in parallel, handle incoming messages:
-        c.socket.onMessage = async (message: any) => {
+        c.onMessage = async (message: any) => {
           console.log('Message Received:')
           console.log(message)
         }
