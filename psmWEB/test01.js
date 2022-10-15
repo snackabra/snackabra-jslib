@@ -266,7 +266,10 @@ if (test_list.includes('test04a')) {
         console.log("++++test04a++++ new room URL:");
         console.log(roomUrl);
         // we now need to connect to it
-        SB.connect(channelId, myId).then((c) => {
+        SB.connect(channelId, myId, (message) => {
+            console.log('Message Received:');
+            console.log(message);
+        }).then((c) => {
             console.log("++++test04a++++ got ourselves a channel:");
             console.log(c);
             // const messages = [];
@@ -286,11 +289,11 @@ if (test_list.includes('test04a')) {
                     console.log(c);
                     console.log("++++test04a++++ end of test");
                 });
-                // in parallel, handle incoming messages:
-                c.onMessage = async (message) => {
-                    console.log('Message Received:');
-                    console.log(message);
-                };
+                // // in parallel, handle incoming messages:
+                // c.onMessage = async (message: any) => {
+                //   console.log('Message Received:')
+                //   console.log(message)
+                // }
                 // send more hello
                 let messageCount = 0;
                 getElement('sayHello').onclick = (() => {

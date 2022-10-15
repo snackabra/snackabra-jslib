@@ -475,6 +475,7 @@ declare abstract class Channel {
     abstract get keys(): ChannelKeys;
     abstract send(m: SBMessage): Promise<string>;
     abstract set onMessage(f: CallableFunction);
+    abstract adminData?: Dictionary;
     constructor(sbServer: Snackabra, channel_id: string, identity: Identity);
     /**
      * Channel.api()
@@ -490,7 +491,8 @@ declare abstract class Channel {
 declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
-    constructor(sbServer: Snackabra, channel_id: string, identity: Identity);
+    adminData?: Dictionary;
+    constructor(sbServer: Snackabra, channel_id: string, identity: Identity, onMessage: CallableFunction);
     set onMessage(f: CallableFunction);
     get onMessage(): CallableFunction;
     /**
@@ -512,14 +514,6 @@ declare class ChannelSocket extends Channel {
       * or an error message if it fails.
       */
     send(message: SBMessage): Promise<string>;
-    /**
-      * ChannelSocket.receive()
-      *
-      * Receive message on channel socket.
-      *
-      * Moving to new message types
-      */
-    receive(message: ChannelMessage2): Promise<string | ChannelMessage2>;
 }
 /**
  * Storage API
@@ -643,7 +637,7 @@ declare class Snackabra {
      * @param {string} channel_id - channel name
      * @param {Identity} identity - default identity for all messages
      */
-    connect(channel_id: string, identity: Identity): Promise<ChannelSocket>;
+    connect(channel_id: string, identity: Identity, onMessage: CallableFunction): Promise<ChannelSocket>;
     /**
      * Creates a new channel. Currently uses trivial authentication.
      * Returns the :term:`Channel Name`.

@@ -1599,6 +1599,8 @@ abstract class Channel {
   admin: boolean = false
   verifiedGuest: boolean = false
 
+  // channels always have an identity, since you typically cannot
+  // query various aspects of channel state without an identity
   identity: Identity
   abstract get keys(): ChannelKeys
 
@@ -1607,7 +1609,9 @@ abstract class Channel {
 
   // metaData: Dictionary = {};
 
-  #api!: ChannelApi;
+  #api!: ChannelApi
+  abstract adminData?: Dictionary // TODO: make into getter
+
   // #socket!: ChannelSocket;
 
   //storage?: StorageApi // TODO: in principle should be optional?
@@ -1658,7 +1662,7 @@ abstract class Channel {
    * Channel.api()
    */
   get api() {
-    return this.#api;
+    return this.#api
   }
 
   /**
@@ -1710,6 +1714,7 @@ class ChannelSocket extends Channel {
 
   #ws: WSProtocolOptions
   #keys?: ChannelKeys
+  adminData?: Dictionary // TODO: add getter
 
   // socket!: WS_Protocol;
   // sbWebSocket: SBWebSocket
@@ -1720,7 +1725,7 @@ class ChannelSocket extends Channel {
   // which go to wsOptions?
   // onOpen!: CallableFunction;
   // onJoin?: CallableFunction;
-  #onMessage: CallableFunction
+  #onMessage: CallableFunction // the user message handler
   // onSystemInfo!: CallableFunction;
 
   // channelCryptoKey: CryptoKey
@@ -1728,11 +1733,11 @@ class ChannelSocket extends Channel {
   #ack: Dictionary = []
   
   #processMessage(m: any) {
-    // receives the message, can be of any type
+    // receives all messages, can be of any type
     console.log("got raw message:")
     console.log(m)
     const data = jsonParseWrapper(m, 'L1489')
-    console.log("... unwrapped:")
+    console.log("... json unwrapped:")
     console.log(data)
     if (data.ack) {
       const r = this.#ack[data._id]
@@ -1748,7 +1753,43 @@ class ChannelSocket extends Channel {
       // typically this will call ChannelSocket.receive()
       // if (this.onMessage(data)) this.onMessage(data)
       // update: pass the string so it can deserialize on its own
-      if (this.#onMessage) this.#onMessage(m)
+      // if (this.#onMessage) this.#onMessage(m)
+      // update to update, no, don't :-) but unwrap here
+
+      const message = data as ChannelMessage2
+      // 'id' will be first property
+      console.log("++++++++ ChannelSocket.#processMessage():")
+      const id = Object.keys(message)[0];
+      console.log("++++++++ #processMessage: note .. 'id' was:")
+      console.log(id)
+      let unwrapped: string = ''
+      if (message.encrypted_contents) {
+        try {
+          sbCrypto.decrypt(this.keys.encryptionKey, message.encrypted_contents, 'string').then((unwrapped) => {
+            console.log("++++++++ #processMessage: unwrapped:")
+            console.log(unwrapped)
+            this.#onMessage(unwrapped)
+          })
+        } catch (e) {
+          console.error(`#processmessage: cannot handle locked channels yet (${e})`)
+          // TODO: locked key might never resolve (if we don't have it)
+          // unwrapped = await sbCrypto.decrypt(this.keys.lockedKey!, message.encrypted_contents, 'string')
+        }
+      } else {
+        console.log("++++++++ #processMessage: Got unencrypted message:")
+        console.log(message)
+        this.#onMessage(message) // 'as string' ?
+
+        // unwrapped = jsonParseWrapper(, 'L1702');
+        // // psm: TODO, i don't know what messages are really supposed to look like in all cases
+        // unwrapped._id = id;
+        // TODO: re-enable local storage of messages
+        // _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', id.slice(this.#channel.channel_id.length));
+        // if (message._id) _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', message._id)
+        // return JSON.stringify(unwrapped);
+
+      }
+
     } else {
       _sb_exception('SBWebSocket', 'received message but there is no handler')
     }
@@ -1770,12 +1811,20 @@ class ChannelSocket extends Channel {
         }
         this.#ws.websocket.addEventListener('open', () => {
           this.#ws.closed = false;
-          this.#ws.init = { name: JSON.stringify({}) } // just needs an empty prompt
-          this.#ws.websocket.send(JSON.stringify(this.#ws.init))
-          // .. nope actually not ready until channel responds with keys
-          // resolve(this)
+          this.identity.exportable_pubKey.then((pubKey) => {
+            console.log("++++++++ readyPromise() has identity:")
+            console.log(this.identity)
+            this.#ws.init = { name: JSON.stringify(pubKey) }
+            console.log("++++++++ readyPromise() constructed init:")
+            console.log(this.#ws.init)
+            this.#ws.websocket.send(JSON.stringify(this.#ws.init))
+            // .. nope actually not ready until channel responds with keys
+            // resolve(this)
+          })
         })
         this.#ws.websocket.addEventListener('message', (e: MessageEvent) => {
+          // the 'root' administrative messages are processed first before
+          // anything else can be processed
           // TODO: add a try wrapper
           console.log("++++++++ readyPromise() received ChannelKeysMessage:")
           console.log(e)
@@ -1819,6 +1868,12 @@ class ChannelSocket extends Channel {
               // const message: ChannelMessage2 = e.data as ChannelMessage2
               // resolveKeys(message.keys)
               // this.#keys = message.keys
+
+              // once we have keys we can also query admin info
+              const adminData = this.api.getAdminData()
+              console.log("++++++++ readyPromise() getting adminData:")
+              console.log(adminData)
+              this.adminData = adminData
 
               if (backlog.length > 0) {
                 // this causes queued messages to be processed ahead of ones from new callbacks
@@ -1871,7 +1926,7 @@ class ChannelSocket extends Channel {
   // }
 
   // MERGING: CHANNEL_SOCKET CONSTRUCTOR:
-  constructor(sbServer: Snackabra, channel_id: string, identity: Identity) {
+  constructor(sbServer: Snackabra, channel_id: string, identity: Identity, onMessage: CallableFunction) {
     console.log("----ChannelSocket.constructor() start:")
     console.log(sbServer)
     // console.log(channel)
@@ -1889,7 +1944,7 @@ class ChannelSocket extends Channel {
     // this.sbWebSocket = new SBWebSocket(this.#url, this.receive, identity)
     // this.sbWebSocket.ready.then((ws) => this.#open(ws))
     const url = sbServer.options.channel_ws + '/api/room/' + this.channel_id + '/websocket'
-    this.#onMessage = this.receive
+    this.#onMessage = onMessage
     this.#ws = {
       url: url,
       websocket: new WebSocket(url),
@@ -1941,7 +1996,9 @@ class ChannelSocket extends Channel {
    * Will throw an exception if keys are unknown or not yet loaded
    */
   get keys(): ChannelKeys {
-    _sb_assert(this.#keys, "ChannelSocket.keys: not initialized (?)")
+    if (!this.#keys) {
+      _sb_assert(false, "ChannelSocket.keys: not initialized (?)")
+    }
     return(this.#keys!)
   }
 
@@ -2027,53 +2084,53 @@ class ChannelSocket extends Channel {
     * 
     * Moving to new message types
     */
-  async receive(message: ChannelMessage2) {
-    // 'id' will be first property
-    console.log("----ChannelSocket.receive():")
-    const id = Object.keys(message)[0];
-    console.log("(note .. 'id' was:)")
-    console.log(id)
-    let unwrapped: string = ''
-    if (message.encrypted_contents) {
-      try {
-        unwrapped = await sbCrypto.decrypt(this.keys.encryptionKey, message.encrypted_contents, 'string');
-        console.log("unwrapped:")
-        console.log(unwrapped)
-      } catch (e) {
-        console.warn(e);
-        // TODO: locked key might never resolve (if we don't have it)
-        unwrapped = await sbCrypto.decrypt(this.keys.lockedKey!, message.encrypted_contents, 'string')
-      }
-      return (unwrapped);
-    } else {
-      console.log("Got message:")
-      console.log(message)
+//   async receive(message: ChannelMessage2) {
+//     // 'id' will be first property
+//     console.log("----ChannelSocket.receive():")
+//     const id = Object.keys(message)[0];
+//     console.log("(note .. 'id' was:)")
+//     console.log(id)
+//     let unwrapped: string = ''
+//     if (message.encrypted_contents) {
+//       try {
+//         unwrapped = await sbCrypto.decrypt(this.keys.encryptionKey, message.encrypted_contents, 'string');
+//         console.log("unwrapped:")
+//         console.log(unwrapped)
+//       } catch (e) {
+//         console.warn(e);
+//         // TODO: locked key might never resolve (if we don't have it)
+//         unwrapped = await sbCrypto.decrypt(this.keys.lockedKey!, message.encrypted_contents, 'string')
+//       }
+//       return (unwrapped);
+//     } else {
+//       console.log("Got message:")
+//       console.log(message)
 
-      // .. removing onJoin mechanism (used for setting keys)
-      // if (this.onJoin) {
-      //   console.log("calling channel join")
-      //   this.onJoin(message)
-      //   // if (message?.ready) {
-      //   //   // this.metaData = message;
-      //   //   this.loadKeys(message.keys).then(() => {
-      //   //     this.socket.isReady();
-      //   //     // resolve(this);
-      //   //   });
-      //   // }
-      // } else {
-      //   console.log("on join not set? (error) on this socket:")
-      //   console.log(this)
-      // }
+//       // .. removing onJoin mechanism (used for setting keys)
+//       // if (this.onJoin) {
+//       //   console.log("calling channel join")
+//       //   this.onJoin(message)
+//       //   // if (message?.ready) {
+//       //   //   // this.metaData = message;
+//       //   //   this.loadKeys(message.keys).then(() => {
+//       //   //     this.socket.isReady();
+//       //   //     // resolve(this);
+//       //   //   });
+//       //   // }
+//       // } else {
+//       //   console.log("on join not set? (error) on this socket:")
+//       //   console.log(this)
+//       // }
 
-      return (message)
-      // unwrapped = jsonParseWrapper(, 'L1702');
-      // // psm: TODO, i don't know what messages are really supposed to look like in all cases
-      // unwrapped._id = id;
-      // _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', id.slice(this.#channel.channel_id.length));
-      // if (message._id) _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', message._id)
-      // return JSON.stringify(unwrapped);
-    }
-  }
+//       return (message)
+//       // unwrapped = jsonParseWrapper(, 'L1702');
+//       // // psm: TODO, i don't know what messages are really supposed to look like in all cases
+//       // unwrapped._id = id;
+//       // _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', id.slice(this.#channel.channel_id.length));
+//       // if (message._id) _localStorage.setItem(this.#channel.channel_id + '_lastSeenMessage', message._id)
+//       // return JSON.stringify(unwrapped);
+//     }
+//   }
 
 } // ChannelSocket
 
@@ -2491,7 +2548,7 @@ class ChannelApi {
     return new Promise(async (resolve, reject) => {
       //if (this.#channel.owner) {
       const token_data: string = new Date().getTime().toString();
-      const token_sign: string = await sbCrypto.sign(await (await this.#channel.keys).signKey, token_data);
+      const token_sign: string = await sbCrypto.sign(this.#channel.keys.channelSignKey, token_data);
       fetch(this.#channelServer + this.#channel.channel_id + '/getAdminData', {
         method: 'GET', credentials: 'include', headers: {
           'authorization': token_data + '.' + token_sign, 'Content-Type': 'application/json'
@@ -2978,7 +3035,7 @@ class Snackabra {
    * @param {string} channel_id - channel name
    * @param {Identity} identity - default identity for all messages
    */
-  connect(channel_id: string, identity: Identity): Promise<ChannelSocket> {
+  connect(channel_id: string, identity: Identity, onMessage: CallableFunction): Promise<ChannelSocket> {
     return new Promise<ChannelSocket>((resolve, reject) => {
       // eslint-disable-next-line @typescript-eslint/no-this-alias
       // psm: changing to make this on a per-message basis
@@ -2986,7 +3043,7 @@ class Snackabra {
       //   reject(new Error('setIdentity() must be called before connecting'));
       // }
 
-      const c = new ChannelSocket(this, channel_id, identity)
+      const c = new ChannelSocket(this, channel_id, identity, onMessage)
       this.#listOfChannels.push(c)
       resolve(c)
 
