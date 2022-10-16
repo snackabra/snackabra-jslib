@@ -6,11 +6,6 @@ interface SnackabraOptions {
     channel_ws: string;
     storage_server: string;
 }
-interface SnackabraKeys {
-    exportable_pubKey: JsonWebKey | Promise<JsonWebKey | null>;
-    exportable_privateKey: JsonWebKey | Promise<JsonWebKey | null>;
-    privateKey: CryptoKey | Promise<CryptoKey | null>;
-}
 interface Dictionary {
     [index: string]: any;
 }
@@ -102,19 +97,6 @@ interface ChannelEncryptedMessageArray {
 }
 export declare type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void;
 export declare type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys';
-/**
- * deserializeMessage()
- *
- * @param {string} m raw message string
- * @param {ChannelMessageTypes} expect expected (required) type (exception if it's not)
- */
-/**
- * serializeMessage()
- *
- * Serializes any SB message type.
- *
- * @param {ChannelMessage} SB message object
- */
 interface ChannelMessage1 {
     [key: string]: ChannelMessage2;
     message: {
@@ -309,7 +291,7 @@ export declare function encodeB64Url(input: string): string;
  */
 export declare function decodeB64Url(input: string): string;
 /**
- * SBCrypto is a class that contains all the SB specific crypto functions
+ * SBCrypto contains all the SB specific crypto functions
  *
  * @class
  * @constructor
@@ -351,22 +333,12 @@ declare class SBCrypto {
      */
     encrypt(contents: BufferSource, secret_key: CryptoKey, outputType?: string, _iv?: ArrayBuffer | null): Promise<Dictionary | string>;
     /**
-     * SBCrypto.decrypt()
-     *
-     * Decrypt. Defunct, replaced by unwrap()
-     */
-    decrypt(secretKey: CryptoKey, contents: Dictionary, outputType?: string): Promise<string>;
-    /**
      * SBCrypto.unwrap
      *
      * Decrypts a wrapped object, returns decrypted contents
      */
-    unwrap(k: CryptoKey, o: EncryptedContents): Promise<string>;
-    /**
-     * SBCrypto.wrap
-     *
-     * Encrypts
-     */
+    unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'string'): Promise<string>;
+    unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'arrayBuffer'): Promise<ArrayBuffer>;
     /**
      * SBCrypto.sign()
      *
@@ -392,29 +364,25 @@ declare class SBCrypto {
  * @constructor
  * @public
  */
-declare class Identity implements SnackabraKeys {
+declare class Identity {
+    #private;
     ready: Promise<Identity>;
-    resolve_exportable_pubKey: (arg0: JsonWebKey | null) => void;
-    resolve_exportable_privateKey: (arg0: JsonWebKey | null) => void;
-    resolve_privateKey: (arg0: CryptoKey | null) => void;
-    exportable_pubKey: Promise<JsonWebKey | null>;
-    exportable_privateKey: Promise<JsonWebKey | null>;
-    privateKey: Promise<CryptoKey | null>;
-    constructor(keys?: JsonWebKey);
     /**
-     * Mint keys
+     * new Identity()
+     * @param key a jwk with which to create identity; if not provided,
+     * it will 'mint' (generate) them randomly
      */
-    mintKeys(): Promise<unknown>;
-    /**
-     * Mount keys
-     */
-    mountKeys(key: JsonWebKey): Promise<unknown>;
+    constructor(key?: JsonWebKey);
+    get exportable_pubKey(): JsonWebKey;
+    get exportable_privateKey(): JsonWebKey;
+    get privateKey(): CryptoKey;
     get _id(): string;
 }
 interface SBMessageContents {
-    sender_pubKey?: JsonWebKey;
+    sender_pubKey: JsonWebKey;
+    sender_username?: string;
     encrypted: boolean;
-    body: string;
+    contents: string;
     sign: string;
     image: string;
     image_sign?: string;
@@ -471,6 +439,7 @@ declare abstract class Channel {
     owner: boolean;
     admin: boolean;
     verifiedGuest: boolean;
+    userName: string;
     identity: Identity;
     abstract get keys(): ChannelKeys;
     abstract send(m: SBMessage): Promise<string>;
@@ -492,7 +461,7 @@ declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
     adminData?: Dictionary;
-    constructor(sbServer: Snackabra, channel_id: string, identity: Identity, onMessage: CallableFunction);
+    constructor(sbServer: Snackabra, channel_id: string, onMessage: CallableFunction, identity?: Identity);
     set onMessage(f: CallableFunction);
     get onMessage(): CallableFunction;
     /**
@@ -616,7 +585,8 @@ declare class Snackabra {
     options: SnackabraOptions;
     /**
      * Constructor expects an object with the names of the matching servers, for example
-     * (this shows the miniflare local dev config):
+     * (below shows the miniflare local dev config). Note that 'new Snackabra()' is
+     * guaranteed synchronous, so can be 'used' right away.
      *
      *
      * ::
@@ -632,12 +602,14 @@ declare class Snackabra {
     constructor(args: SnackabraOptions);
     /**
      * Snackabra.connect()
+     *
      * Connects to :term:`Channel Name` on this SB config.
-     * Returns a (promise to the) channel object
+     * Returns a (promise to the) channel (socket) object
+     *
      * @param {string} channel_id - channel name
      * @param {Identity} identity - default identity for all messages
      */
-    connect(channel_id: string, identity: Identity, onMessage: CallableFunction): Promise<ChannelSocket>;
+    connect(channel_id: string, onMessage: CallableFunction, identity?: Identity): Promise<ChannelSocket>;
     /**
      * Creates a new channel. Currently uses trivial authentication.
      * Returns the :term:`Channel Name`.
@@ -649,4 +621,4 @@ declare class Snackabra {
     get crypto(): SBCrypto;
     sendFile(file: SBFile): void;
 }
-export { Channel, Identity, SBMessage, Snackabra, };
+export { Channel, Identity, SBMessage, Snackabra, SBCrypto, };
