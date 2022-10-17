@@ -614,7 +614,9 @@ declare class Snackabra {
     connect(channel_id: string, onMessage: CallableFunction, identity?: Identity): Promise<ChannelSocket>;
     /**
      * Creates a new channel. Currently uses trivial authentication.
-     * Returns the :term:`Channel Name`.
+     * Returns the :term:`Channel Name`. Note that this does not
+     * create a channel object, e.g. does not make a connection.
+     * Therefore you need
      * (TODO: token-based approval of storage spend)
      */
     create(serverSecret: string, identity: Identity): Promise<string>;

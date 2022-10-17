@@ -1769,13 +1769,13 @@ class ChannelSocket extends Channel {
                 console.log(`++++++++ ChannelSocket.send() this message: '${m}' `)
                 this.#ws.websocket.send(m)
                 // TODO: update protocol so server acks on message
-                // this.#ws.websocket.send(JSON.stringify(ackPayload));
+                this.#ws.websocket.send(JSON.stringify(ackPayload));
                 setTimeout(() => {
                   if (this.#ack[_id]) {
                     delete this.#ack[_id]
-                    const error = `Websocket request timed out after ${this.#ws.timeout}ms (${_id})`
-                    console.error(error)
-                    reject(new Error(error))
+                    const msg = `Websocket request timed out (no ack) after ${this.#ws.timeout}ms (${_id})`
+                    console.error(msg)
+                    reject(msg)
                   } else {
                     // normal behavior
                     console.log("++++++++ ChannelSocket.send() completed sending!")
@@ -2708,7 +2708,9 @@ class Snackabra {
 
   /**
    * Creates a new channel. Currently uses trivial authentication.
-   * Returns the :term:`Channel Name`.
+   * Returns the :term:`Channel Name`. Note that this does not
+   * create a channel object, e.g. does not make a connection.
+   * Therefore you need 
    * (TODO: token-based approval of storage spend)
    */
   create(serverSecret: string, identity: Identity): Promise<string> {
