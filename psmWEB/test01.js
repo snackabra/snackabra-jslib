@@ -212,6 +212,24 @@ const sb_config = {
     channel_ws: 'ws://127.0.0.1:4001',
     storage_server: 'http://127.0.0.1:4000'
 };
+if (true) {
+    // create server object
+    const SB = new Snackabra({
+        channel_server: 'http://127.0.0.1:4001',
+        channel_ws: 'ws://127.0.0.1:4001',
+        storage_server: 'http://127.0.0.1:4000'
+    });
+    // create a new channel (room) and connect
+    SB.create('password', (new Identity())).then((channelId) => {
+        SB.connect(channelId, 
+        // print out any messages we get
+        (m) => { console.log(`got message: ${m}`); }).then((c) => c.ready).then((c) => {
+            // say hello to everybody
+            c.userName = "TestBot";
+            (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`sent! (${c})`); });
+        });
+    });
+}
 if (test_list.includes('test04d')) {
     const z = getElement('test04d');
     // create orchestration (master) object (synchronous)

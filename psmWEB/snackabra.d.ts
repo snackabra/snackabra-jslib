@@ -379,7 +379,7 @@ declare class Identity {
     get _id(): string;
 }
 interface SBMessageContents {
-    sender_pubKey: JsonWebKey;
+    sender_pubKey?: JsonWebKey;
     sender_username?: string;
     encrypted: boolean;
     contents: string;
@@ -398,7 +398,7 @@ interface SBMessageContents {
 declare class SBMessage {
     ready: Promise<SBMessage>;
     channel: Channel;
-    identity: Identity;
+    identity?: Identity;
     contents: SBMessageContents;
     constructor(channel: Channel, body: string, identity?: Identity);
     /**
@@ -440,12 +440,12 @@ declare abstract class Channel {
     admin: boolean;
     verifiedGuest: boolean;
     userName: string;
-    identity: Identity;
+    identity?: Identity;
     abstract get keys(): ChannelKeys;
     abstract send(m: SBMessage): Promise<string>;
     abstract set onMessage(f: CallableFunction);
     abstract adminData?: Dictionary;
-    constructor(sbServer: Snackabra, channel_id: string, identity: Identity);
+    constructor(sbServer: Snackabra, channel_id: string, identity?: Identity);
     /**
      * Channel.api()
      */
@@ -598,6 +598,8 @@ declare class Snackabra {
      *     }
      *
      * @param args {SnackabraOptions} interface
+     *
+     *
      */
     constructor(args: SnackabraOptions);
     /**

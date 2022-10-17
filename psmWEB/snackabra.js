@@ -1020,16 +1020,19 @@ class SBMessage {
         console.log("creating SBMessage on channel:");
         console.log(channel);
         this.channel = channel;
-        // this.contents.sender_pubKey = channel.keys.exportable_pubKey // need to get this from SB object
-        if (identity) {
-            this.identity = identity;
-        }
-        else {
-            this.identity = channel.identity;
-        }
-        this.contents = { encrypted: false, sender_pubKey: this.identity.exportable_pubKey, contents: body, sign: '', image: '', imageMetaData: {} };
-        this.ready = new Promise((resolve) => {
-            console.log("SBMessage: waiting on channel to be ready... ");
+        this.contents = { encrypted: false, contents: body, sign: '', image: '', imageMetaData: {} };
+        this.ready = new Promise((resolve, reject) => {
+            if (identity) {
+                this.identity = identity;
+            }
+            else if (channel.identity) {
+                this.identity = channel.identity;
+            }
+            else {
+                reject("SBMessage needs an identity set (somewhere)");
+            }
+            this.contents.sender_pubKey = this.identity.exportable_pubKey,
+                console.log("SBMessage: waiting on channel to be ready... ");
             channel.ready.then(() => {
                 console.log("SBMessage: ... got keys .. here are keys and sign key ");
                 console.log(this.channel.keys);
@@ -1126,7 +1129,8 @@ class Channel {
     verifiedGuest = false;
     userName = '';
     // channels always have an identity, since you typically cannot
-    // query various aspects of channel state without an identity
+    // query various aspects of channel state without an identity.
+    // however if not provided, one will be generated upon a connect
     identity;
     #api;
     /*
@@ -1143,7 +1147,8 @@ class Channel {
      */
     constructor(sbServer, channel_id, identity) {
         this.sbServer = sbServer;
-        this.identity = identity;
+        if (identity)
+            this.identity = identity;
         _sb_assert(channel_id != null, 'channel_id cannot be null'); // TODO: this can be done with types
         this.channel_id = channel_id;
         this.#api = new ChannelApi(this.sbServer, this, this.identity);
@@ -1261,11 +1266,11 @@ class ChannelSocket extends Channel {
                 this.#ws.websocket.addEventListener('open', () => {
                     this.#ws.closed = false;
                     const id = this.identity;
-                    const r = id.ready;
+                    const r = id.ready; // we know at this point we have an identity
                     r.then(() => {
                         console.log("++++++++ readyPromise() has identity:");
-                        console.log(this.identity);
-                        this.#ws.init = { name: JSON.stringify(this.identity.exportable_pubKey) };
+                        console.log(id);
+                        this.#ws.init = { name: JSON.stringify(id.exportable_pubKey) };
                         console.log("++++++++ readyPromise() constructed init:");
                         console.log(this.#ws.init);
                         this.#ws.websocket.send(JSON.stringify(this.#ws.init));
@@ -1295,7 +1300,7 @@ class ChannelSocket extends Channel {
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.signKey), 'ECDH', true, ['deriveKey']),
                         sbCrypto.importKey('jwk', sbCrypto.extractPubKey(JSON.parse(message.keys.signKey)), 'ECDH', true, []),
-                        this.identity.privateKey
+                        this.identity.privateKey // we know we have id by now
                     ]).then((v) => {
                         console.log("++++++++ readyPromise() processed first batch of keys");
                         const ownerKey = v[0];
@@ -2187,6 +2192,8 @@ class Snackabra {
      *     }
      *
      * @param args {SnackabraOptions} interface
+     *
+     *
      */
     constructor(args) {
         _sb_assert(args, 'Snackabra(args) - missing args');

@@ -1280,7 +1280,7 @@ interface resolveKeyFunction {
 }
 
 interface SBMessageContents {
-  sender_pubKey: JsonWebKey,
+  sender_pubKey?: JsonWebKey,
   sender_username?: string,
   encrypted: boolean,
   contents: string,
@@ -1300,24 +1300,24 @@ interface SBMessageContents {
 class SBMessage {
   ready
   channel: Channel
-  identity: Identity // if omitted go with channel default
+  identity?: Identity // if omitted go with channel default
   contents: SBMessageContents
 
   constructor(channel: Channel, body: string, identity?: Identity) {
     console.log("creating SBMessage on channel:")
     console.log(channel)
     this.channel = channel
+    this.contents = { encrypted: false, contents: body, sign: '', image: '', imageMetaData: {} }
 
-    // this.contents.sender_pubKey = channel.keys.exportable_pubKey // need to get this from SB object
-
-    if (identity) {
-      this.identity = identity
-    } else {
-      this.identity = channel.identity
-    }
-    this.contents = { encrypted: false, sender_pubKey: this.identity.exportable_pubKey, contents: body, sign: '', image: '', imageMetaData: {} }
-
-    this.ready = new Promise<SBMessage>((resolve) => {
+    this.ready = new Promise<SBMessage>((resolve, reject) => {
+      if (identity) {
+        this.identity = identity
+      } else if (channel.identity) {
+        this.identity = channel.identity
+      } else {
+        reject("SBMessage needs an identity set (somewhere)")
+      }
+      this.contents.sender_pubKey = this.identity!.exportable_pubKey,
       console.log("SBMessage: waiting on channel to be ready... ")
       channel.ready.then(() => {
         console.log("SBMessage: ... got keys .. here are keys and sign key ")
@@ -1420,8 +1420,9 @@ abstract class Channel {
   userName: string = ''
 
   // channels always have an identity, since you typically cannot
-  // query various aspects of channel state without an identity
-  identity: Identity
+  // query various aspects of channel state without an identity.
+  // however if not provided, one will be generated upon a connect
+  identity?: Identity
 
   abstract get keys(): ChannelKeys
   abstract send(m: SBMessage): Promise<string> // "success" or error message
@@ -1442,9 +1443,9 @@ abstract class Channel {
    * @param {string} channel_id (the :term:`Channel Name`) to find on that server
    * @param {Identity} the identity which you want to present (defaults to server default)
    */
-  constructor(sbServer: Snackabra, channel_id: string, identity: Identity) {
+  constructor(sbServer: Snackabra, channel_id: string, identity?: Identity) {
     this.sbServer = sbServer
-    this.identity = identity
+    if (identity) this.identity = identity
     _sb_assert(channel_id != null, 'channel_id cannot be null') // TODO: this can be done with types
     this.channel_id = channel_id
     this.#api = new ChannelApi(this.sbServer, this, this.identity)
@@ -1560,12 +1561,12 @@ class ChannelSocket extends Channel {
         }
         this.#ws.websocket.addEventListener('open', () => {
           this.#ws.closed = false
-          const id = this.identity
-          const r = id.ready
+          const id = this.identity!
+          const r = id.ready // we know at this point we have an identity
           r.then(() => {
             console.log("++++++++ readyPromise() has identity:")
-            console.log(this.identity)
-            this.#ws.init = { name: JSON.stringify(this.identity.exportable_pubKey) }
+            console.log(id)
+            this.#ws.init = { name: JSON.stringify(id.exportable_pubKey) }
             console.log("++++++++ readyPromise() constructed init:")
             console.log(this.#ws.init)
             this.#ws.websocket.send(JSON.stringify(this.#ws.init))
@@ -1595,7 +1596,7 @@ class ChannelSocket extends Channel {
             sbCrypto.importKey('jwk', JSON.parse(message.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
             sbCrypto.importKey('jwk', JSON.parse(message.keys.signKey),'ECDH', true, ['deriveKey']),
             sbCrypto.importKey('jwk', sbCrypto.extractPubKey(JSON.parse(message.keys.signKey))!, 'ECDH', true, []),
-            this.identity.privateKey
+            this.identity!.privateKey // we know we have id by now
           ]).then((v) => {
             console.log("++++++++ readyPromise() processed first batch of keys")
             const ownerKey = v[0]
@@ -2666,6 +2667,8 @@ class Snackabra {
    *     }
    *
    * @param args {SnackabraOptions} interface
+   * 
+   * 
    */
   constructor(args: SnackabraOptions) {
     _sb_assert(args, 'Snackabra(args) - missing args');
