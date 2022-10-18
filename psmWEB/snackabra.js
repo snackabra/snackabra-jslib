@@ -943,31 +943,13 @@ class SBCrypto {
 const sbCrypto = new SBCrypto();
 function Memoize(target, propertyKey, descriptor) {
     if (descriptor.get) {
-        console.log("Memoize target:");
-        console.log(target);
         let get = descriptor.get;
         descriptor.get = function () {
-            // const prop = Symbol(`__${propertyKey}__`)
             const prop = `__${propertyKey}__`;
-            if (this.hasOwnProperty(prop)) {
-                // @ts-ignore
-                const returnValue = this[prop];
-                console.log("Memoize found value in cache");
-                console.log(returnValue);
-                return (returnValue);
-            }
-            else {
-                console.log("Memoize new return value");
-                const returnValue = get.call(this);
-                Object.defineProperty(this, prop, {
-                    configurable: false,
-                    enumerable: false,
-                    writable: false,
-                    value: returnValue
-                });
-                console.log(returnValue);
-                return returnValue;
-            }
+            if (!this.hasOwnProperty(prop))
+                Object.defineProperty(this, prop, { configurable: false, enumerable: false, writable: false, value: get.apply(this) });
+            // @ts-ignore
+            return this[prop];
         };
     }
 }
