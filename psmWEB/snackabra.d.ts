@@ -373,9 +373,10 @@ declare class Identity {
      * it will 'mint' (generate) them randomly
      */
     constructor(key?: JsonWebKey);
-    get exportable_pubKey(): JsonWebKey;
-    get exportable_privateKey(): JsonWebKey;
-    get privateKey(): CryptoKey;
+    get readyFlag(): boolean;
+    get exportable_pubKey(): JsonWebKey | null;
+    get exportable_privateKey(): JsonWebKey | null;
+    get privateKey(): CryptoKey | null;
     get _id(): string;
 }
 interface SBMessageContents {
