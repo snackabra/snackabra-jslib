@@ -7,6 +7,18 @@
   current tsc command-line settings:
   tsc -t es2022 --pretty false --strict ./snackabra.ts
 
+  design principles:
+  - no external (library) dependencies
+  - no window/dom dependency
+  - pure asynchronous (eg no 'await')
+  - clean es2022 code
+  - zero errors/warnings on tsc 'strict' setting
+  - minimum forced typecasting
+  - DRY extendable / abstract OOP implementation
+  - Use decorators where appropriate
+    -https://www.typescriptlang.org/docs/handbook/decorators.html
+  
+
   TODO list:
   * cut code (some still relevant) in
   
@@ -1206,6 +1218,36 @@ class SBCrypto {
 
 const sbCrypto = new SBCrypto();
 
+function Memoize(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  if (descriptor.get) {
+    console.log("Memoize target:")
+    console.log(target)
+    let get = descriptor.get
+    descriptor.get = function () {
+      // const prop = Symbol(`__${propertyKey}__`)
+      const prop = `__${propertyKey}__`
+      if (this.hasOwnProperty(prop)) {
+        // @ts-ignore
+        const returnValue = this[prop]
+        console.log("Memoize found value in cache")
+        console.log(returnValue)
+        return (returnValue)
+      } else {
+        console.log("Memoize new return value")
+        const returnValue = get.call(this)
+        Object.defineProperty(this, prop, {
+          configurable: false,
+          enumerable: false,
+          writable: false,
+          value: returnValue
+        })
+        console.log(returnValue)
+        return returnValue
+      }
+    }
+  }
+}
+
 /**
  * Identity (key for use in SB)
  * @class
@@ -1258,26 +1300,34 @@ class Identity {
       }
     })
   }
-  get exportable_pubKey() {
+
+
+  @Memoize
+  get exportable_pubKey(): JsonWebKey {
     _sb_assert(this.#readyFlag && this.#exportable_pubKey, "Identity.exportable_pubKey: accessed but identity not ready")
     return this.#exportable_pubKey!
   }
+
+  @Memoize
   get exportable_privateKey() {
     _sb_assert(this.#readyFlag && this.#exportable_privateKey, "Identity.exportable_privateKey: accessed but identity not ready")
     return this.#exportable_privateKey!
   }
+
+  @Memoize
   get privateKey() {
     _sb_assert(this.#readyFlag && this.#privateKey, "Identity.privateKey: accessed but identity not ready")
     return this.#privateKey!
   }
+
   get _id() {
     return JSON.stringify(this.exportable_pubKey);
   }
 }
 
-interface resolveKeyFunction {
-  (arg0: ChannelKeys | Promise<ChannelKeys>): void
-}
+// interface resolveKeyFunction {
+//   (arg0: ChannelKeys | Promise<ChannelKeys>): void
+// }
 
 interface SBMessageContents {
   sender_pubKey?: JsonWebKey,
@@ -1360,7 +1410,7 @@ class SBMessage {
         })
       })
     })
-    // TODO: i've punted on queue here
+    // TODO: i've punted on queue here <--- queueMicrotaks maybe?
   }
 }
 
@@ -1566,6 +1616,7 @@ class ChannelSocket extends Channel {
           r.then(() => {
             console.log("++++++++ readyPromise() has identity:")
             console.log(id)
+            this.#ws.init = { name: JSON.stringify(id.exportable_pubKey) }
             this.#ws.init = { name: JSON.stringify(id.exportable_pubKey) }
             console.log("++++++++ readyPromise() constructed init:")
             console.log(this.#ws.init)

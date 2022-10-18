@@ -1,4 +1,10 @@
 /* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
+    var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
+    if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
+    else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
+    return c > 3 && r && Object.defineProperty(target, key, r), r;
+};
 /* zen Master: "um" */
 export function SB_libraryVersion() {
     return ('THIS IS NEITHER BROWSER NOR NODE THIS IS SPARTA!');
@@ -935,6 +941,36 @@ class SBCrypto {
     }
 } /* SBCrypto */
 const sbCrypto = new SBCrypto();
+function Memoize(target, propertyKey, descriptor) {
+    if (descriptor.get) {
+        console.log("Memoize target:");
+        console.log(target);
+        let get = descriptor.get;
+        descriptor.get = function () {
+            // const prop = Symbol(`__${propertyKey}__`)
+            const prop = `__${propertyKey}__`;
+            if (this.hasOwnProperty(prop)) {
+                // @ts-ignore
+                const returnValue = this[prop];
+                console.log("Memoize found value in cache");
+                console.log(returnValue);
+                return (returnValue);
+            }
+            else {
+                console.log("Memoize new return value");
+                const returnValue = get.call(this);
+                Object.defineProperty(this, prop, {
+                    configurable: false,
+                    enumerable: false,
+                    writable: false,
+                    value: returnValue
+                });
+                console.log(returnValue);
+                return returnValue;
+            }
+        };
+    }
+}
 /**
  * Identity (key for use in SB)
  * @class
@@ -1005,6 +1041,15 @@ class Identity {
         return JSON.stringify(this.exportable_pubKey);
     }
 }
+__decorate([
+    Memoize
+], Identity.prototype, "exportable_pubKey", null);
+__decorate([
+    Memoize
+], Identity.prototype, "exportable_privateKey", null);
+__decorate([
+    Memoize
+], Identity.prototype, "privateKey", null);
 /**
  * SBMessage
  * @class
@@ -1075,7 +1120,7 @@ class SBMessage {
                 });
             });
         });
-        // TODO: i've punted on queue here
+        // TODO: i've punted on queue here <--- queueMicrotaks maybe?
     }
 }
 /**
@@ -1270,6 +1315,7 @@ class ChannelSocket extends Channel {
                     r.then(() => {
                         console.log("++++++++ readyPromise() has identity:");
                         console.log(id);
+                        this.#ws.init = { name: JSON.stringify(id.exportable_pubKey) };
                         this.#ws.init = { name: JSON.stringify(id.exportable_pubKey) };
                         console.log("++++++++ readyPromise() constructed init:");
                         console.log(this.#ws.init);
