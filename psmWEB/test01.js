@@ -213,6 +213,11 @@ const sb_config = {
     storage_server: 'http://127.0.0.1:4000'
 };
 if (true) {
+    const testKeys = new Identity();
+    console.log("new identity pub keys - should throw an exception");
+    console.log(testKeys.exportable_pubKey);
+}
+if (true) {
     // create server object
     const SB = new Snackabra({
         channel_server: 'http://127.0.0.1:4001',
