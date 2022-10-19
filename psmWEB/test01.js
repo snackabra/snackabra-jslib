@@ -32,7 +32,8 @@ function assert(expr, msg = '') {
 import { SB_libraryVersion, ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues, 
 // jsonParseWrapper,
 // Channel,
-Identity, MessageBus, 
+// Identity,
+MessageBus, 
 // SBFile,
 SBMessage, Snackabra } from './snackabra.js';
 let test_pass = 0, test_fail = 0;
@@ -213,26 +214,22 @@ const sb_config = {
     storage_server: 'http://127.0.0.1:4000'
 };
 if (true) {
-    const testKeys = new Identity();
-    console.log("new identity pub keys - should throw an exception");
-    console.log(testKeys.exportable_pubKey);
-}
-if (true) {
-    // create server object
+    // create server object (assumes miniflare test setup):
     const SB = new Snackabra({
         channel_server: 'http://127.0.0.1:4001',
         channel_ws: 'ws://127.0.0.1:4001',
-        storage_server: 'http://127.0.0.1:4000'
+        storage_server: 'http://127.0.0.1:4000' // default storage server
     });
-    // create a new channel (room) and connect
-    const ownerKeys = new Identity();
-    SB.create('password', ownerKeys).then((channelId) => {
-        SB.connect(channelId, 
-        // print out any messages we get
-        (m) => { console.log(`got message: ${m}`); }, ownerKeys // if we omit then we're connecting anonymously
+    // create a new channel (room), returns (owner) key and channel name:
+    SB.create('password').then((handle) => {
+        // connect to the websocket with our handle info:
+        SB.connect(
+        // must have a message handler:
+        (m) => { console.log(`got message: ${m}`); }, handle.key, // if we omit then we're connecting anonymously (and not as owner)
+        handle.channelId // since we're owner this is optional
         ).then((c) => c.ready).then((c) => {
-            // say hello to everybody
-            c.userName = "TestBot";
+            c.userName = "TestBot"; // optional
+            // say hello to everybody! upon success it will return "success"
             (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`sent! (${c})`); });
         });
     });
@@ -243,16 +240,15 @@ if (test_list.includes('test04d')) {
     console.log("++++test04d++++ SB object:");
     const SB = new Snackabra(sb_config);
     console.log("++++test04d++++ new owner keys:");
-    const channelOwnerKeys = new Identity();
-    SB.create('password', channelOwnerKeys).then((channelId) => {
-        SB.connect(channelId, (message) => {
-            console.log('++++test04d++++ Message Received:');
-            console.log(message);
-        } /* optionally we could add ', identity' override here */).then((c) => c.ready).then((c) => {
+    SB.create('password').then((handle) => {
+        SB.connect(
+        // print out any messages we get
+        (m) => { console.log(`got message: ${m}`); }, handle.key, // if we omit then we're connecting anonymously
+        handle.channelId).then((c) => c.ready).then((c) => {
             console.log("++++test04d++++ channel:");
             console.log(c);
             // update test web page (index.html)
-            const roomUrl = `localhost:3000/rooms/${channelId}`;
+            const roomUrl = `localhost:3000/rooms/${handle.channelId}`;
             z.innerHTML += ' ... received new channel:<br\>';
             z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br\n>`;
             console.log("++++test04d++++ reachable at:");
@@ -281,6 +277,76 @@ if (test_list.includes('test04d')) {
         });
     });
 }
+// if (true) {
+//   // create server object
+//   const SB = new Snackabra({
+//     channel_server: 'http://127.0.0.1:4001',
+//     channel_ws: 'ws://127.0.0.1:4001',
+//     storage_server: 'http://127.0.0.1:4000'})
+//   // create a new channel (room) and connect
+//   const ownerKeys = new Identity()
+//   SB.create('password', ownerKeys).then((channelId) => {
+//     SB.connect(
+//       channelId,
+//       // print out any messages we get
+//       (m: ChannelMessage) => { console.log(`got message: ${m}`) },
+//       ownerKeys // if we omit then we're connecting anonymously
+//     ).then((c) => c.ready).then((c) => {
+//       // say hello to everybody
+//       c.userName = "TestBot";
+//       (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`sent! (${c})`) })
+//     })
+//   })
+// }
+// if (test_list.includes('test04d')) {
+//   const z = getElement('test04d');
+//   // create orchestration (master) object (synchronous)
+//   console.log("++++test04d++++ SB object:")
+//   const SB = new Snackabra(sb_config);
+//   console.log("++++test04d++++ new owner keys:")
+//   const channelOwnerKeys = new Identity();
+//   SB.create(
+//     'password',
+//     channelOwnerKeys).then((channelId) => {
+//       SB.connect(
+//         channelId,
+//         (message: ChannelMessage) => {
+//           console.log('++++test04d++++ Message Received:')
+//           console.log(message)
+//         } /* optionally we could add ', identity' override here */
+//       ).then((c) => c.ready).then((c) => {
+//         console.log("++++test04d++++ channel:")
+//         console.log(c)
+//         // update test web page (index.html)
+//         const roomUrl = `localhost:3000/rooms/${channelId}`
+//         z.innerHTML += ' ... received new channel:<br\>'
+//         z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br\n>`
+//         console.log("++++test04d++++ reachable at:")
+//         console.log(roomUrl)
+//         // optional
+//         c.userName = "TestBot"
+//         // everything should be ready
+//         console.log("++++test04d++++ channel has keys:")
+//         console.log(c.keys)
+//         let sbm = new SBMessage(c, "Hello from test04d!")
+//         console.log("++++test04d++++ will try to send this message:")
+//         console.log(sbm)
+//         sbm.send().then((c) => {
+//           console.log("++++test04d++++ back from send promise - got response:")
+//           console.log(c)
+//         })
+//         // there's a button that sends more messages manually
+//         let messageCount = 0
+//         getElement('sayHello').onclick = (() => {
+//           messageCount++
+//           let sbm = new SBMessage(c, `message number ${messageCount} from test04d!`)
+//           console.log(`================ sending message number ${messageCount}:`)
+//           console.log(sbm)
+//           c.send(sbm).then((c) => console.log(`back from sending message ${messageCount} (${c})`))
+//         })
+//       })
+//     })
+//   }
 /* so you can also reach this on:
    https://snackabra.pages.dev/rooms/yzeQWYahP87ngAVbhdP7DxU3or0mOrOTLJ3HcQ9UQQzZgKMYq3zWr1Qk5bZTXpHl
 */

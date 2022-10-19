@@ -1,6 +1,17 @@
 /**
  * Interfaces
  */
+/**
+ * SBChanneHandle
+ *
+ * Complete descriptor of a channel. 'key' is stringified 'jwk' key.
+ * The key is always private. If it matches the channelId, then it's
+ * an 'owner' key.
+ */
+interface SBChannelHandle {
+    channelId: string;
+    key: JsonWebKey;
+}
 interface SnackabraOptions {
     channel_server: string;
     channel_ws: string;
@@ -329,13 +340,15 @@ declare class SBCrypto {
     /**
      * SBCrypto.encrypt()
      *
-     * Encrypt
+     * Encrypt. if no nonce (iv) is given, will create it.
      */
-    encrypt(contents: BufferSource, secret_key: CryptoKey, outputType?: string, _iv?: ArrayBuffer | null): Promise<Dictionary | string>;
+    encrypt(data: BufferSource, key: CryptoKey, _iv?: ArrayBuffer | null): Promise<EncryptedContents>;
+    wrap(k: CryptoKey, b: string, bodyType: 'string'): Promise<EncryptedContents>;
+    wrap(k: CryptoKey, b: ArrayBuffer, bodyType: 'arrayBuffer'): Promise<EncryptedContents>;
     /**
      * SBCrypto.unwrap
      *
-     * Decrypts a wrapped object, returns decrypted contents
+     * Decrypts a wrapped object, returns (promise to) decrypted contents
      */
     unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'string'): Promise<string>;
     unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'arrayBuffer'): Promise<ArrayBuffer>;
@@ -359,16 +372,16 @@ declare class SBCrypto {
     areKeysSame(key1: Dictionary, key2: Dictionary): boolean;
 }
 /**
- * Identity (key for use in SB)
+ * SB384 - basic (core) capability object in SB
  * @class
  * @constructor
  * @public
  */
-declare class Identity {
+declare class SB384 {
     #private;
-    ready: Promise<Identity>;
+    ready: Promise<SB384>;
     /**
-     * new Identity()
+     * new SB384()
      * @param key a jwk with which to create identity; if not provided,
      * it will 'mint' (generate) them randomly
      */
@@ -377,7 +390,9 @@ declare class Identity {
     get exportable_pubKey(): JsonWebKey | null;
     get exportable_privateKey(): JsonWebKey | null;
     get privateKey(): CryptoKey | null;
+    get keyPair(): CryptoKeyPair | null;
     get _id(): string;
+    get ownerChannelId(): string | null;
 }
 interface SBMessageContents {
     sender_pubKey?: JsonWebKey;
@@ -399,9 +414,8 @@ interface SBMessageContents {
 declare class SBMessage {
     ready: Promise<SBMessage>;
     channel: Channel;
-    identity?: Identity;
     contents: SBMessageContents;
-    constructor(channel: Channel, body: string, identity?: Identity);
+    constructor(channel: Channel, body: string);
     /**
      * SBMessage.send()
      *
@@ -421,7 +435,7 @@ export declare class SBFile extends SBMessage {
     image_sign: string;
     imageMetaData: ImageMetaData;
     imageMetadata_sign: string;
-    constructor(channel: Channel, file: File, identity?: Identity);
+    constructor(channel: Channel, file: File);
 }
 /**
  * Channel
@@ -430,27 +444,25 @@ export declare class SBFile extends SBMessage {
  * @constructor
  * @public
  */
-declare abstract class Channel {
+declare abstract class Channel extends SB384 {
     #private;
-    abstract ready: Promise<Channel>;
-    sbServer: Snackabra;
-    channel_id: string;
+    ready: Promise<Channel>;
+    channelReady: Promise<Channel>;
     motd?: string;
     locked?: boolean;
     owner: boolean;
     admin: boolean;
     verifiedGuest: boolean;
     userName: string;
-    identity?: Identity;
     abstract get keys(): ChannelKeys;
     abstract send(m: SBMessage): Promise<string>;
     abstract set onMessage(f: CallableFunction);
     abstract adminData?: Dictionary;
-    constructor(sbServer: Snackabra, channel_id: string, identity?: Identity);
-    /**
-     * Channel.api()
-     */
+    constructor(sbServer: Snackabra, key?: JsonWebKey, channelId?: string);
     get api(): ChannelApi;
+    get sbServer(): Snackabra;
+    get channelId(): string | undefined;
+    get readyFlag(): boolean;
 }
 /**
  *
@@ -462,7 +474,7 @@ declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
     adminData?: Dictionary;
-    constructor(sbServer: Snackabra, channel_id: string, onMessage: CallableFunction, identity?: Identity);
+    constructor(sbServer: Snackabra, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string);
     set onMessage(f: CallableFunction);
     get onMessage(): CallableFunction;
     /**
@@ -539,7 +551,7 @@ declare class StorageApi {
  */
 declare class ChannelApi {
     #private;
-    constructor(sbServer: Snackabra, channel: Channel, identity?: Identity);
+    constructor(/* sbServer: Snackabra, */ channel: Channel);
     /**
      * getLastMessageTimes
      */
@@ -609,21 +621,23 @@ declare class Snackabra {
      * Connects to :term:`Channel Name` on this SB config.
      * Returns a (promise to the) channel (socket) object
      *
-     * @param {string} channel_id - channel name
+     * @param {string} channelId - channel name
      * @param {Identity} identity - default identity for all messages
      */
-    connect(channel_id: string, onMessage: CallableFunction, identity?: Identity): Promise<ChannelSocket>;
+    connect(onMessage: CallableFunction, key?: JsonWebKey, channelId?: string): Promise<ChannelSocket>;
     /**
+     * Snackabra.create()
+     *
      * Creates a new channel. Currently uses trivial authentication.
      * Returns the :term:`Channel Name`. Note that this does not
      * create a channel object, e.g. does not make a connection.
      * Therefore you need
      * (TODO: token-based approval of storage spend)
      */
-    create(serverSecret: string, identity: Identity): Promise<string>;
+    create(serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle>;
     get channel(): Channel;
     get storage(): StorageApi;
     get crypto(): SBCrypto;
     sendFile(file: SBFile): void;
 }
-export { Channel, Identity, SBMessage, Snackabra, SBCrypto, };
+export { Channel, SBMessage, Snackabra, SBCrypto, };
