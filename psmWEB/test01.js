@@ -5,13 +5,14 @@
 const test_list = [
     /* 'test01a', 'test01b', 'test02', 'test02b', 'test03', */
     /* SB API */
-    /* 'test04c', 'test04a', 'test04', 'test04b', */
-    'test04d',
+    /* 'test04c', 'test04a','test04b', */
+    'test04d', 'test04',
     /* voprf test, not standard
        plus: need to uncomment the import far below on voprf
        (we will be removing this since snackabra-jslib is constrained to standardized web API */
     /* 'test05' */
 ];
+//#region - various utilities
 /*
   Asserts boolean, but doesn't break program flow, instead
   it reports on it and returns the outcome
@@ -205,6 +206,7 @@ if (test_list.includes('test03')) {
     }
     z.innerHTML += '... MessageBus tests done ...<br\>';
 }
+//#endregion
 /* ******************************** *
     New 0.5.0 'snackabra.ts' tests!
  * ******************************** */
@@ -534,43 +536,33 @@ if (test_list.includes('test04d')) {
 //     });
 //   });
 // }
-// NOT WORKING YET
-// the image stuff not finished as TS
-// // sends an image to the storage server
-// if (test_list.includes('test04')) {
-//   channel_id.then((channel_id) => {
-//     const z = getElement('test04');
-//     z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
-//     const SB = new Snackabra(sb_config);
-//     SB.setIdentity(key).then(async () => {
-//       z.innerHTML += '.. identity set ...<br\>';
-//       const c = await SB.connect(channel_id);
-//       z.innerHTML += '.. connected ...<br\>';
-//       console.log(c);
-//       try {
-//         // All methods are promises we need to await or use .then().catch()
-//         c.channel.api.getOldMessages(10).then(() => {
-//           c.sendMessage('hello!');
-//           console.log('got channel response:');
-//           console.log(z2);
-//           const img = getElement('original-snackabra-img');
-//           fetch(img.src)
-//             .then((res) => res.blob())
-//             .then((blob) => {
-//               // const file = new File([blob], 'dot.png', blob);
-//               const file = new File([blob], 'dot.svg', blob);
-//               console.log(file);
-//               c.sendFile(file);
-//             });
-//         });
-//       } catch (e) {
-//         console.log('ERROR in channel test:');
-//         console.log(e);
-//         test_fail++;
-//       }
-//     });
-//   });
-// }
+// sends an image to the storage server
+if (test_list.includes('test04')) {
+    const SB = new Snackabra(sb_config);
+    SB.create('password').then((handle) => {
+        SB.connect((m) => { console.log(`test04 got old message: ${m}`); }, handle.key // connecting as owner
+        // , handle.channelId // since we're owner this is optional
+        ).then((c) => {
+            const z = getElement('test04');
+            z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
+            z.innerHTML += '.. connected ...<br\>';
+            console.log(c);
+            // c.api.getOldMessages(10).then... TODO: look at old messages
+            c.send("Hello from TestBot").then((s) => { console.log(`sent hello! (returned '${s}')`); });
+            const img = getElement('original-snackabra-img');
+            console.log("fetching this image:");
+            console.log(img);
+            fetch(img.src)
+                .then((res) => res.blob())
+                .then((blob) => {
+                // const file = new File([blob], 'dot.png', blob);
+                const file = new SBFile([blob], 'dot.svg', blob);
+                console.log(file);
+                SB.sendFile(file);
+            });
+        });
+    });
+}
 // VOPRF testing ...
 // ... uncomment this if you're running test05
 // import {

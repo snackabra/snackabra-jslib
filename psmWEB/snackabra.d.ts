@@ -58,6 +58,16 @@ interface ChannelMessage2 {
     system?: boolean;
     verificationToken?: string;
 }
+declare type xChannelMessageType = 'ack' | 'system' | 'invalid' | 'ready';
+interface xChannelMessage {
+    type: xChannelMessageType;
+    _id: string;
+}
+interface xChannelMessage {
+    type: xChannelMessageType;
+    _id: string;
+    systemMessage: string;
+}
 interface ChannelAckMessage {
     type: 'ack';
     _id: string;
@@ -107,6 +117,8 @@ interface ChannelEncryptedMessageArray {
     messages: ChannelEncryptedMessageArray[];
 }
 export declare type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void;
+export declare function f(v: ChannelMessage): ChannelKeysMessage | null;
+export declare function g(v: xChannelMessage): xChannelMessage | null;
 export declare type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys';
 interface ChannelMessage1 {
     [key: string]: ChannelMessage2;
@@ -423,6 +435,42 @@ declare class SBMessage {
      */
     send(): Promise<string>;
 }
+export declare function saveImage(sbImage: any, roomId: any, sendSystemMessage: any): Promise<{
+    full: string | undefined;
+    preview: string | undefined;
+    fullKey: string | undefined;
+    previewKey: string | undefined;
+    fullStorePromise: Promise<any>;
+    previewStorePromise: Promise<any>;
+}>;
+export declare function storeImage(image: any, image_id: any, keyData: any, type: any, roomId: any): Promise<any>;
+export declare function generateImageHash(image: any): Promise<{
+    id: string;
+    key: string;
+} | {
+    id?: undefined;
+    key?: undefined;
+}>;
+export declare function retrieveData(message: any, controlMessages: any, cache: any): Promise<{
+    error: string;
+    url?: undefined;
+} | {
+    url: string;
+    error?: undefined;
+}>;
+export declare function getFileData(file: any, outputType: any): Promise<unknown>;
+export declare function _restrictPhoto(maxSize: any, _c: any, _b1: any): Promise<any>;
+export declare function restrictPhoto(sbImage: any, maxSize: any): Promise<any>;
+export declare function scaleCanvas(canvas: any, scale: any): HTMLCanvasElement;
+export declare function padImage(image_buffer: any): any;
+export declare function unpadData(data_buffer: any): any;
+export declare class SBImage {
+    constructor(image: any);
+    loadToCanvas(canvas: any): Promise<unknown>;
+}
+export declare class BlobWorker extends Worker {
+    constructor(worker: any, i: any);
+}
 /**
  * SBFile
  * @class
@@ -430,6 +478,7 @@ declare class SBMessage {
  * @public
  */
 export declare class SBFile extends SBMessage {
+    #private;
     data: Dictionary;
     image: string;
     image_sign: string;
@@ -455,7 +504,7 @@ declare abstract class Channel extends SB384 {
     verifiedGuest: boolean;
     userName: string;
     abstract get keys(): ChannelKeys;
-    abstract send(m: SBMessage): Promise<string>;
+    abstract send(m: SBMessage | string, messageType?: 'string' | 'SBMessage'): Promise<string>;
     abstract set onMessage(f: CallableFunction);
     abstract adminData?: Dictionary;
     constructor(sbServer: Snackabra, key?: JsonWebKey, channelId?: string);
@@ -495,7 +544,7 @@ declare class ChannelSocket extends Channel {
       * Returns a promise that resolves to "success" when sent,
       * or an error message if it fails.
       */
-    send(message: SBMessage): Promise<string>;
+    send(msg: SBMessage | string): Promise<string>;
 }
 /**
  * Storage API
@@ -510,7 +559,7 @@ declare class StorageApi {
     /**
      * StorageApi.saveFile()
      */
-    saveFile(sbFile: SBFile, channel: Channel): Promise<void>;
+    saveFile(channel: Channel, sbFile: SBFile): Promise<void>;
     /**
      * StorageApi().storeRequest
      */
