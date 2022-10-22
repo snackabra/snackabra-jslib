@@ -1387,6 +1387,7 @@ class Identity implements SnackabraKeys {
     this.ready = new Promise<Identity>((resolve) => {
       // as soon as any source of crypto resolves the Identity, we're ready
       this.exportable_pubKey.then(() => resolve(_self))
+      // TODO: no, they all need to resolve
     })
     if (keys) this.mountKeys(keys)
   }
