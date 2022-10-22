@@ -1,15 +1,21 @@
 /**
  * Interfaces
  */
+/**
+ * SBChanneHandle
+ *
+ * Complete descriptor of a channel. 'key' is stringified 'jwk' key.
+ * The key is always private. If it matches the channelId, then it's
+ * an 'owner' key.
+ */
+interface SBChannelHandle {
+    channelId: string;
+    key: JsonWebKey;
+}
 interface SnackabraOptions {
     channel_server: string;
     channel_ws: string;
     storage_server: string;
-}
-interface SnackabraKeys {
-    exportable_pubKey: JsonWebKey | Promise<JsonWebKey | null>;
-    exportable_privateKey: JsonWebKey | Promise<JsonWebKey | null>;
-    privateKey: CryptoKey | Promise<CryptoKey | null>;
 }
 interface Dictionary {
     [index: string]: any;
@@ -51,6 +57,16 @@ interface ChannelMessage2 {
     sender_pubKey?: JsonWebKey;
     system?: boolean;
     verificationToken?: string;
+}
+declare type xChannelMessageType = 'ack' | 'system' | 'invalid' | 'ready';
+interface xChannelMessage {
+    type: xChannelMessageType;
+    _id: string;
+}
+interface xChannelMessage {
+    type: xChannelMessageType;
+    _id: string;
+    systemMessage: string;
 }
 interface ChannelAckMessage {
     type: 'ack';
@@ -101,20 +117,9 @@ interface ChannelEncryptedMessageArray {
     messages: ChannelEncryptedMessageArray[];
 }
 export declare type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void;
+export declare function f(v: ChannelMessage): ChannelKeysMessage | null;
+export declare function g(v: xChannelMessage): xChannelMessage | null;
 export declare type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys';
-/**
- * deserializeMessage()
- *
- * @param {string} m raw message string
- * @param {ChannelMessageTypes} expect expected (required) type (exception if it's not)
- */
-/**
- * serializeMessage()
- *
- * Serializes any SB message type.
- *
- * @param {ChannelMessage} SB message object
- */
 interface ChannelMessage1 {
     [key: string]: ChannelMessage2;
     message: {
@@ -309,7 +314,7 @@ export declare function encodeB64Url(input: string): string;
  */
 export declare function decodeB64Url(input: string): string;
 /**
- * SBCrypto is a class that contains all the SB specific crypto functions
+ * SBCrypto contains all the SB specific crypto functions
  *
  * @class
  * @constructor
@@ -347,26 +352,18 @@ declare class SBCrypto {
     /**
      * SBCrypto.encrypt()
      *
-     * Encrypt
+     * Encrypt. if no nonce (iv) is given, will create it.
      */
-    encrypt(contents: BufferSource, secret_key: CryptoKey, outputType?: string, _iv?: ArrayBuffer | null): Promise<Dictionary | string>;
-    /**
-     * SBCrypto.decrypt()
-     *
-     * Decrypt. Defunct, replaced by unwrap()
-     */
-    decrypt(secretKey: CryptoKey, contents: Dictionary, outputType?: string): Promise<string>;
+    encrypt(data: BufferSource, key: CryptoKey, _iv?: ArrayBuffer | null): Promise<EncryptedContents>;
+    wrap(k: CryptoKey, b: string, bodyType: 'string'): Promise<EncryptedContents>;
+    wrap(k: CryptoKey, b: ArrayBuffer, bodyType: 'arrayBuffer'): Promise<EncryptedContents>;
     /**
      * SBCrypto.unwrap
      *
-     * Decrypts a wrapped object, returns decrypted contents
+     * Decrypts a wrapped object, returns (promise to) decrypted contents
      */
-    unwrap(k: CryptoKey, o: EncryptedContents): Promise<string>;
-    /**
-     * SBCrypto.wrap
-     *
-     * Encrypts
-     */
+    unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'string'): Promise<string>;
+    unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'arrayBuffer'): Promise<ArrayBuffer>;
     /**
      * SBCrypto.sign()
      *
@@ -387,34 +384,33 @@ declare class SBCrypto {
     areKeysSame(key1: Dictionary, key2: Dictionary): boolean;
 }
 /**
- * Identity (key for use in SB)
+ * SB384 - basic (core) capability object in SB
  * @class
  * @constructor
  * @public
  */
-declare class Identity implements SnackabraKeys {
-    ready: Promise<Identity>;
-    resolve_exportable_pubKey: (arg0: JsonWebKey | null) => void;
-    resolve_exportable_privateKey: (arg0: JsonWebKey | null) => void;
-    resolve_privateKey: (arg0: CryptoKey | null) => void;
-    exportable_pubKey: Promise<JsonWebKey | null>;
-    exportable_privateKey: Promise<JsonWebKey | null>;
-    privateKey: Promise<CryptoKey | null>;
-    constructor(keys?: JsonWebKey);
+declare class SB384 {
+    #private;
+    ready: Promise<SB384>;
     /**
-     * Mint keys
+     * new SB384()
+     * @param key a jwk with which to create identity; if not provided,
+     * it will 'mint' (generate) them randomly
      */
-    mintKeys(): Promise<unknown>;
-    /**
-     * Mount keys
-     */
-    mountKeys(key: JsonWebKey): Promise<unknown>;
+    constructor(key?: JsonWebKey);
+    get readyFlag(): boolean;
+    get exportable_pubKey(): JsonWebKey | null;
+    get exportable_privateKey(): JsonWebKey | null;
+    get privateKey(): CryptoKey | null;
+    get keyPair(): CryptoKeyPair | null;
     get _id(): string;
+    get ownerChannelId(): string | null;
 }
 interface SBMessageContents {
     sender_pubKey?: JsonWebKey;
+    sender_username?: string;
     encrypted: boolean;
-    body: string;
+    contents: string;
     sign: string;
     image: string;
     image_sign?: string;
@@ -430,15 +426,50 @@ interface SBMessageContents {
 declare class SBMessage {
     ready: Promise<SBMessage>;
     channel: Channel;
-    identity: Identity;
     contents: SBMessageContents;
-    constructor(channel: Channel, body: string, identity?: Identity);
+    constructor(channel: Channel, body: string);
     /**
      * SBMessage.send()
      *
      * @param {SBMessage} message - the message object to send
      */
     send(): Promise<string>;
+}
+export declare function saveImage(sbImage: any, roomId: any, sendSystemMessage: any): Promise<{
+    full: string | undefined;
+    preview: string | undefined;
+    fullKey: string | undefined;
+    previewKey: string | undefined;
+    fullStorePromise: Promise<any>;
+    previewStorePromise: Promise<any>;
+}>;
+export declare function storeImage(image: any, image_id: any, keyData: any, type: any, roomId: any): Promise<any>;
+export declare function generateImageHash(image: any): Promise<{
+    id: string;
+    key: string;
+} | {
+    id?: undefined;
+    key?: undefined;
+}>;
+export declare function retrieveData(message: any, controlMessages: any, cache: any): Promise<{
+    error: string;
+    url?: undefined;
+} | {
+    url: string;
+    error?: undefined;
+}>;
+export declare function getFileData(file: any, outputType: any): Promise<unknown>;
+export declare function _restrictPhoto(maxSize: any, _c: any, _b1: any): Promise<any>;
+export declare function restrictPhoto(sbImage: any, maxSize: any): Promise<any>;
+export declare function scaleCanvas(canvas: any, scale: any): HTMLCanvasElement;
+export declare function padImage(image_buffer: any): any;
+export declare function unpadData(data_buffer: any): any;
+export declare class SBImage {
+    constructor(image: any);
+    loadToCanvas(canvas: any): Promise<unknown>;
+}
+export declare class BlobWorker extends Worker {
+    constructor(worker: any, i: any);
 }
 /**
  * SBFile
@@ -447,12 +478,13 @@ declare class SBMessage {
  * @public
  */
 export declare class SBFile extends SBMessage {
+    #private;
     data: Dictionary;
     image: string;
     image_sign: string;
     imageMetaData: ImageMetaData;
     imageMetadata_sign: string;
-    constructor(channel: Channel, file: File, identity?: Identity);
+    constructor(channel: Channel, file: File);
 }
 /**
  * Channel
@@ -461,26 +493,25 @@ export declare class SBFile extends SBMessage {
  * @constructor
  * @public
  */
-declare abstract class Channel {
+declare abstract class Channel extends SB384 {
     #private;
-    abstract ready: Promise<Channel>;
-    sbServer: Snackabra;
-    channel_id: string;
+    ready: Promise<Channel>;
+    channelReady: Promise<Channel>;
     motd?: string;
     locked?: boolean;
     owner: boolean;
     admin: boolean;
     verifiedGuest: boolean;
-    identity: Identity;
+    userName: string;
     abstract get keys(): ChannelKeys;
-    abstract send(m: SBMessage): Promise<string>;
+    abstract send(m: SBMessage | string, messageType?: 'string' | 'SBMessage'): Promise<string>;
     abstract set onMessage(f: CallableFunction);
     abstract adminData?: Dictionary;
-    constructor(sbServer: Snackabra, channel_id: string, identity: Identity);
-    /**
-     * Channel.api()
-     */
+    constructor(sbServer: Snackabra, key?: JsonWebKey, channelId?: string);
     get api(): ChannelApi;
+    get sbServer(): Snackabra;
+    get channelId(): string | undefined;
+    get readyFlag(): boolean;
 }
 /**
  *
@@ -492,7 +523,7 @@ declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
     adminData?: Dictionary;
-    constructor(sbServer: Snackabra, channel_id: string, identity: Identity, onMessage: CallableFunction);
+    constructor(sbServer: Snackabra, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string);
     set onMessage(f: CallableFunction);
     get onMessage(): CallableFunction;
     /**
@@ -513,7 +544,7 @@ declare class ChannelSocket extends Channel {
       * Returns a promise that resolves to "success" when sent,
       * or an error message if it fails.
       */
-    send(message: SBMessage): Promise<string>;
+    send(msg: SBMessage | string): Promise<string>;
 }
 /**
  * Storage API
@@ -528,7 +559,7 @@ declare class StorageApi {
     /**
      * StorageApi.saveFile()
      */
-    saveFile(sbFile: SBFile, channel: Channel): Promise<void>;
+    saveFile(channel: Channel, sbFile: SBFile): Promise<void>;
     /**
      * StorageApi().storeRequest
      */
@@ -569,7 +600,7 @@ declare class StorageApi {
  */
 declare class ChannelApi {
     #private;
-    constructor(sbServer: Snackabra, channel: Channel, identity?: Identity);
+    constructor(/* sbServer: Snackabra, */ channel: Channel);
     /**
      * getLastMessageTimes
      */
@@ -616,7 +647,8 @@ declare class Snackabra {
     options: SnackabraOptions;
     /**
      * Constructor expects an object with the names of the matching servers, for example
-     * (this shows the miniflare local dev config):
+     * (below shows the miniflare local dev config). Note that 'new Snackabra()' is
+     * guaranteed synchronous, so can be 'used' right away.
      *
      *
      * ::
@@ -628,25 +660,33 @@ declare class Snackabra {
      *     }
      *
      * @param args {SnackabraOptions} interface
+     *
+     *
      */
     constructor(args: SnackabraOptions);
     /**
      * Snackabra.connect()
+     *
      * Connects to :term:`Channel Name` on this SB config.
-     * Returns a (promise to the) channel object
-     * @param {string} channel_id - channel name
+     * Returns a (promise to the) channel (socket) object
+     *
+     * @param {string} channelId - channel name
      * @param {Identity} identity - default identity for all messages
      */
-    connect(channel_id: string, identity: Identity, onMessage: CallableFunction): Promise<ChannelSocket>;
+    connect(onMessage: CallableFunction, key?: JsonWebKey, channelId?: string): Promise<ChannelSocket>;
     /**
+     * Snackabra.create()
+     *
      * Creates a new channel. Currently uses trivial authentication.
-     * Returns the :term:`Channel Name`.
+     * Returns the :term:`Channel Name`. Note that this does not
+     * create a channel object, e.g. does not make a connection.
+     * Therefore you need
      * (TODO: token-based approval of storage spend)
      */
-    create(serverSecret: string, identity: Identity): Promise<string>;
+    create(serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle>;
     get channel(): Channel;
     get storage(): StorageApi;
     get crypto(): SBCrypto;
     sendFile(file: SBFile): void;
 }
-export { Channel, Identity, SBMessage, Snackabra, };
+export { Channel, SBMessage, Snackabra, SBCrypto, };

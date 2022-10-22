@@ -251,57 +251,6 @@
   //   }
   // }
 
-  /**
-   * padImage
-   */
-  //   #padImage(image_buffer: ArrayBuffer) {
-  //     let _sizes: Array<number> = [128, 256, 512, 1024, 2048, 4096]; // in KB
-  //     _sizes = _sizes.map((size) => size * 1024);
-  //     const image_size: number = image_buffer.byteLength;
-  //     // console.log('BEFORE PADDING: ', image_size)
-  //     let _target: number | null = 0
-  //     if (image_size < _sizes[_sizes.length - 1]) {
-  //       for (let i = 0; i < _sizes.length; i++) {
-  //         if (image_size + 21 < _sizes[i]) {
-  //           _target = _sizes[i];
-  //           break;
-  //         }
-  //       }
-  //     } else {
-  //       _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
-  //       if (image_size + 21 >= _target) {
-  //         _target += 1024;
-  //       }
-  //     }
-  //     const _padding_array: Array<number> = [128];
-  //     _target = _target - image_size - 21;
-  //     // We will finally convert to Uint32Array where each element is 4 bytes
-  //     // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
-  //     // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
-  //     for (let i = 0; i < _target; i++) {
-  //       _padding_array.push(0);
-  //     }
-  //     // _padding_array.push(image_size);
-  //     const _padding = new Uint8Array(_padding_array).buffer;
-  //     // console.log('Padding size: ', _padding.byteLength)
-  //     let final_data: ArrayBuffer = _appendBuffer(image_buffer, _padding);
-  //     final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
-  //     // console.log('AFTER PADDING: ', final_data.byteLength)
-  //     return final_data;
-  //   }
-
-  //   /**
-  //    * restrictPhoto
-  //    */
-  //   async #restrictPhoto(photo: ArrayBuffer,
-  //     maxSize: number, // in KB
-  //     imageType: 'image/jpeg',
-  //     qualityArgument: number): Promise<Blob | null> {
-  //     // latest and greatest JS version is in:
-  //     // 384-snackabra-webclient/src/utils/ImageProcessor.js
-  //     throw new Error('restrictPhoto() needs TS version')
-  //     return null;
-  //   }
 
   //   /**
   //    * scaleCanvas
@@ -452,7 +401,8 @@
 // });
 
 
-/*   */
+/* 
+  */
 
 /* **************************************************************** */
 /* **************** OLD and for archive **************** */

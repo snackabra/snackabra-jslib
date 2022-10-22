@@ -37,5 +37,6 @@ module.exports = {
     'comma-dangle': 'off',
     'no-tabs': 'off',
     'no-unused-vars': 'warn'
-  }
+  },
+  "ignorePatterns": ["test*.js", "test*.ts", "**/__tests__/*"],
 };

@@ -5,15 +5,14 @@
 const test_list = [
     /* 'test01a', 'test01b', 'test02', 'test02b', 'test03', */
     /* SB API */
-    'test04c',
-    'test04a',
-    /* 'test04',   ... don't have SBImage yet */
-    'test04b',
+    /* 'test04c', 'test04a','test04b', */
+    'test04d', 'test04',
     /* voprf test, not standard
        plus: need to uncomment the import far below on voprf
        (we will be removing this since snackabra-jslib is constrained to standardized web API */
     /* 'test05' */
 ];
+//#region - various utilities
 /*
   Asserts boolean, but doesn't break program flow, instead
   it reports on it and returns the outcome
@@ -34,9 +33,10 @@ function assert(expr, msg = '') {
 import { SB_libraryVersion, ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, getRandomValues, 
 // jsonParseWrapper,
 // Channel,
-Identity, MessageBus, 
+// Identity,
+MessageBus, 
 // SBFile,
-SBMessage, Snackabra, } from './snackabra.js';
+SBMessage, Snackabra } from './snackabra.js';
 let test_pass = 0, test_fail = 0;
 // guarantees that it's not null
 function getElement(s) {
@@ -206,16 +206,149 @@ if (test_list.includes('test03')) {
     }
     z.innerHTML += '... MessageBus tests done ...<br\>';
 }
-/* snackabra channel tests ... these correspond to snackabra.pages.dev public server */
-/* switch to local miniflare */
+//#endregion
+/* ******************************** *
+    New 0.5.0 'snackabra.ts' tests!
+ * ******************************** */
 const sb_config = {
-    // channel_server: 'https://r.somethingstuff.workers.dev',
     channel_server: 'http://127.0.0.1:4001',
-    // channel_ws: 'wss://r.somethingstuff.workers.dev',
     channel_ws: 'ws://127.0.0.1:4001',
-    // storage_server: 'https://s.somethingstuff.workers.dev'
     storage_server: 'http://127.0.0.1:4000'
 };
+if (true) {
+    // create server object (assumes miniflare test setup):
+    const SB = new Snackabra({
+        channel_server: 'http://127.0.0.1:4001',
+        channel_ws: 'ws://127.0.0.1:4001',
+        storage_server: 'http://127.0.0.1:4000' // default storage server
+    });
+    // create a new channel (room), returns (owner) key and channel name:
+    SB.create('password').then((handle) => {
+        // connect to the websocket with our handle info:
+        SB.connect(
+        // must have a message handler:
+        (m) => { console.log(`got message: ${m}`); }, handle.key, // if we omit then we're connecting anonymously (and not as owner)
+        handle.channelId // since we're owner this is optional
+        ).then((c) => c.ready).then((c) => {
+            c.userName = "TestBot"; // optional
+            // say hello to everybody! upon success it will return "success"
+            (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`sent! (${c})`); });
+        });
+    });
+}
+if (test_list.includes('test04d')) {
+    const z = getElement('test04d');
+    // create orchestration (master) object (synchronous)
+    console.log("++++test04d++++ SB object:");
+    const SB = new Snackabra(sb_config);
+    console.log("++++test04d++++ new owner keys:");
+    SB.create('password').then((handle) => {
+        SB.connect(
+        // print out any messages we get
+        (m) => { console.log(`got message: ${m}`); }, handle.key, // if we omit then we're connecting anonymously
+        handle.channelId).then((c) => c.ready).then((c) => {
+            console.log("++++test04d++++ channel:");
+            console.log(c);
+            // update test web page (index.html)
+            const roomUrl = `localhost:3000/rooms/${handle.channelId}`;
+            z.innerHTML += ' ... received new channel:<br\>';
+            z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br\n>`;
+            console.log("++++test04d++++ reachable at:");
+            console.log(roomUrl);
+            // optional
+            c.userName = "TestBot";
+            // everything should be ready
+            console.log("++++test04d++++ channel has keys:");
+            console.log(c.keys);
+            let sbm = new SBMessage(c, "Hello from test04d!");
+            console.log("++++test04d++++ will try to send this message:");
+            console.log(sbm);
+            sbm.send().then((c) => {
+                console.log("++++test04d++++ back from send promise - got response:");
+                console.log(c);
+            });
+            // there's a button that sends more messages manually
+            let messageCount = 0;
+            getElement('sayHello').onclick = (() => {
+                messageCount++;
+                let sbm = new SBMessage(c, `message number ${messageCount} from test04d!`);
+                console.log(`================ sending message number ${messageCount}:`);
+                console.log(sbm);
+                c.send(sbm).then((c) => console.log(`back from sending message ${messageCount} (${c})`));
+            });
+        });
+    });
+}
+// if (true) {
+//   // create server object
+//   const SB = new Snackabra({
+//     channel_server: 'http://127.0.0.1:4001',
+//     channel_ws: 'ws://127.0.0.1:4001',
+//     storage_server: 'http://127.0.0.1:4000'})
+//   // create a new channel (room) and connect
+//   const ownerKeys = new Identity()
+//   SB.create('password', ownerKeys).then((channelId) => {
+//     SB.connect(
+//       channelId,
+//       // print out any messages we get
+//       (m: ChannelMessage) => { console.log(`got message: ${m}`) },
+//       ownerKeys // if we omit then we're connecting anonymously
+//     ).then((c) => c.ready).then((c) => {
+//       // say hello to everybody
+//       c.userName = "TestBot";
+//       (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`sent! (${c})`) })
+//     })
+//   })
+// }
+// if (test_list.includes('test04d')) {
+//   const z = getElement('test04d');
+//   // create orchestration (master) object (synchronous)
+//   console.log("++++test04d++++ SB object:")
+//   const SB = new Snackabra(sb_config);
+//   console.log("++++test04d++++ new owner keys:")
+//   const channelOwnerKeys = new Identity();
+//   SB.create(
+//     'password',
+//     channelOwnerKeys).then((channelId) => {
+//       SB.connect(
+//         channelId,
+//         (message: ChannelMessage) => {
+//           console.log('++++test04d++++ Message Received:')
+//           console.log(message)
+//         } /* optionally we could add ', identity' override here */
+//       ).then((c) => c.ready).then((c) => {
+//         console.log("++++test04d++++ channel:")
+//         console.log(c)
+//         // update test web page (index.html)
+//         const roomUrl = `localhost:3000/rooms/${channelId}`
+//         z.innerHTML += ' ... received new channel:<br\>'
+//         z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br\n>`
+//         console.log("++++test04d++++ reachable at:")
+//         console.log(roomUrl)
+//         // optional
+//         c.userName = "TestBot"
+//         // everything should be ready
+//         console.log("++++test04d++++ channel has keys:")
+//         console.log(c.keys)
+//         let sbm = new SBMessage(c, "Hello from test04d!")
+//         console.log("++++test04d++++ will try to send this message:")
+//         console.log(sbm)
+//         sbm.send().then((c) => {
+//           console.log("++++test04d++++ back from send promise - got response:")
+//           console.log(c)
+//         })
+//         // there's a button that sends more messages manually
+//         let messageCount = 0
+//         getElement('sayHello').onclick = (() => {
+//           messageCount++
+//           let sbm = new SBMessage(c, `message number ${messageCount} from test04d!`)
+//           console.log(`================ sending message number ${messageCount}:`)
+//           console.log(sbm)
+//           c.send(sbm).then((c) => console.log(`back from sending message ${messageCount} (${c})`))
+//         })
+//       })
+//     })
+//   }
 /* so you can also reach this on:
    https://snackabra.pages.dev/rooms/yzeQWYahP87ngAVbhdP7DxU3or0mOrOTLJ3HcQ9UQQzZgKMYq3zWr1Qk5bZTXpHl
 */
@@ -224,15 +357,15 @@ const sb_config = {
 // let channel_id_resolve: (arg0: string) => void = (() => { throw new Error('resolve err'); })
 // let channel_id = new Promise<string>((resolve) => { channel_id_resolve = resolve; });
 /* this is one of Matt's keys */
-const key = {
-    key_ops: ['deriveKey'],
-    ext: true,
-    kty: 'EC',
-    x: '62RGlvpBrkrBTgscORtV5MmJqSS0N6aIELTLY1VdOEhrToUbnNPi2XbFucGhWey9',
-    y: '24kcejeniQMNGuYigc39fcsjzP6P9VqEYWieT6WYgSBlVsCR_DXTjlPRAQ4P8x1K',
-    crv: 'P-384',
-    d: '9sYVDOfUJ8YofRh4y_4dItXcXzTiiwYKI6pXU9thJyfMqMtaFhvUbCsHl14Wx37k'
-};
+// const key = {
+//   key_ops: ['deriveKey'],
+//   ext: true,
+//   kty: 'EC',
+//   x: '62RGlvpBrkrBTgscORtV5MmJqSS0N6aIELTLY1VdOEhrToUbnNPi2XbFucGhWey9',
+//   y: '24kcejeniQMNGuYigc39fcsjzP6P9VqEYWieT6WYgSBlVsCR_DXTjlPRAQ4P8x1K',
+//   crv: 'P-384',
+//   d: '9sYVDOfUJ8YofRh4y_4dItXcXzTiiwYKI6pXU9thJyfMqMtaFhvUbCsHl14Wx37k'
+// };
 // if (test_list.includes('test04c')) {
 //   const z = getElement('test04c');
 //   z.innerHTML = 'starting test ... creating Snackabra object ...<br\>';
@@ -248,67 +381,72 @@ const key = {
 //     });
 //   });
 // }
-// new tiny 'hello'
-if (test_list.includes('test04a')) {
-    // "me", note 'key' is set above as a const
-    const myId = new Identity(key);
-    // create SB (orchestration) object
-    const SB = new Snackabra(sb_config);
-    // create a new room (channel)
-    SB.create('password', myId).then((channelId) => {
-        // we have a nice new channel
-        const roomUrl = `localhost:3000/rooms/${channelId}`;
-        z.innerHTML += ' ... received new channel:<br\>';
-        z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br\n>`;
-        console.log("++++test04a++++ created ID and created room:");
-        console.log("++++test04a++++ my identity:");
-        console.log(myId);
-        console.log("++++test04a++++ new room URL:");
-        console.log(roomUrl);
-        // we now need to connect to it
-        SB.connect(channelId, myId, (message) => {
-            console.log('Message Received:');
-            console.log(message);
-        }).then((c) => {
-            console.log("++++test04a++++ got ourselves a channel:");
-            console.log(c);
-            // const messages = [];
-            // const controlMessages = [];
-            c.ready.then(() => {
-                // everything should be ready
-                const k = c.keys;
-                console.log("++++test04a++++ channel has keys:");
-                console.log(k);
-                console.log(c.keys);
-                console.log("++++test04a++++ trying to send message!");
-                let sbm = new SBMessage(c, "Hello from test04a!");
-                console.log("++++test04a++++ will try to send this message:");
-                console.log(sbm);
-                sbm.send().then((c) => {
-                    console.log("back from send promise? got response:");
-                    console.log(c);
-                    console.log("++++test04a++++ end of test");
-                });
-                // // in parallel, handle incoming messages:
-                // c.onMessage = async (message: any) => {
-                //   console.log('Message Received:')
-                //   console.log(message)
-                // }
-                // send more hello
-                let messageCount = 0;
-                getElement('sayHello').onclick = (() => {
-                    messageCount++;
-                    let msg = new SBMessage(c, `message number ${messageCount} from test04ba!`);
-                    // @ts-ignore
-                    // sbm.sender_pubKey = JSON.stringify(myPubKey)
-                    console.log(`================ sending message number ${messageCount}:`);
-                    console.log(sbm);
-                    c.send(sbm).then((c) => console.log(`back from send promise? (${c})`));
-                });
-            });
-        });
-    });
-}
+// previous tiny hello
+// if (test_list.includes('test04a')) {
+//   // "me", note 'key' is set above as a const
+//   const myId = new Identity(key)
+//   // create SB (orchestration) object
+//   const SB = new Snackabra(sb_config)
+//   // create a new room (channel)
+//   SB.create('password', myId).then((channelId) => {
+//     // we have a nice new channel
+//     const roomUrl = `localhost:3000/rooms/${channelId}`
+//     z.innerHTML += ' ... received new channel:<br\>';
+//     z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br\n>`;
+//     console.log("++++test04a++++ created ID and created room:")
+//     console.log("++++test04a++++ my identity:")
+//     console.log(myId)
+//     console.log("++++test04a++++ new room URL:")
+//     console.log(roomUrl)
+//     // we now need to connect to it
+//     SB.connect(
+//       channelId,
+//       myId,
+//       (message: any) => {
+//         console.log('Message Received:')
+//         console.log(message)
+//       }
+//       ).then((c) => {
+//       console.log("++++test04a++++ got ourselves a channel:")
+//       console.log(c)
+//       // const messages = [];
+//       // const controlMessages = [];
+//       c.ready.then(() => {
+//         // everything should be ready
+//         c.userName = "TestBot"
+//         const k = c.keys
+//         console.log("++++test04a++++ channel has keys:")
+//         console.log(k)
+//         console.log(c.keys)
+//         console.log("++++test04a++++ trying to send message!")
+//         let sbm = new SBMessage(c, "Hello from test04a!")
+//         console.log("++++test04a++++ will try to send this message:")
+//         console.log(sbm)
+//         sbm.send().then((c) => {
+//           console.log("back from send promise? got response:")
+//           console.log(c)
+//           console.log("++++test04a++++ end of test")
+//         })
+//         // // in parallel, handle incoming messages:
+//         // c.onMessage = async (message: any) => {
+//         //   console.log('Message Received:')
+//         //   console.log(message)
+//         // }
+//         // send more hello
+//         let messageCount = 0
+//         getElement('sayHello').onclick = (() => {
+//           messageCount++
+//           let sbm = new SBMessage(c, `message number ${messageCount} from test04ba!`)
+//           // @ts-ignore
+//           // sbm.sender_pubKey = JSON.stringify(myPubKey)
+//           console.log(`================ sending message number ${messageCount}:`)
+//           console.log(sbm)
+//           c.send(sbm).then((c) => console.log(`back from send promise? (${c})`))
+//         })
+//       })
+//     })
+//   })
+// }
 // if (test_list.includes('test04a')) {
 //   channel_id.then((channel_id: string) => {
 //     // Watch for incoming messages on the socket
@@ -398,43 +536,33 @@ if (test_list.includes('test04a')) {
 //     });
 //   });
 // }
-// NOT WORKING YET
-// the image stuff not finished as TS
-// // sends an image to the storage server
-// if (test_list.includes('test04')) {
-//   channel_id.then((channel_id) => {
-//     const z = getElement('test04');
-//     z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
-//     const SB = new Snackabra(sb_config);
-//     SB.setIdentity(key).then(async () => {
-//       z.innerHTML += '.. identity set ...<br\>';
-//       const c = await SB.connect(channel_id);
-//       z.innerHTML += '.. connected ...<br\>';
-//       console.log(c);
-//       try {
-//         // All methods are promises we need to await or use .then().catch()
-//         c.channel.api.getOldMessages(10).then(() => {
-//           c.sendMessage('hello!');
-//           console.log('got channel response:');
-//           console.log(z2);
-//           const img = getElement('original-snackabra-img');
-//           fetch(img.src)
-//             .then((res) => res.blob())
-//             .then((blob) => {
-//               // const file = new File([blob], 'dot.png', blob);
-//               const file = new File([blob], 'dot.svg', blob);
-//               console.log(file);
-//               c.sendFile(file);
-//             });
-//         });
-//       } catch (e) {
-//         console.log('ERROR in channel test:');
-//         console.log(e);
-//         test_fail++;
-//       }
-//     });
-//   });
-// }
+// sends an image to the storage server
+if (test_list.includes('test04')) {
+    const SB = new Snackabra(sb_config);
+    SB.create('password').then((handle) => {
+        SB.connect((m) => { console.log(`test04 got old message: ${m}`); }, handle.key // connecting as owner
+        // , handle.channelId // since we're owner this is optional
+        ).then((c) => {
+            const z = getElement('test04');
+            z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
+            z.innerHTML += '.. connected ...<br\>';
+            console.log(c);
+            // c.api.getOldMessages(10).then... TODO: look at old messages
+            c.send("Hello from TestBot").then((s) => { console.log(`sent hello! (returned '${s}')`); });
+            const img = getElement('original-snackabra-img');
+            console.log("fetching this image:");
+            console.log(img);
+            fetch(img.src)
+                .then((res) => res.blob())
+                .then((blob) => {
+                // const file = new File([blob], 'dot.png', blob);
+                const file = new SBFile([blob], 'dot.svg', blob);
+                console.log(file);
+                SB.sendFile(file);
+            });
+        });
+    });
+}
 // VOPRF testing ...
 // ... uncomment this if you're running test05
 // import {
