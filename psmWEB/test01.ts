@@ -54,7 +54,9 @@ import {
   // SBFile,
   SBMessage,
   Snackabra,
-  ChannelMessage
+  ChannelMessage,
+  SBObjectHandle,
+  SBChannelHandle,
 } from './snackabra.js';
 
 
@@ -250,17 +252,17 @@ if (test_list.includes('test03')) {
  * ******************************** */
 
 const sb_config = {
-  channel_server: 'http://127.0.0.1:4001',
-  channel_ws: 'ws://127.0.0.1:4001',
-  storage_server: 'http://127.0.0.1:4000'
+  channel_server: 'http://localhost:4001',
+  channel_ws: 'ws://localhost:4001',
+  storage_server: 'http://localhost:4000'
 }
 
 if (true) {
   // create server object (assumes miniflare test setup):
   const SB = new Snackabra({
-    channel_server: 'http://127.0.0.1:4001', // asynchronous API
-    channel_ws: 'ws://127.0.0.1:4001', // synchronous (websocket)
-    storage_server: 'http://127.0.0.1:4000' // default storage server
+    channel_server: 'http://localhost:4001', // asynchronous API
+    channel_ws: 'ws://localhost:4001', // synchronous (websocket)
+    storage_server: 'http://localhost:4000' // default storage server
   })
   // create a new channel (room), returns (owner) key and channel name:
   SB.create('password').then((handle) => {
@@ -278,6 +280,43 @@ if (true) {
   })
 }
 
+if (true) {
+  // create server object (assumes miniflare test setup):
+  const SB = new Snackabra({
+    channel_server: 'http://localhost:4001', // asynchronous API
+    channel_ws: 'ws://localhost:4001', // synchronous (websocket)
+    storage_server: 'http://localhost:4000' // default storage server
+  })
+  // create a new channel (room), returns (owner) key and channel name:
+  SB.create('password').then((handle) => {
+    // we shouldn't need anything else to store stuff
+    const img = getElement('original-snackabra-img')
+    console.log("fetching this image:")
+    // @ts-ignore
+    console.log(img.src)
+    // @ts-ignore
+    fetch(img.src)
+      .then((res) => res.arrayBuffer())
+      .then((myBuf) => {
+        console.log('will try to send this buffer:')
+        console.log(myBuf)
+        SB.storage.storeObject(myBuf, 'b', handle.channelId).then((r) => {
+          console.log('got response from storeObject():')
+          console.log(r)
+          r.verification.then((v) => {
+            console.log('got verification:')
+            console.log(v)
+            console.log('will now try to fetch same object')
+            SB.storage.fetchData(r.id, v).then((d) => {
+              console.log('got this back:')
+              console.log(d)
+            })
+          })
+        })
+      })
+  })
+}
+
 
 if (test_list.includes('test04d')) {
   const z = getElement('test04d');
@@ -285,7 +324,7 @@ if (test_list.includes('test04d')) {
   // create orchestration (master) object (synchronous)
   console.log("++++test04d++++ SB object:")
   const SB = new Snackabra(sb_config);
-  console.log("++++test04d++++ new owner keys:")
+  // console.log("++++test04d++++ new owner keys:")
   SB.create('password').then((handle) => {
     SB.connect(
       // print out any messages we get
@@ -331,9 +370,9 @@ if (test_list.includes('test04d')) {
 // if (true) {
 //   // create server object
 //   const SB = new Snackabra({
-//     channel_server: 'http://127.0.0.1:4001',
-//     channel_ws: 'ws://127.0.0.1:4001',
-//     storage_server: 'http://127.0.0.1:4000'})
+//     channel_server: 'http://localhost:4001',
+//     channel_ws: 'ws://localhost:4001',
+//     storage_server: 'http://localhost:4000'})
 //   // create a new channel (room) and connect
 //   const ownerKeys = new Identity()
 //   SB.create('password', ownerKeys).then((channelId) => {
@@ -626,35 +665,39 @@ if (test_list.includes('test04d')) {
 //   });
 // }
 
-// sends an image to the storage server
-if (test_list.includes('test04')) {
-  const SB = new Snackabra(sb_config)
-  SB.create('password').then((handle) => {
-    SB.connect(
-      (m: ChannelMessage) => { console.log(`test04 got old message: ${m}`) },
-      handle.key // connecting as owner
-      // , handle.channelId // since we're owner this is optional
-    ).then((c) => {
-      const z = getElement('test04')
-      z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
-      z.innerHTML += '.. connected ...<br\>';
-      console.log(c);
-      // c.api.getOldMessages(10).then... TODO: look at old messages
-      c.send("Hello from TestBot").then((s) => { console.log(`sent hello! (returned '${s}')`) })
-      const img = getElement('original-snackabra-img')
-      console.log("fetching this image:")
-      console.log(img)
-      fetch(img.src)
-        .then((res) => res.blob())
-        .then((blob) => {
-          // const file = new File([blob], 'dot.png', blob);
-          const file = new SBFile([blob], 'dot.svg', blob);
-          console.log(file);
-          SB.sendFile(file);
-        });
-    });
-  })
-}
+// // sends an image to the storage server
+// if (test_list.includes('test04')) {
+//   const SB = new Snackabra(sb_config)
+//   SB.create('password').then((handle) => {
+//     SB.connect(
+//       (m: ChannelMessage) => { console.log(`test04 got old message: ${m}`) },
+//       handle.key // connecting as owner
+//       // , handle.channelId // since we're owner this is optional
+//     ).then((c) => {
+//       const z = getElement('test04')
+//       z.innerHTML += 'starting channel tests ... setting up snoop bot ...<br\>';
+//       z.innerHTML += '.. connected ...<br\>';
+//       console.log(c);
+//       // c.api.getOldMessages(10).then... TODO: look at old messages
+//       c.send("Hello from TestBot").then((s) => { console.log(`sent hello! (returned '${s}')`) })
+//       const img = getElement('original-snackabra-img')
+//       console.log("fetching this image:")
+//       // @ts-ignore
+//       console.log(img.src)
+//       console.log(typeof img)
+//       // @ts-ignore
+//       fetch(img.src)
+//         .then((res) => res.blob())
+//         .then((blob) => {
+//           // const file = new File([blob], 'dot.png', blob);
+//           // @ts-ignore
+//           const file = new SBFile([blob], 'dot.svg', blob);
+//           console.log(file);
+//           SB.sendFile(file);
+//         });
+//     });
+//   })
+// }
 
 
 // VOPRF testing ...

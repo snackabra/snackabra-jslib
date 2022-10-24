@@ -8,7 +8,7 @@
  * The key is always private. If it matches the channelId, then it's
  * an 'owner' key.
  */
-interface SBChannelHandle {
+export interface SBChannelHandle {
     channelId: string;
     key: JsonWebKey;
 }
@@ -344,17 +344,14 @@ declare class SBCrypto {
      */
     deriveKey(privateKey: CryptoKey, publicKey: CryptoKey, type: string, extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
     /**
-     * SBCrypto.getFileKey()
-     *
-     * Get file key
-     */
-    getFileKey(fileHash: string, _salt: ArrayBuffer): Promise<unknown>;
-    /**
      * SBCrypto.encrypt()
      *
-     * Encrypt. if no nonce (iv) is given, will create it.
+     * Encrypt. if no nonce (iv) is given, will create it. Returns a Promise
+     * that resolves either to raw array buffer or a packaged EncryptedContents.
+     * Note that for the former, nonce must be given.
      */
-    encrypt(data: BufferSource, key: CryptoKey, _iv?: ArrayBuffer | null): Promise<EncryptedContents>;
+    encrypt(data: BufferSource, key: CryptoKey, _iv?: ArrayBuffer | null, returnType?: 'encryptedContents'): Promise<EncryptedContents>;
+    encrypt(data: BufferSource, key: CryptoKey, _iv?: ArrayBuffer | null, returnType?: 'arrayBuffer'): Promise<ArrayBuffer>;
     wrap(k: CryptoKey, b: string, bodyType: 'string'): Promise<EncryptedContents>;
     wrap(k: CryptoKey, b: ArrayBuffer, bodyType: 'arrayBuffer'): Promise<EncryptedContents>;
     /**
@@ -392,6 +389,7 @@ declare class SBCrypto {
 declare class SB384 {
     #private;
     ready: Promise<SB384>;
+    sb384Ready: Promise<SB384>;
     /**
      * new SB384()
      * @param key a jwk with which to create identity; if not provided,
@@ -427,49 +425,13 @@ declare class SBMessage {
     ready: Promise<SBMessage>;
     channel: Channel;
     contents: SBMessageContents;
-    constructor(channel: Channel, body: string);
+    constructor(channel: Channel, body?: string);
     /**
      * SBMessage.send()
      *
      * @param {SBMessage} message - the message object to send
      */
     send(): Promise<string>;
-}
-export declare function saveImage(sbImage: any, roomId: any, sendSystemMessage: any): Promise<{
-    full: string | undefined;
-    preview: string | undefined;
-    fullKey: string | undefined;
-    previewKey: string | undefined;
-    fullStorePromise: Promise<any>;
-    previewStorePromise: Promise<any>;
-}>;
-export declare function storeImage(image: any, image_id: any, keyData: any, type: any, roomId: any): Promise<any>;
-export declare function generateImageHash(image: any): Promise<{
-    id: string;
-    key: string;
-} | {
-    id?: undefined;
-    key?: undefined;
-}>;
-export declare function retrieveData(message: any, controlMessages: any, cache: any): Promise<{
-    error: string;
-    url?: undefined;
-} | {
-    url: string;
-    error?: undefined;
-}>;
-export declare function getFileData(file: any, outputType: any): Promise<unknown>;
-export declare function _restrictPhoto(maxSize: any, _c: any, _b1: any): Promise<any>;
-export declare function restrictPhoto(sbImage: any, maxSize: any): Promise<any>;
-export declare function scaleCanvas(canvas: any, scale: any): HTMLCanvasElement;
-export declare function padImage(image_buffer: any): any;
-export declare function unpadData(data_buffer: any): any;
-export declare class SBImage {
-    constructor(image: any);
-    loadToCanvas(canvas: any): Promise<unknown>;
-}
-export declare class BlobWorker extends Worker {
-    constructor(worker: any, i: any);
 }
 /**
  * SBFile
@@ -483,7 +445,6 @@ export declare class SBFile extends SBMessage {
     image: string;
     image_sign: string;
     imageMetaData: ImageMetaData;
-    imageMetadata_sign: string;
     constructor(channel: Channel, file: File);
 }
 /**
@@ -546,6 +507,15 @@ declare class ChannelSocket extends Channel {
       */
     send(msg: SBMessage | string): Promise<string>;
 }
+export declare type SBObjectType = 'f' | 'p' | 'b';
+export interface SBObjectHandleV1 {
+    version: '1';
+    type: SBObjectType;
+    id: string;
+    key: string;
+    verification: Promise<string>;
+}
+export declare type SBObjectHandle = SBObjectHandleV1;
 /**
  * Storage API
  * @class
@@ -555,7 +525,9 @@ declare class ChannelSocket extends Channel {
 declare class StorageApi {
     #private;
     server: string;
-    constructor(server: string);
+    channelServer: string;
+    constructor(server: string, channelServer: string);
+    storeObject(buf: ArrayBuffer, type: 'f' | 'p' | 'b', roomId: string): Promise<SBObjectHandle>;
     /**
      * StorageApi.saveFile()
      */
@@ -567,7 +539,7 @@ declare class StorageApi {
     /**
      * StorageApi().storeData()
      */
-    storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: Dictionary): Promise<Dictionary>;
+    storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: ArrayBuffer): Promise<Dictionary>;
     /**
      * StorageApi().storeImage()
      */

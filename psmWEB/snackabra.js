@@ -640,16 +640,17 @@ export function extractPayloadV1(payload) {
  */
 export function assemblePayload(data) {
     try {
+        // console.log("assemblePayload():")
+        // console.log(data)
         const metadata = {};
         metadata['version'] = '002';
         let keyCount = 0;
         let startIndex = 0;
         for (const key in data) {
-            if (data.key) {
-                keyCount++;
-                metadata[keyCount.toString()] = { name: key, start: startIndex, size: data[key].byteLength };
-                startIndex += data[key].byteLength;
-            }
+            // if (data.key)  ... why was this added?
+            keyCount++;
+            metadata[keyCount.toString()] = { name: key, start: startIndex, size: data[key].byteLength };
+            startIndex += data[key].byteLength;
         }
         const encoder = new TextEncoder();
         const metadataBuffer = encoder.encode(JSON.stringify(metadata));
@@ -657,10 +658,11 @@ export function assemblePayload(data) {
         // psm: changed to Uint8 .. hope that doesn't break things?
         let payload = _appendBuffer(new Uint8Array(metadataSize.buffer), new Uint8Array(metadataBuffer));
         for (const key in data) {
-            if (data.key) {
-                payload = _appendBuffer(new Uint8Array(payload), data[key]);
-            }
+            // if (data.key) ... why was this added?
+            payload = _appendBuffer(new Uint8Array(payload), data[key]);
         }
+        // console.log("created payload:")
+        // console.log(payload)
         return payload;
     }
     catch (e) {
@@ -677,37 +679,42 @@ export function extractPayload(payload) {
     try {
         // number of bytes of meta data (encoded as a 32-bit Uint)
         const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
-        console.info('METADATASIZE: ', metadataSize);
+        // console.info('METADATASIZE: ', metadataSize);
         const decoder = new TextDecoder();
         // extracts the string of meta data and parses
-        console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
+        // console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
         const _metadata = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
         console.info('METADATA EXTRACTED', JSON.stringify(_metadata));
+        console.log(_metadata);
         // calculate start of actual contents
         const startIndex = 4 + metadataSize;
-        if (!_metadata.version) {
-            // backwards compatibility
-            _metadata['version'] = '001';
-        }
-        console.info(_metadata['version']);
+        if (!_metadata.version)
+            _metadata['version'] = '001'; // backwards compat
+        // console.info(_metadata['version']);
         switch (_metadata['version']) {
             case '001': {
                 // deprecated, older format
                 return extractPayloadV1(payload);
             }
             case '002': {
+                // console.log('version 2')
                 const data = [];
                 for (let i = 1; i < Object.keys(_metadata).length; i++) {
                     const _index = i.toString();
-                    if (_metadata._index) {
+                    if (_metadata[_index]) {
+                        // console.log(`found entry index ${i}`)
                         const propertyStartIndex = _metadata[_index]['start'];
                         // start (in bytes) of contents
-                        console.info(propertyStartIndex);
+                        // console.info(propertyStartIndex);
                         const size = _metadata[_index]['size'];
                         // where to put it
                         const entry = _metadata[_index];
                         // extracts contents - this supports raw data
                         data[entry['name']] = payload.slice(startIndex + propertyStartIndex, startIndex + propertyStartIndex + size);
+                        // console.log(data[entry['name']])
+                    }
+                    else {
+                        console.log(`found nothing for index ${i}`);
                     }
                 }
                 return data;
@@ -831,50 +838,27 @@ class SBCrypto {
             }
         });
     }
-    /**
-     * SBCrypto.getFileKey()
-     *
-     * Get file key
-     */
-    getFileKey(fileHash, _salt) {
-        return new Promise(async (resolve, reject) => {
-            try {
-                const keyMaterial = await this.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
-                // @psm TODO - Support deriving from PBKDF2 in deriveKey function
-                const key = await crypto.subtle.deriveKey({
-                    'name': 'PBKDF2',
-                    'salt': _salt,
-                    'iterations': 100000,
-                    'hash': 'SHA-256'
-                }, keyMaterial, { 'name': 'AES-GCM', 'length': 256 }, true, ['encrypt', 'decrypt']);
-                // return key;
-                resolve(key);
-            }
-            catch (e) {
-                reject(e);
-            }
-        });
-    }
-    /**
-     * SBCrypto.encrypt()
-     *
-     * Encrypt. if no nonce (iv) is given, will create it.
-     */
-    encrypt(data, key, _iv = null) {
+    encrypt(data, key, _iv, returnType = 'encryptedContents') {
         return new Promise(async (resolve, reject) => {
             try {
                 if (data === null)
                     reject(new Error('no contents'));
-                const iv = _iv === null ? crypto.getRandomValues(new Uint8Array(12)) : _iv;
+                const iv = ((!_iv) || (_iv === null)) ? crypto.getRandomValues(new Uint8Array(12)) : _iv;
                 if (typeof data === 'string')
                     data = (new TextEncoder()).encode(data);
                 crypto.subtle.encrypt({ name: 'AES-GCM', iv: iv }, key, data).then((encrypted) => {
                     // console.log("encrypt() result:")
                     // console.log(encrypted)
-                    resolve({
-                        content: encodeURIComponent(arrayBufferToBase64(encrypted)),
-                        iv: encodeURIComponent(arrayBufferToBase64(iv))
-                    });
+                    if (returnType === 'encryptedContents') {
+                        resolve({
+                            content: encodeURIComponent(arrayBufferToBase64(encrypted)),
+                            iv: encodeURIComponent(arrayBufferToBase64(iv))
+                        });
+                    }
+                    else {
+                        // _sb_assert(_iv, "encrypt() returning a buffer must have nonce assigned (or it will be lost)")
+                        resolve(encrypted);
+                    }
                 });
             }
             catch (e) {
@@ -981,12 +965,12 @@ class SBCrypto {
     }
 } /* SBCrypto */
 const sbCrypto = new SBCrypto();
-//#region - local descriptors
+//#region - local decorators
 function Memoize(target, propertyKey, descriptor) {
     if (descriptor.get) {
         let get = descriptor.get;
         descriptor.get = function () {
-            const prop = `__${propertyKey}__`;
+            const prop = `__${target.constructor.name}__${propertyKey}__`;
             if (this.hasOwnProperty(prop)) {
                 const returnValue = this[prop];
                 // console.log("Memoize found value in cache")
@@ -1006,24 +990,27 @@ function Memoize(target, propertyKey, descriptor) {
 function Ready(target, propertyKey, descriptor) {
     if (descriptor.get) {
         // console.log("Checking ready for:")
-        // console.log(target)
+        // console.log(target.constructor.name)
         let get = descriptor.get;
         descriptor.get = function () {
             // console.log("============= Ready checking this:")
             // console.log(this)
-            if ("readyFlag" in this) {
+            const obj = target.constructor.name;
+            // TODO: the Ready template can probably be simplified
+            const prop = `${obj}ReadyFlag`;
+            if (prop in this) {
                 // console.log(`============= Ready() - checking readyFlag for ${propertyKey}`)
                 const rf = "readyFlag";
                 // console.log(this[rf])
-                // _sb_assert(this[rf], `${propertyKey} getter accessed but object not ready (fatal)`)  
+                _sb_assert(this[rf], `${propertyKey} getter accessed but object ${obj} not ready (fatal)`);
             }
             const retValue = get.call(this);
-            _sb_assert(retValue != null, `${propertyKey} getter accessed but returns NULL (fatal)`);
+            _sb_assert(retValue != null, `${propertyKey} getter accessed in object type ${obj} but returns NULL (fatal)`);
             return retValue;
         };
     }
 }
-//# endregion
+//# endregion - local decorators
 /**
  * SB384 - basic (core) capability object in SB
  * @class
@@ -1032,7 +1019,8 @@ function Ready(target, propertyKey, descriptor) {
  */
 class SB384 {
     ready;
-    #readyFlag = false;
+    sb384Ready;
+    #SB384ReadyFlag = false; // must be named <class>ReadyFlag
     #exportable_pubKey = null;
     #exportable_privateKey = null;
     #privateKey = null;
@@ -1050,12 +1038,17 @@ class SB384 {
                 if (key) {
                     this.#exportable_privateKey = key;
                     const pk = sbCrypto.extractPubKey(key);
-                    if (pk)
-                        this.#exportable_pubKey = pk;
+                    _sb_assert(pk, 'unable to extract public key');
+                    this.#exportable_pubKey = pk;
                     sbCrypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
                         this.#privateKey = k;
-                        this.#readyFlag = true;
-                        resolve(this);
+                        this.#generateRoomId(this.#exportable_pubKey.x, this.#exportable_pubKey.y).then((channelId) => {
+                            // console.log('******** setting ownerChannelId')
+                            // console.log(channelId)
+                            this.#ownerChannelId = channelId;
+                            this.#SB384ReadyFlag = true;
+                            resolve(this);
+                        });
                     });
                 }
                 else {
@@ -1071,8 +1064,10 @@ class SB384 {
                             this.#exportable_pubKey = v[0];
                             this.#exportable_privateKey = v[1];
                             this.#generateRoomId(this.#exportable_pubKey.x, this.#exportable_pubKey.y).then((channelId) => {
+                                // console.log('******** setting ownerChannelId')
+                                // console.log(channelId)  
                                 this.#ownerChannelId = channelId;
-                                this.#readyFlag = true;
+                                this.#SB384ReadyFlag = true;
                                 resolve(this);
                             });
                         });
@@ -1086,6 +1081,7 @@ class SB384 {
                 reject(errMsg);
             }
         });
+        this.sb384Ready = this.ready;
     }
     #generateRoomId(x, y) {
         return new Promise(async (resolve, reject) => {
@@ -1102,7 +1098,7 @@ class SB384 {
             }
         });
     }
-    get readyFlag() { return this.#readyFlag; }
+    get readyFlag() { return this.#SB384ReadyFlag; }
     get exportable_pubKey() { return this.#exportable_pubKey; }
     get exportable_privateKey() { return this.#exportable_privateKey; }
     get privateKey() { return this.#privateKey; }
@@ -1148,13 +1144,13 @@ class SBMessage {
     channel;
     contents;
     /* SBMessage */
-    constructor(channel, body) {
+    constructor(channel, body = '') {
         // console.log("creating SBMessage on channel:")
         // console.log(channel)
         this.channel = channel;
         this.contents = { encrypted: false, contents: body, sign: '', image: '', imageMetaData: {} };
+        this.contents.sender_pubKey = this.channel.exportable_pubKey;
         this.ready = new Promise((resolve, reject) => {
-            this.contents.sender_pubKey = this.channel.exportable_pubKey;
             // console.log("SBMessage: waiting on channel to be ready... ")
             channel.ready.then(() => {
                 // console.log("SBMessage: ... got keys .. here are keys and sign key ")
@@ -1201,694 +1197,6 @@ class SBMessage {
         // TODO: i've punted on queue here <--- queueMicrotaks maybe?
     }
 }
-//#region ImageProcessor.js (being rewritten to be in this library starting 20221020 ...)
-import * as utils from "./utils";
-import config from "../config";
-import { encrypt, getImageKey } from "./crypto";
-import { decrypt } from "./utils";
-import ImageWorker from './ImageWorker.js';
-// experiment with https://silvia-odwyer.github.io/photon/guide/using-photon-web/
-// import("@silvia-odwyer/photon").then(photon => {
-//   // it's now imported and should work
-//   console.log("Looks like photon got imported");
-//   console.log(photon);
-// });
-// // experiment with https://github.com/ai/offscreen-canvas
-// import createWorker from '../offscreen-canvas/create-worker'
-// const worker = createWorker(canvas, '/worker.js', e => {
-//   // Messages from the worker
-// })
-// document.addEventListener("localKvReady", function(e) {
-//   ReactDOM.render(<App />, document.getElementById('root'));
-// });
-// refactoring - 'image' becomes sbImage object
-export async function saveImage(sbImage, roomId, sendSystemMessage) {
-    const t0 = new Date().getTime();
-    const previewImage = padImage(await (await restrictPhoto(sbImage, 4096)).arrayBuffer());
-    const previewHash = await generateImageHash(previewImage);
-    const t1 = new Date().getTime();
-    console.log(`#### previewHash took took total ${t1 - t0} milliseconds (blocking)`);
-    // only if the file is over 15 MB do we restrict the full file - 15360 here is 15360 KB which is 15 MB
-    const fullImage = sbImage.image.size > 15728640 ? padImage(await (await restrictPhoto(sbImage, 15360)).arrayBuffer()) : padImage(await sbImage.image.arrayBuffer());
-    const t2 = new Date().getTime();
-    console.log(`#### fullImage load took took total ${t2 - t1} milliseconds (blocking)`);
-    const fullHash = await generateImageHash(fullImage);
-    const t3 = new Date().getTime();
-    console.log(`#### fullHash took took total ${t3 - t2} milliseconds (blocking)`);
-    const previewStorePromise = storeImage(previewImage, previewHash.id, previewHash.key, 'p', roomId).then(_x => {
-        if (_x.hasOwnProperty('error'))
-            sendSystemMessage('Could not store preview: ' + _x['error']);
-        const t5 = new Date().getTime();
-        console.log(`#### previewStorePromise took ${t5 - t3} milliseconds (asynchronous)`);
-        return _x;
-    });
-    const t4 = new Date().getTime();
-    const fullStorePromise = storeImage(fullImage, fullHash.id, fullHash.key, 'f', roomId).then(_x => {
-        if (_x.hasOwnProperty('error'))
-            sendSystemMessage('Could not store full image: ' + _x['error']);
-        const t5 = new Date().getTime();
-        console.log(`#### fullStorePromise took ${t5 - t4} milliseconds (but asynchronous)`);
-        return _x;
-    });
-    // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
-    return {
-        full: fullHash.id,
-        preview: previewHash.id,
-        fullKey: fullHash.key,
-        previewKey: previewHash.key,
-        fullStorePromise: fullStorePromise,
-        previewStorePromise: previewStorePromise // and this promise
-    };
-}
-async function uploadImage(storageToken, encrypt_data, type, image_id, data) {
-    return await fetch(config.STORAGE_SERVER + "/storeData?type=" + type + "&key=" + encodeURIComponent(image_id), {
-        method: "POST",
-        body: utils.assemblePayload({
-            iv: encrypt_data.iv,
-            salt: encrypt_data.salt,
-            image: data.content,
-            storageToken: (new TextEncoder()).encode(storageToken),
-            vid: window.crypto.getRandomValues(new Uint8Array(48))
-        })
-    });
-}
-export async function storeImage(image, image_id, keyData, type, roomId) {
-    try {
-        const storeReqResp = await (await fetch(config.STORAGE_SERVER + "/storeRequest?name=" + image_id)).arrayBuffer();
-        const encrypt_data = utils.extractPayload(storeReqResp);
-        const key = await getImageKey(keyData, encrypt_data.salt);
-        let storageToken, verificationToken;
-        const data = await encrypt(image, key, "arrayBuffer", encrypt_data.iv);
-        const storageTokenReq = await (await fetch(config.ROOM_SERVER + roomId + '/storageRequest?size=' + data.content.byteLength)).json();
-        if (storageTokenReq.hasOwnProperty('error')) {
-            return { error: storageTokenReq.error };
-        }
-        storageToken = JSON.stringify(storageTokenReq);
-        const resp = await uploadImage(storageToken, encrypt_data, type, image_id, data);
-        const status = resp.status;
-        const resp_json = await resp.json();
-        if (status !== 200) {
-            return { error: 'Error: storeImage() failed (' + resp_json.error + ')' };
-        }
-        verificationToken = resp_json.verification_token;
-        return { verificationToken: verificationToken, id: resp_json.image_id, type: type };
-    }
-    catch (e) {
-        console.error(e);
-        return image_id;
-    }
-}
-export async function generateImageHash(image) {
-    try {
-        const digest = await crypto.subtle.digest('SHA-512', image);
-        const _id = digest.slice(0, 32);
-        const _key = digest.slice(32);
-        return {
-            id: encodeURIComponent(utils.arrayBufferToBase64(_id)),
-            key: encodeURIComponent(utils.arrayBufferToBase64(_key))
-        };
-    }
-    catch (e) {
-        console.log(e);
-        return {};
-    }
-}
-async function downloadImage(control_msg, image_id, cache) {
-    const imageFetch = await (await fetch(config.STORAGE_SERVER + "/fetchData?id=" + encodeURIComponent(control_msg.id) + '&verification_token=' + control_msg.verificationToken)).arrayBuffer();
-    let data = utils.extractPayload(imageFetch);
-    document.cacheDb.setItem(`${image_id}_cache`, data);
-    return data;
-}
-export async function retrieveData(message, controlMessages, cache) {
-    const imageMetaData = message.imageMetaData;
-    const image_id = imageMetaData.previewId;
-    const control_msg = controlMessages.find(msg => msg.hasOwnProperty('id') && msg.id.startsWith(image_id));
-    if (!control_msg) {
-        return { 'error': 'Failed to fetch data - missing control message for that image' };
-    }
-    const cached = await document.cacheDb.getItem(`${image_id}_cache`);
-    let data;
-    if (cached === null) {
-        data = await downloadImage(control_msg, image_id, cache);
-    }
-    else {
-        console.log('Loading image data from cache');
-        data = cached;
-    }
-    const iv = data.iv;
-    const salt = data.salt;
-    const image_key = await getImageKey(imageMetaData.previewKey, salt);
-    const encrypted_image = data.image;
-    const padded_img = await decrypt(image_key, { content: encrypted_image, iv: iv }, "arrayBuffer");
-    const img = unpadData(padded_img.plaintext);
-    if (img.error) {
-        console.log('(Image error: ' + img.error + ')');
-        throw new Error('Failed to fetch data - authentication or formatting error');
-    }
-    return { 'url': "data:image/jpeg;base64," + utils.arrayBufferToBase64(img) };
-}
-export async function getFileData(file, outputType) {
-    try {
-        let reader = new FileReader();
-        if (file.size === 0) {
-            return null;
-        }
-        outputType === 'url' ? reader.readAsDataURL(file) : reader.readAsArrayBuffer(file);
-        return new Promise((resolve, reject) => {
-            reader.onloadend = (event) => {
-                let the_blob = reader.result;
-                resolve(the_blob);
-            };
-        });
-    }
-    catch (e) {
-        console.log(e);
-        return null;
-    }
-}
-// refactoring from using raw photo to using SBImage object
-// change: imageType, qualityArgument both hardcoded
-// helper
-// maxSize: target (max) size in KB
-// _c: full image on starting point canvas (eg sbImage.canvas)
-// _b1: blob version (eg sbImage.blob)
-export async function _restrictPhoto(maxSize, _c, _b1) {
-    const t2 = new Date().getTime();
-    const imageType = "image/jpeg";
-    const qualityArgument = 0.92;
-    let _size = _b1.size;
-    if (_size <= maxSize) {
-        console.log(`Starting size ${_size} is fine (below target size ${maxSize}`);
-        return _b1;
-    }
-    console.log(`Starting size ${_size} too large (max is ${maxSize}) bytes.`);
-    console.log(`Reduce size by scaling canvas - start size is W ${_c.width} x H ${_c.height}`);
-    // compression wasn't enough, so let's resize until we're getting close
-    let _old_size;
-    let _old_c;
-    if (false) {
-        // experiments: we first cut it with quality argument (normalize)
-        _b1 = await new Promise((resolve) => {
-            _c.toBlob(resolve, imageType, qualityArgument);
-        });
-        console.log(`setting quality changed size from ${_size} to ${_b1.size}`);
-        await createImageBitmap(_b1).then(bm => { _c.getContext('2d').drawImage(bm, 0, 0); });
-        _size = _b1.size;
-        // now we do a *single* big adjustment
-        _c = scaleCanvas(_c, Math.sqrt(maxSize / _size));
-        _old_c = _c;
-        _b1 = await new Promise((resolve) => {
-            _c.toBlob(resolve, imageType, qualityArgument);
-        });
-        _size = _b1.size;
-        _old_size = _size;
-        const t3 = new Date().getTime();
-        console.log(`... reduced to W ${_c.width} x H ${_c.height} (to size ${_size}) ... total time ${t3 - t2} milliseconds`);
-    }
-    else {
-        while (_size > maxSize) {
-            _old_c = _c;
-            _c = scaleCanvas(_c, .5);
-            _b1 = await new Promise((resolve) => {
-                _c.toBlob(resolve, imageType, qualityArgument);
-            });
-            _old_size = _size;
-            _size = _b1.size;
-            // workingDots();
-            const t3 = new Date().getTime();
-            console.log(`... reduced to W ${_c.width} x H ${_c.height} (to size ${_size}) ... total time ${t3 - t2} milliseconds`);
-        }
-    }
-    // we assume that within this width interval, storage is roughly prop to area,
-    // with a little tuning downwards
-    let _ratio = (maxSize / _old_size) * 0.95; // overshoot a bit
-    let _maxIteration = 12; // to be safe
-    console.log("_old_c is:");
-    console.log(_old_c);
-    console.log(`... stepping back up to W ${_old_c.width} x H ${_old_c.height} and will then try scale ${_ratio.toFixed(4)}`);
-    let _final_c;
-    const t4 = new Date().getTime();
-    do {
-        _final_c = scaleCanvas(_old_c, Math.sqrt(_ratio) * 0.95); // always overshoot
-        _b1 = await new Promise((resolve) => {
-            _final_c.toBlob(resolve, imageType, qualityArgument);
-            console.log(`(generating blob of requested type ${imageType})`);
-        });
-        // workingDots();
-        console.log(`... fine-tuning to W ${_final_c.width} x H ${_final_c.height} (size ${_b1.size})`);
-        _ratio *= (maxSize / _b1.size);
-        const t5 = new Date().getTime();
-        console.log(`... resulting _ratio is ${_ratio} ... total time here ${t5 - t4} milliseconds`);
-        console.log(` ... we're within ${(Math.abs(_b1.size - maxSize) / maxSize)} of cap (${maxSize})`);
-    } while (((_b1.size > maxSize) || ((Math.abs(_b1.size - maxSize) / maxSize) > 0.10)) && (--_maxIteration > 0)); // we're pretty tolerant here
-    return _b1;
-}
-export async function restrictPhoto(sbImage, maxSize) {
-    console.log("################################################################");
-    console.log("#################### inside restrictPhoto() ####################");
-    console.log("################################################################");
-    const t0 = new Date().getTime();
-    // imageType default should be 'image/jpeg'
-    // qualityArgument should be 0.92 for jpeg and 0.8 for png (MDN default)
-    maxSize = maxSize * 1024; // KB
-    // let _c = await readPhoto(photo);
-    let _c = await sbImage.img.then(() => sbImage.canvas);
-    console.log("Got sbImage as:");
-    console.log(sbImage);
-    console.log("And got sbImage.canvas as:");
-    console.log(_c);
-    const t1 = new Date().getTime();
-    console.log(`#### readPhoto took ${t1 - t0} milliseconds`);
-    // let _b1 = await new Promise((resolve) => _c.blob.then((b) => resolve(b)));
-    let _b1 = await sbImage.blob.then(() => sbImage.blob);
-    console.log("got blob");
-    console.log(_b1);
-    // let _b1 = await new Promise((resolve) => {
-    //   _c.toBlob(resolve, imageType, qualityArgument);
-    // });
-    const t2 = new Date().getTime();
-    console.log(`#### getting photo into a blob took ${t2 - t1} milliseconds`);
-    // workingDots();
-    let _final_b1 = _restrictPhoto(maxSize, _c, _b1);
-    // workingDots();
-    console.log(`... ok looks like we're good now ... final size is ${_b1.size} (which is ${((_b1.size * 100) / maxSize).toFixed(2)}% of cap)`);
-    // document.getElementById('the-original-image').width = _final_c.width;  // a bit of a hack
-    const end = new Date().getTime();
-    console.log(`#### restrictPhoto() took total ${end - t0} milliseconds`);
-    return _final_b1;
-}
-// basically replaced by SBImage
-// export async function readPhoto(photo) {
-//   const canvas = document.createElement('canvas');
-//   const img = document.createElement('img');
-//   // create img element from File object
-//   img.src = await new Promise((resolve) => {
-//     const reader = new FileReader();
-//     reader.onload = (e) => resolve(e.target.result);
-//     reader.readAsDataURL(photo);
-//   });
-//   await new Promise((resolve) => {
-//     img.onload = resolve;
-//   });
-//   // console.log("img object");
-//   // console.log(img);
-//   // console.log("canvas object");
-//   // console.log(canvas);
-//   // draw image in canvas element
-//   canvas.width = img.width;
-//   canvas.height = img.height;
-//   canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-//   return canvas;
-// }
-// let scaledCanvas = document.createElement('canvas');
-export function scaleCanvas(canvas, scale) {
-    var start = new Date().getTime();
-    const scaledCanvas = document.createElement('canvas');
-    scaledCanvas.width = canvas.width * scale;
-    scaledCanvas.height = canvas.height * scale;
-    // console.log(`#### scaledCanvas starting with W ${canvas.width} x H ${canvas.height}`);
-    scaledCanvas
-        .getContext('2d')
-        .drawImage(canvas, 0, 0, scaledCanvas.width, scaledCanvas.height);
-    // console.log(`#### scaledCanvas actual W ${scaledCanvas.width} x H ${scaledCanvas.height}`);
-    var end = new Date().getTime();
-    // console.log(`#### scaleCanvas() took ${end - start} milliseconds`);
-    console.log(`#### scaledCanvas scale ${scale} to target W ${scaledCanvas.width} x H ${scaledCanvas.height} took ${end - start} milliseconds`);
-    return scaledCanvas;
-}
-export function padImage(image_buffer) {
-    let _sizes = [128, 256, 512, 1024, 2048, 4096]; // in KB
-    _sizes = _sizes.map((size) => size * 1024);
-    const image_size = image_buffer.byteLength;
-    // console.log('BEFORE PADDING: ', image_size)
-    let _target;
-    if (image_size < _sizes[_sizes.length - 1]) {
-        for (let i = 0; i < _sizes.length; i++) {
-            if (image_size + 21 < _sizes[i]) {
-                _target = _sizes[i];
-                break;
-            }
-        }
-    }
-    else {
-        _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
-        if (image_size + 21 >= _target) {
-            _target += 1024;
-        }
-    }
-    let _padding_array = [128];
-    _target = _target - image_size - 21;
-    // We will finally convert to Uint32Array where each element is 4 bytes
-    // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
-    // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
-    for (let i = 0; i < _target; i++) {
-        _padding_array.push(0);
-    }
-    // _padding_array.push(image_size);
-    const _padding = new Uint8Array(_padding_array).buffer;
-    // console.log('Padding size: ', _padding.byteLength)
-    let final_data = utils._appendBuffer(image_buffer, _padding);
-    final_data = utils._appendBuffer(final_data, new Uint32Array([image_size]).buffer);
-    // console.log('AFTER PADDING: ', final_data.byteLength)
-    return final_data;
-}
-export function unpadData(data_buffer) {
-    // console.log(data_buffer, typeof data_buffer)
-    const _size = new Uint32Array(data_buffer.slice(-4))[0];
-    return data_buffer.slice(0, _size);
-}
-// let script_01 = 
-//     `data:text/javascript,
-//     function functionThatTakesLongTime(someArgument){
-//         //There are obviously faster ways to do this, I made this function slow on purpose just for the example.
-//         for(let i = 0; i < 1000000000; i++){
-//             someArgument++;
-//         }
-//         return someArgument;
-//     }
-//     onmessage = function(event){    //This will be called when worker.postMessage is called in the outside code.
-//         let foo = event.data;    //Get the argument that was passed from the outside code, in this case foo.
-//         let result = functionThatTakesLongTime(foo);    //Find the result. This will take long time but it doesn't matter since it's called in the worker.
-//         postMessage(result);    //Send the result to the outside code.
-//     };
-//     `;
-let script_02 = `data:text/javascript,
-    function fileToAB(file) {
-      file.arrayBuffer().then((a) => postMessage(a, [a]));
-    }
-    onmessage = function(event){
-        fileToAB(event.data);
-    };
-    `;
-// code by Thomas Lochmatter, thomas.lochmatter@viereck.ch
-// Returns an object with the width and height of the JPEG image
-// stored in bytes, or null if the bytes do not represent a JPEG
-// image.
-function readJpegHeader(bytes) {
-    // JPEG magick
-    if (bytes[0] != 0xff)
-        return;
-    if (bytes[1] != 0xd8)
-        return;
-    // Go through all markers
-    var pos = 2;
-    var dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-    while (pos + 4 < bytes.byteLength) {
-        // Scan for the next start marker (if the image is corrupt, this marker may not be where it is expected)
-        if (bytes[pos] != 0xff) {
-            pos += 1;
-            continue;
-        }
-        var type = bytes[pos + 1];
-        // Short marker
-        pos += 2;
-        if (bytes[pos] == 0xff)
-            continue;
-        // SOFn marker
-        var length = dv.getUint16(pos);
-        if (pos + length > bytes.byteLength)
-            return;
-        if (length >= 7 && (type == 0xc0 || type == 0xc2)) {
-            var data = {};
-            data.progressive = type == 0xc2;
-            data.bitDepth = bytes[pos + 2];
-            data.height = dv.getUint16(pos + 3);
-            data.width = dv.getUint16(pos + 5);
-            data.components = bytes[pos + 7];
-            return data;
-        }
-        // Other marker
-        pos += length;
-    }
-    return;
-}
-export class SBImage {
-    constructor(image) {
-        this.image = image; // file
-        var resolveAspectRatio;
-        this.aspectRatio = new Promise((resolve) => {
-            // block on getting width and height...
-            resolveAspectRatio = resolve;
-        });
-        // Fetch the original image
-        console.log("Fetching file:");
-        console.log(image);
-        this.imgURL = new Promise((resolve) => {
-            const _self = this;
-            const reader = image.stream().getReader();
-            return new ReadableStream({
-                start(controller) {
-                    var foundSize = false;
-                    return pump();
-                    function pump() {
-                        return reader.read().then(({ done, value }) => {
-                            // When no more data needs to be consumed, close the stream
-                            if (done) {
-                                controller.close();
-                                return;
-                            }
-                            // console.log("Got a chunk!");
-                            // console.log(value);
-                            // pull out size
-                            if (!foundSize) {
-                                foundSize = true;
-                                // console.log("$$$$$$$ found first chunk")
-                                const h = readJpegHeader(value);
-                                // _self.width = value[165] * 256 + value[166];
-                                // _self.height = value[163] * 256 + value[164];
-                                // var width = value[165] * 256 + value[166];
-                                // var height = value[163] * 256 + value[164];
-                                if (h) {
-                                    console.log("^^^^^^^^^^^^^^^^", h);
-                                    _self.width = h.width;
-                                    _self.height = h.height;
-                                    console.log(`got the size of the image!!  ${_self.width} x ${_self.height}`);
-                                    resolveAspectRatio(_self.width / _self.height);
-                                }
-                                else {
-                                    console.log("PROBLEM ***** ... could not parse jpeg header");
-                                }
-                            }
-                            // Enqueue the next data chunk into our target stream
-                            controller.enqueue(value);
-                            return pump();
-                        });
-                    }
-                }
-            });
-        })
-            // Create a new response out of the stream
-            .then((stream) => new Response(stream))
-            // Create an object URL for the response
-            .then((response) => response.blob())
-            .then((blob) => URL.createObjectURL(blob))
-            // Update image
-            .then((url) => {
-            console.log("Finished getting 'url':");
-            console.log(url);
-            resolve(url);
-        })
-            .catch((err) => console.error(err));
-        this.img = new Promise((resolve) => {
-            const reader = new FileReader();
-            const img = document.createElement('img');
-            reader.onload = (e) => {
-                img.src = e.target.result;
-                resolve(img);
-            };
-            reader.readAsDataURL(this.image);
-        });
-        // this.canvas = new Promise((resolve) => {
-        //   this.img.then((img) => {
-        // 	const canvas = document.createElement('canvas'); 
-        // 	canvas.width = img.width;
-        // 	canvas.height = img.height;
-        // 	canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        // 	console.log("resolved canvas object:");
-        // 	console.log(canvas);
-        // 	resolve(canvas);
-        //   });
-        // });
-        // create a canvas and then wait for the correct size
-        this.canvas = new Promise((resolve) => {
-            this.aspectRatio.then((r) => {
-                const canvas = document.createElement('canvas');
-                canvas.width = this.width;
-                canvas.height = this.height;
-                this.img.then((img) => canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height));
-                // this will return right away with correctly-sized canvas
-                resolve(canvas);
-            });
-        });
-        // this.blob = new Promise((resolve) => {
-        //   const imageType = "image/jpeg";
-        //   const qualityArgument = 0.92;
-        //   this.canvas.then((canvas) => canvas.toBlob(resolve, imageType, qualityArgument));
-        // });
-        this.blob = new Promise((resolve) => {
-            // spin up worker
-            let worker = new Worker(script_02);
-            worker.onmessage = (event) => {
-                console.log("Got blob from worker:");
-                console.log(event.data);
-                resolve(new Blob([event.data])); // convert arraybuffer to blob
-            };
-            worker.postMessage(image);
-        });
-        // this requests some worker to load the file into a sharedarraybuffer
-        this.imageSAB = doImageTask(['loadSB', image], false);
-        // // simple worker template
-        // this.w = new Promise((resolve) => {
-        //   // spin up worker
-        //   let worker = new Worker(script_01);
-        //   worker.onmessage = (event) => {
-        // 	console.log(`Got result from worker: ${event.data}`);
-        // 	resolve(event.data);
-        //   }
-        //   worker.postMessage(42); // kick it off
-        // });
-        // this.canvas = new Promise((resolve) => {
-        //   const canvas = document.createElement('canvas');
-        //   this.img.then((img) => {
-        // 	canvas.width = img.width;
-        // 	canvas.height = img.height;
-        // 	canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
-        // 	resolve(canvas);
-        //   });
-        // });
-    }
-    loadToCanvas(canvas) {
-        return new Promise((resolve) => {
-            this.aspectRatio.then((r) => {
-                console.log("~~~~~~~~~~~~~~~~ got WxH", this.width, this.height);
-                canvas.width = this.width;
-                canvas.height = this.height;
-                this.imageSAB.then((imageSAB) => {
-                    if (OffscreenCanvas) {
-                        console.log("%%%%%%%%%%%%%%%% we are here");
-                        console.log(imageSAB);
-                        // const canvas = document.createElement('canvas'); // test to give it from caller
-                        // var ctx = canvas.getContext('2d');
-                        // var imageData = ctx.createImageData(400, 400);
-                        const offscreen = canvas.transferControlToOffscreen();
-                        // const ctx = offscreen.getContext('2d');
-                        // doImageTask(['testCanvas', imageData.data.buffer], [imageData.data.buffer]).then((m) => console.log(m));
-                        doImageTask(['testCanvas', offscreen, imageSAB], [offscreen]).then((m) => {
-                            console.log("**************** Returned message:", m);
-                            console.log("**************** offscreen:", canvas);
-                            console.log("**************** offscreen:", offscreen);
-                            resolve(canvas);
-                        });
-                    }
-                    else {
-                        console.log("**************** THIS feature only works with OffscreenCanvas");
-                        console.log("                 (TODO: make the code work as promise as fallback");
-                    }
-                });
-            });
-        });
-    }
-}
-// we need this so it can be packaged
-export class BlobWorker extends Worker {
-    constructor(worker, i) {
-        const code = worker.toString();
-        const blob = new Blob([`(${code})(${i})`]);
-        return new Worker(URL.createObjectURL(blob));
-    }
-}
-let image_workers = [];
-let next_worker = 0;
-let max_workers = window.navigator.hardwareConcurrency;
-console.log(`setting up ${max_workers} image helper workers`);
-// const IW_code = _restrictPhoto.toString();
-// const IW_blob = new Blob([`${IW_code}`]);
-// const IW_url = URL.createObjectURL(IW_blob);
-// console.log("%%%%%%%%%%%%%%%% IW_code:", IW_code);
-for (let i = 0; i < max_workers; i++) {
-    let newWorker = {
-        worker: new BlobWorker(ImageWorker, i),
-        i: i,
-        broken: false // tracks if there's a problem
-    };
-    image_workers.push(newWorker);
-}
-function doImageTask(vars, transfer) {
-    console.log("doImageTask() - vars are:");
-    console.log(vars);
-    var i = next_worker;
-    next_worker = (next_worker + 1) % max_workers;
-    var instance = image_workers[i].worker;
-    return new Promise(function (resolve, reject) {
-        // we pick one, rotating
-        console.log(`Passing ${vars} on to ${next_worker}`);
-        instance.onmessage = function (m) {
-            console.log(`[${i}] finished finished ... returning with:`);
-            console.log(m);
-            resolve(m.data);
-        };
-        try {
-            if (transfer) {
-                instance.postMessage(vars, transfer);
-            }
-            else {
-                instance.postMessage(vars);
-            }
-        }
-        catch (error) {
-            console.error(`Failed to send task to worker ${i}`);
-            console.error(error);
-            reject("failed");
-        }
-    });
-}
-// export function indexFile(ab) {
-//   // first file it sees is done "locally"
-//   if (!window.g_t_ndx) {
-//     window.g_t_ndx = {}; // otherwise race condition
-//     return new Promise(function (resolve, reject) {
-//       var p = (new Blob([ab])).text();
-//       p.then((s) => {
-//         console.log("indexFile() - got the string (file)");
-//         // console.log(s.slice(0, 200) + "...");
-//         var t = s.match(/([^.!?]+[.!?]+)|([^.!?]+$)/g);
-//         window.g_t = t;
-//         console.log("array should be in g_t ... ");
-//         var index = new Index();
-//         t.forEach((item, i) => index.add(i, item));
-//         window.g_t_ndx = index;
-//         console.log("index should be in window.g_t_ndx");
-//         resolve(index); // TODO - this needs to be same blob format as from web worker
-//       });
-//     });
-//   } else {
-//     // do first so there's no race condition
-//     var i = next_worker;
-//     next_worker = (next_worker + 1) % max_workers;
-//     var instance = search_workers[i].worker;
-//     return new Promise(function (resolve, reject) {
-//       // we pick one, rotating
-//       // var instance = new BlobWorker(IndexWorker);
-//       if (ab.byteLength > 0) {
-// 	console.log(`got a blob of size ${ab.byteLength} sending to worker ${next_worker}`);
-// 	instance.onmessage = function(m) {
-// 	  console.log(`[${i}] finished indexing ... returning buffer`);
-// 	  // console.log(m);
-// 	  resolve(m);
-// 	}
-// 	try {
-// 	  instance.postMessage(ab, [ab]);
-// 	} catch {
-// 	  console.error(`Failed to send task to worker ${i}`);
-// 	  reject("failed");
-// 	}
-//       } else {
-// 	reject(`[${i}] did not get anything to work with`);
-//       }
-//     });
-//   }
-// }
-//#endregion
 /**
  * SBFile
  * @class
@@ -1908,80 +1216,36 @@ export class SBFile extends SBMessage {
     image = '';
     image_sign = '';
     imageMetaData = {};
-    imageMetadata_sign = '';
     // file is an instance of File
     constructor(channel, file /* signKey: CryptoKey, key: CryptoKey */) {
+        throw new Error('working on SBFile()!');
         super(channel, '');
         // all is TODO with new image code
         // this.senderPubKey = key;
         // ... done by SBMessage parent?
         // this.sign = sbCrypto.sign(channel.keys.channelSignKey, this.contents);
-        if (file.type.match(/^image/i)) {
-            this.#asImage(file, signKey);
-        }
-        else {
-            throw new Error('Unsupported file type: ' + file.type);
-        }
+        // if (file.type.match(/^image/i)) {
+        //   this.#asImage(file, signKey)
+        // } else {
+        //   throw new Error('Unsupported file type: ' + file.type);
+        // }
     }
     async #asImage(image, signKey) {
         // TODO: the getfile/restrict should be done by SBImage etc, other stuff is SB messaging
-        // throw new Error(`#asImage() needs carryover from SBImage etc (${image}, ${signKey})`)
-        this.data.previewImage = this.#padImage(await (await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
-        const previewHash = await this.#generateImageHash(this.data.previewImage);
-        this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await (await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
-        const fullHash = await this.#generateImageHash(this.data.fullImage);
-        this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
-        this.image_sign = await sbCrypto.sign(signKey, this.image);
-        this.imageMetaData = JSON.stringify({
-            imageId: fullHash.id,
-            previewId: previewHash.id,
-            imageKey: fullHash.key,
-            previewKey: previewHash.key
-        });
-        this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData);
-    }
-    #padImage(image_buffer) {
-        let _sizes = [128, 256, 512, 1024, 2048, 4096]; // in KB
-        _sizes = _sizes.map((size) => size * 1024);
-        const image_size = image_buffer.byteLength;
-        // console.log('BEFORE PADDING: ', image_size)
-        let _target = 0;
-        if (image_size < _sizes[_sizes.length - 1]) {
-            for (let i = 0; i < _sizes.length; i++) {
-                if (image_size + 21 < _sizes[i]) {
-                    _target = _sizes[i];
-                    break;
-                }
-            }
-        }
-        else {
-            _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
-            if (image_size + 21 >= _target) {
-                _target += 1024;
-            }
-        }
-        const _padding_array = [128];
-        _target = _target - image_size - 21;
-        // We will finally convert to Uint32Array where each element is 4 bytes
-        // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
-        // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
-        for (let i = 0; i < _target; i++) {
-            _padding_array.push(0);
-        }
-        // _padding_array.push(image_size);
-        const _padding = new Uint8Array(_padding_array).buffer;
-        // console.log('Padding size: ', _padding.byteLength)
-        let final_data = _appendBuffer(image_buffer, _padding);
-        final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
-        // console.log('AFTER PADDING: ', final_data.byteLength)
-        return final_data;
-    }
-    async #restrictPhoto(photo, maxSize, // in KB
-    imageType, qualityArgument) {
-        // latest and greatest JS version is in:
-        // 384-snackabra-webclient/src/utils/ImageProcessor.js
-        throw new Error('restrictPhoto() needs TS version');
-        return null;
+        throw new Error(`#asImage() needs carryover from SBImage etc (${image}, ${signKey})`);
+        //   this.data.previewImage = this.#padImage(await(await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
+        //   const previewHash: Dictionary = await this.#generateImageHash(this.data.previewImage);
+        //   this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await(await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
+        //   const fullHash: Dictionary = await this.#generateImageHash(this.data.fullImage);
+        //   this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
+        //   this.image_sign = await sbCrypto.sign(signKey, this.image);
+        //   this.imageMetaData = JSON.stringify({
+        //     imageId: fullHash.id,
+        //     previewId: previewHash.id,
+        //     imageKey: fullHash.key,
+        //     previewKey: previewHash.key
+        //   });
+        //   this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
     }
 }
 /**
@@ -1994,7 +1258,7 @@ export class SBFile extends SBMessage {
 class Channel extends SB384 {
     ready;
     channelReady;
-    #readyFlag = false;
+    #ChannelReadyFlag = false; // must be named <class>ReadyFlag
     #sbServer;
     motd = '';
     locked = false;
@@ -2024,13 +1288,18 @@ class Channel extends SB384 {
         this.ready = new Promise((resolve) => {
             if (channelId) {
                 this.#channelId = channelId;
-                this.#readyFlag = true;
+                this.#ChannelReadyFlag = true;
                 resolve(this);
             }
             else {
-                super.ready.then(() => {
+                this.sb384Ready.then((x) => {
+                    console.log('using this channelId');
+                    console.log(this);
+                    console.log(x);
+                    console.log(this.ownerChannelId);
+                    console.log(x);
                     this.#channelId = this.ownerChannelId;
-                    this.#readyFlag = true;
+                    this.#ChannelReadyFlag = true;
                     resolve(this);
                 });
             }
@@ -2042,7 +1311,7 @@ class Channel extends SB384 {
     get api() { return this.#api; }
     get sbServer() { return this.#sbServer; }
     get channelId() { return this.#channelId; }
-    get readyFlag() { return this.#readyFlag; }
+    get readyFlag() { return this.#ChannelReadyFlag; }
 } /* Channel */
 __decorate([
     Memoize,
@@ -2056,7 +1325,7 @@ __decorate([
  */
 class ChannelSocket extends Channel {
     ready;
-    #readyFlag = false;
+    #ChannelSocketReadyFlag = false; // must be named <class>ReadyFlag
     // #channelId: string
     #ws;
     #keys;
@@ -2070,7 +1339,7 @@ class ChannelSocket extends Channel {
         // console.log(sbServer)
         // console.log("----ChannelSocket.constructor() ... end")
         super(sbServer, key, channelId /*, identity ? identity : new Identity() */); // initialize 'channel' parent       
-        const url = sbServer.options.channel_ws + '/api/room/' + this.channelId + '/websocket';
+        const url = sbServer.options.channel_ws + '/api/room/' + channelId + '/websocket';
         this.#onMessage = onMessage;
         this.#ws = {
             url: url,
@@ -2265,7 +1534,7 @@ class ChannelSocket extends Channel {
                             // console.log("++++++++ readyPromise() changing onMessage to processMessage")
                             this.#ws.websocket.addEventListener('message', (e) => this.#processMessage(e.data));
                             // and now we are ready!
-                            this.#readyFlag = true;
+                            this.#ChannelSocketReadyFlag = true;
                             // console.log("++++++++ readyPromise() all done - resolving!")
                             resolve(this);
                         });
@@ -2354,7 +1623,7 @@ class ChannelSocket extends Channel {
         }
         return new Promise((resolve, reject) => {
             this.ready.then(() => {
-                if (!this.#readyFlag)
+                if (!this.#ChannelSocketReadyFlag)
                     reject("ChannelSocket.send() is confused - ready or not?");
                 switch (this.#ws.websocket.readyState) {
                     case 1: // OPEN
@@ -2401,9 +1670,6 @@ class ChannelSocket extends Channel {
         });
     }
 } // ChannelSocket
-__decorate([
-    Ready
-], ChannelSocket.prototype, "send", null);
 /**
  * Storage API
  * @class
@@ -2412,8 +1678,156 @@ __decorate([
  */
 class StorageApi {
     server;
-    constructor(server) {
+    channelServer; // approves budget, TODO this needs some thought
+    constructor(server, channelServer) {
         this.server = server + '/api/v1';
+        this.channelServer = channelServer + '/api/room/';
+    }
+    #generateIdKey(buf) {
+        return new Promise((resolve, reject) => {
+            try {
+                crypto.subtle.digest('SHA-512', buf).then((digest) => {
+                    const _id = digest.slice(0, 32);
+                    const _key = digest.slice(32);
+                    resolve({
+                        id: encodeURIComponent(arrayBufferToBase64(_id)),
+                        key: encodeURIComponent(arrayBufferToBase64(_key))
+                    });
+                });
+            }
+            catch (e) {
+                reject(e);
+            }
+        });
+    }
+    // TODO: his function needs to be cleaned up
+    #padBuf(buf) {
+        // design change: 12 sizes
+        const pad21 = 21; // need 21 bytes margin ... forget why?  ... not good
+        let _sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192]; // in KB
+        _sizes = _sizes.map((size) => size * 1024);
+        const image_size = buf.byteLength;
+        // console.log('BEFORE PADDING: ', image_size)
+        let _target = 0;
+        if (image_size < _sizes[_sizes.length - 1]) {
+            for (let i = 0; i < _sizes.length; i++) {
+                if (image_size + pad21 < _sizes[i]) {
+                    _target = _sizes[i];
+                    break;
+                }
+            }
+        }
+        else {
+            _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
+            if (image_size + pad21 >= _target) {
+                _target += 1024;
+            }
+        }
+        let _padding_array = [128];
+        _target = _target - image_size - pad21;
+        // We will finally convert to Uint32Array where each element is 4 bytes
+        // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
+        // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
+        for (let i = 0; i < _target; i++) {
+            _padding_array.push(0);
+        }
+        // _padding_array.push(image_size)
+        const _padding = new Uint8Array(_padding_array).buffer;
+        // console.log('Padding size: ', _padding.byteLength)
+        let final_data = _appendBuffer(buf, _padding);
+        final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
+        // console.log('AFTER PADDING: ', final_data.byteLength)
+        return final_data;
+    }
+    #getObjectKey(fileHash, _salt) {
+        // was: getFileKey(fileHash: string, _salt: ArrayBuffer) 
+        // console.log('getObjectKey with hash and salt:')
+        // console.log(fileHash)
+        // console.log(_salt)
+        return new Promise((resolve, reject) => {
+            try {
+                // const keyMaterial: CryptoKey = await sbCrypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
+                sbCrypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']).then((keyMaterial) => {
+                    // @psm TODO - Support deriving from PBKDF2 in sbCrypto.eriveKey function
+                    crypto.subtle.deriveKey({
+                        'name': 'PBKDF2',
+                        'salt': _salt,
+                        'iterations': 100000,
+                        'hash': 'SHA-256'
+                    }, keyMaterial, { 'name': 'AES-GCM', 'length': 256 }, true, ['encrypt', 'decrypt']).then((key) => {
+                        // return key;
+                        resolve(key);
+                    });
+                });
+            }
+            catch (e) {
+                reject(e);
+            }
+        });
+    }
+    #_storeObject(image, image_id, keyData, type, roomId) {
+        // export async function storeImage(image, image_id, keyData, type, roomId)
+        return new Promise((resolve, reject) => {
+            try {
+                // const storeReqResp = await(await fetch(config.STORAGE_SERVER + "/storeRequest?name=" + image_id)).arrayBuffer()
+                fetch(this.server + "/storeRequest?name=" + image_id)
+                    .then((r) => { /* console.log('got storage reply:'); console.log(r); */ return r.arrayBuffer(); })
+                    .then((b) => {
+                    // console.log('got b back:')
+                    // console.log(b)
+                    const encrypt_data = extractPayload(b);
+                    // console.log('got these instructions from the storage server:')
+                    // console.log(encrypt_data)
+                    // const key = await this.#getObjectKey(keyData, encrypt_data.salt)
+                    this.#getObjectKey(keyData, encrypt_data.salt).then((key) => {
+                        // storage server returns the salt it wants us to use
+                        sbCrypto.encrypt(image, key, encrypt_data.iv, 'arrayBuffer').then((data) => {
+                            // const storageTokenReq = await(await 
+                            fetch(this.channelServer + roomId + '/storageRequest?size=' + data.byteLength)
+                                .then((r) => r.json())
+                                .then((storageTokenReq) => {
+                                if (storageTokenReq.hasOwnProperty('error'))
+                                    reject('storage token request error');
+                                let storageToken = JSON.stringify(storageTokenReq);
+                                //const resp = await uploadImage(storageToken, encrypt_data, type, image_id, data)
+                                // storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: Dictionary): Promise<Dictionary> {
+                                // async function uploadImage(storageToken, encrypt_data, type, image_id, data)
+                                // console.log("storeObject() data:")
+                                // console.log(data)
+                                this.storeData(type, image_id, encrypt_data, storageToken, data)
+                                    .then((resp_json) => {
+                                    if (resp_json.error)
+                                        reject(`storeObject() failed: ${resp_json.error}`);
+                                    if (resp_json.image_id != image_id)
+                                        reject(`received imageId ${resp_json.image_id} but expected ${image_id}`);
+                                    resolve(resp_json.verification_token);
+                                });
+                            });
+                        });
+                    });
+                });
+            }
+            catch (e) {
+                reject(`storeObject() failed: ${e}`);
+            }
+        });
+    }
+    // psm: new, experimenting with clean low-level object save
+    storeObject(buf, type, roomId) {
+        // export async function saveImage(sbImage, roomId, sendSystemMessage)
+        return new Promise((resolve, reject) => {
+            const paddedBuf = this.#padBuf(buf);
+            this.#generateIdKey(paddedBuf).then((fullHash) => {
+                // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
+                resolve({
+                    version: '1',
+                    type: type,
+                    id: fullHash.id,
+                    key: fullHash.key,
+                    verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId)
+                });
+            });
+        });
     }
     /**
      * StorageApi.saveFile()
@@ -2433,21 +1847,6 @@ class StorageApi {
             // channel.sendSbObject(sbFile);
             channel.send(sbFile);
         });
-    }
-    /**
-     * StorageApi().getFileKey
-     */
-    async #getFileKey(fileHash, _salt) {
-        const keyMaterial = await sbCrypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
-        // @psm TODO - Support deriving from PBKDF2 in deriveKey function
-        const key = await crypto.subtle.deriveKey({
-            'name': 'PBKDF2',
-            'salt': _salt,
-            'iterations': 100000,
-            'hash': 'SHA-256'
-        }, keyMaterial, { 'name': 'AES-GCM', 'length': 256 }, true, ['encrypt', 'decrypt']);
-        // return key;
-        return key;
     }
     /**
      * StorageApi().storeRequest
@@ -2472,6 +1871,7 @@ class StorageApi {
      * StorageApi().storeData()
      */
     storeData(type, fileId, encrypt_data, storageToken, data) {
+        // async function uploadImage(storageToken, encrypt_data, type, image_id, data)
         return new Promise((resolve, reject) => {
             fetch(this.server + '/storeData?type=' + type + '&key=' + encodeURIComponent(fileId), {
                 // psm: need to clean up these types
@@ -2479,14 +1879,14 @@ class StorageApi {
                 body: assemblePayload({
                     iv: encrypt_data.iv,
                     salt: encrypt_data.salt,
-                    image: data.content,
+                    image: data,
                     storageToken: (new TextEncoder()).encode(storageToken),
                     vid: crypto.getRandomValues(new Uint8Array(48))
                 })
             })
                 .then((response) => {
                 if (!response.ok) {
-                    reject(new Error('Network response was not OK'));
+                    reject('response from storage server was not OK');
                 }
                 return response.json();
             })
@@ -2503,7 +1903,7 @@ class StorageApi {
     storeImage(image, image_id, keyData, type) {
         // latest and greatest JS version is in:
         // 384-snackabra-webclient/src/utils/ImageProcessor.js
-        throw new Error('Storage() needs TS version');
+        throw new Error('StorageApi.storeImate() needs TS version');
     }
     /**
      * StorageApi().fetchData()
@@ -2517,12 +1917,15 @@ class StorageApi {
                 method: 'GET'
             })
                 .then((response) => {
-                if (!response.ok) {
+                if (!response.ok)
                     reject(new Error('Network response was not OK'));
-                }
+                console.log(response);
                 return response.arrayBuffer();
             })
                 .then((data) => {
+                let j = JSON.parse(ab2str(new Uint8Array(data)));
+                if (j.error)
+                    reject(`fetchData() error: ${j.error}`);
                 resolve(data);
             }).catch((error) => {
                 reject(error);
@@ -2559,7 +1962,7 @@ class StorageApi {
         const data = extractPayload(imageFetch);
         const iv = data.iv;
         const salt = data.salt;
-        const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
+        const image_key = await this.#getObjectKey(imageMetaData.previewKey, salt);
         const encrypted_image = data.image;
         const padded_img = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer');
         const img = this.#unpadData(padded_img);
@@ -2584,7 +1987,7 @@ class StorageApi {
         const data = extractPayload(imageFetch);
         const iv = data.iv;
         const salt = data.salt;
-        const image_key = await this.#getFileKey(imageMetaData.previewKey, salt);
+        const image_key = await this.#getObjectKey(imageMetaData.previewKey, salt);
         const encrypted_image = data.image;
         const padded_img = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer');
         const img = this.#unpadData(padded_img);
@@ -3108,7 +2511,7 @@ class Snackabra {
                 channel_ws: args.channel_ws,
                 storage_server: args.storage_server
             });
-            this.#storage = new StorageApi(args.storage_server);
+            this.#storage = new StorageApi(args.storage_server, args.channel_server);
         }
         catch (e) {
             if (e.hasOwnProperty('message')) {
