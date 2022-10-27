@@ -2099,16 +2099,24 @@ class ChannelSocket extends Channel {
 } // ChannelSocket
 
 
+// these map to conventions and are different namespaces
+// currently: 'full', 'preview', and 'block'. there's an (old)
+// bug in current servers that they don't like reads unless
+// it's of type 'p', but we'll fix that soon ...
 export type SBObjectType = 'f' | 'p' | 'b'
-
 export interface SBObjectHandle {
-  version: '1',
-  type: SBObjectType,
-  id: string,
-  key: string,
-  iv?: Uint8Array,
-  salt?: Uint8Array,
-  verification: Promise<string>
+  version: '1', type: SBObjectType,
+  // for long-term storage you only need these:
+  id: string, key: string,
+  // and currently you also need to keep track of this,
+  // but you can start sharing / communicating the 
+  // object before it's resolved: among other things it
+  // serves as a 'write-through' verification
+  verification: Promise<string>,
+  // you'll need these in case you want to track an object
+  // across future (storage) servers, but as long as you
+  // are within the same SB servers you can request them.
+  iv?: Uint8Array, salt?: Uint8Array
 }
 
 /**

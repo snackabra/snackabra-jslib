@@ -515,9 +515,9 @@ export interface SBObjectHandle {
     type: SBObjectType;
     id: string;
     key: string;
+    verification: Promise<string>;
     iv?: Uint8Array;
     salt?: Uint8Array;
-    verification: Promise<string>;
 }
 /**
  * Storage API
