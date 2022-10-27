@@ -2058,8 +2058,9 @@ class StorageApi {
                                 reject(`fetchData() error: ${j.error}`);
                         }
                         catch (e) {
-                            console.log(`did NOT see an error (error: ${e})`);
-                            console.log(payload);
+                            console.info('fetchData() received payload');
+                            // console.log(`did NOT see an error (error: ${e})`)
+                            // console.log(payload)
                         }
                         finally {
                             // const extractedData = extractPayload(payload)

@@ -11,7 +11,9 @@ const test_list = [
   /* SB API */
   /* 'test04c', 'test04a','test04b', */
 
-  'test04d', 'test04',
+  // 'test04d', 'test04',
+  // 'test05a',
+  'test05b'
 
   /* voprf test, not standard
      plus: need to uncomment the import far below on voprf
@@ -247,7 +249,7 @@ const sb_config_matt = {
   storage_server: 'https://s.somethingstuff.workers.dev/'
 }
 
-if (true) {
+if (false) {
   // create server object (assumes miniflare test setup):
   const SB = new Snackabra({
     channel_server: 'http://localhost:4001', // asynchronous API
@@ -265,14 +267,13 @@ if (true) {
     ).then((c) => c.ready).then((c) => {
       c.userName = "TestBot"; // optional
       // say hello to everybody! upon success it will return "success"
-      (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`sent! (${c})`) })
+      (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`test message sent! (${c})`) })
     })
   })
 }
 
-if (true) {
+if (false) {
   console.log(`testing against servers: ${sb_config_matt}`)
-  // create server object (assumes miniflare test setup):
   const SB = new Snackabra(sb_config_matt)
   // we need a channel name since that's our source of storage 'budget'
   SB.create('password').then((channelHandle) => {
@@ -290,6 +291,105 @@ if (true) {
         }
       })
     })
+  })
+}
+
+// test performance of 4KB blocks
+if (test_list.includes('test05a')) {
+  const blockCount: number = 14
+  console.log(`testing storing ${14}x4KB blocks against servers:`)
+  console.log(sb_config_matt)
+  const SB = new Snackabra(sb_config_matt)
+  // we need a channel name since that's our source of storage 'budget'
+  SB.create('password').then((c) => {
+    let t0 = Date.now()
+    console.log('starting timer. SB object ready.')
+    // now we generate a bunch of random 4KB blocks
+    let blockSet: Array<Uint8Array> = []
+    // this in fact equates to 4KB writes in current design ... don't worry about that for now
+    for (let i=0; i<blockCount; i++) blockSet.push(getRandomValues(new Uint8Array(2 * 1024)))
+    console.log(`[${Date.now() - t0}] random blocks generated, start writing them to storage:`)
+    let handlePromiseSet: Array<Promise<SBObjectHandle>> = []
+    for (let i=0; i<blockCount; i++) handlePromiseSet.push(SB.storage.storeObject(blockSet[i], 'p', c.channelId))
+    console.log(`[${Date.now() - t0}] everything has been fired off:`)
+    console.log(handlePromiseSet)
+    console.log(`[${Date.now() - t0}] now we send them to be stored:`)
+    Promise.all(handlePromiseSet).then((handleSet) => {
+      console.log(`[${Date.now() - t0}] we got all handles (they're all allocated)`)
+      console.log(handleSet)
+      console.log(`[${Date.now() - t0}] we'll now 'peek' into the process and first wait for all verifications:`)
+      let verificationPromiseSet: Array<Promise<string>> = []
+      handleSet.forEach(s => verificationPromiseSet.push(Object.assign({}, s.verification)))
+      console.log(verificationPromiseSet)
+      Promise.all(verificationPromiseSet).then((verificationSet) => {
+        console.log(`[${Date.now() - t0}] we got all of them so they've all been written:`)
+        console.log(verificationSet)
+        let fetchPromiseSet: Array<Promise<ArrayBuffer>> = []
+        for (let i = 0; i < blockCount; i++) fetchPromiseSet.push(SB.storage.fetchData(handleSet[i]))
+        console.log(`[${Date.now() - t0}] that's started, we got the promises up and running:`)
+        console.log(fetchPromiseSet)
+        console.log(`[${Date.now() - t0}] now we wait for ALL of them to come back:`)
+        Promise.all(fetchPromiseSet).then((returnedBlockSet) => {
+          console.log(`[${Date.now() - t0}] they should all be back, let's check contents:`)
+          for (let i = 0; i < blockCount; i++) if (!compareBuffers(blockSet[i], returnedBlockSet[i])) console.error(`ugh - buffer ${i} did not come back the same`)
+          console.log(`[${Date.now() - t0}] if there were no errors, everything worked!`)
+          console.log(`[${Date.now() - t0}] now let's try reading everything a second time:`)
+          let t1 = Date.now()
+          let fetchPromiseSet2: Array<Promise<ArrayBuffer>> = []
+          for (let i = 0; i < blockCount; i++) fetchPromiseSet2.push(SB.storage.fetchData(handleSet[i]))
+          console.log(`[${Date.now() - t0}] that's started, we got the promises up and running:`)
+          console.log(fetchPromiseSet2)
+          console.log(`[${Date.now() - t0}] now we wait for ALL of them to come back:`)
+          Promise.all(fetchPromiseSet2).then((returnedBlockSet2) => {
+            console.log(`[${Date.now() - t0}] they should all be back (delta time ${Date.now() - t1}), let's check contents:`)
+            for (let i = 0; i < blockCount; i++) if (!compareBuffers(blockSet[i], returnedBlockSet2[i])) console.error(`ugh - buffer ${i} did not come back the same`)
+            console.log(`[${Date.now() - t0}] if there were no errors, everything worked again!`)
+          })
+        })
+      })
+    })
+  })
+}
+
+async function testBlockWrites(j: number, SB: Snackabra, c: SBChannelHandle, blockCount: number) {
+  let t0 = Date.now()
+  console.log(`[${j}] testBlockWrites() starting with ${blockCount} blocks`)
+  // now we generate a bunch of random 4KB blocks
+  let blockSet: Array<Uint8Array> = []
+  // this in fact equates to 4KB writes in current design ... don't worry about that for now
+  for (let i=0; i<blockCount; i++) blockSet.push(getRandomValues(new Uint8Array(63 * 1024)))
+  console.log(`[${j}][${Date.now() - t0}] random blocks generated, start writing them to storage:`)
+  let handlePromiseSet: Array<Promise<SBObjectHandle>> = []
+  for (let i=0; i<blockCount; i++) {
+    let myHandle = new Promise<SBObjectHandle>((resolve) => {
+      let t1 = Date.now()
+      SB.storage.storeObject(blockSet[i], 'p', c.channelId).then((blobHandle) => {
+        console.log(`[${j}][${Date.now() - t0}] got handle for object ${i}`)
+        blobHandle.verification.then((ver) => {
+          console.log(`[${j}][${Date.now()-t0}] got verification for object ${i} (${ver}) total time to write ${Date.now()-t1}`)
+          resolve(blobHandle)
+        })
+      })
+    })
+    handlePromiseSet.push(myHandle)
+  }
+  console.log(`[${j}][${Date.now() - t0}] we got the tasks set up, they should be referenced here:`)
+  console.log(handlePromiseSet)
+  Promise.all(handlePromiseSet).then((v) => {
+    console.log(`[${j}][${Date.now() - t0}] and now they should all be completed:`)
+    console.log(v)
+  })      
+}
+
+if (test_list.includes('test05b')) {
+  const blockCount: number = 14
+  const totalTestCount: number = 4
+  console.log(`testing storing ${blockCount}x46KB blocks INDIVIDUALLY against servers (${totalTestCount} times):`)
+  console.log(sb_config_matt)
+  const SB = new Snackabra(sb_config_matt)
+  SB.create('password').then((c) => {
+    console.log('starting timer(s). SB object ready.')
+    for (let j=0; j<totalTestCount; j++) testBlockWrites(j, SB, c, blockCount)
   })
 }
 
