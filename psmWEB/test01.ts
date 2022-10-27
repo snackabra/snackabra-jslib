@@ -41,7 +41,6 @@ function assert(expr: any, msg: string = ''): boolean {
 
 // import {jest} from '@jest/globals';
 import {
-  SB_libraryVersion,
   ab2str,
   str2ab,
   base64ToArrayBuffer,
@@ -57,6 +56,7 @@ import {
   ChannelMessage,
   SBObjectHandle,
   SBChannelHandle,
+  compareBuffers
 } from './snackabra.js';
 
 
@@ -75,7 +75,7 @@ function getElement(s: string): HTMLElement {
 }
 
 const z = getElement('testResults')
-z.innerHTML += 'Checking version of library: ' + SB_libraryVersion() + '\n';
+z.innerHTML += 'Not checking library ... starting tests \n ';
 
 // easy tests
 const z1 = [
@@ -94,23 +94,6 @@ const z2 = [
 ];
 
 
-// TODO: we should probably have an SB class for buffers
-
-const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
-  ? new DataView(bs)
-  : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
-
-// compare buffers
-function compareBuffers(a: Uint8Array | ArrayBuffer | null,
-  b: Uint8Array | ArrayBuffer | null): boolean {
-  if (typeof a != typeof b) return false
-  if ((a == null) || (b == null)) return false
-  const av = bs2dv(a)
-  const bv = bs2dv(b)
-  if (av.byteLength !== bv.byteLength) return false
-  for (let i = 0; i < av.byteLength; i++)  if (av.getUint8(i) !== bv.getUint8(i)) return false
-  return true
-}
 
 // // TRUE if the same, false otherwise (we assume they're uint8)
 // function compare_uint8(a: ArrayBuffer, b: ArrayBuffer) {
@@ -257,6 +240,13 @@ const sb_config = {
   storage_server: 'http://localhost:4000'
 }
 
+// snackabra.pages.dev
+const sb_config_matt = {
+  channel_server: 'https://r.somethingstuff.workers.dev/',
+  channel_ws: 'wss://r.somethingstuff.workers.dev/',
+  storage_server: 'https://s.somethingstuff.workers.dev/'
+}
+
 if (true) {
   // create server object (assumes miniflare test setup):
   const SB = new Snackabra({
@@ -281,6 +271,29 @@ if (true) {
 }
 
 if (true) {
+  console.log(`testing against servers: ${sb_config_matt}`)
+  // create server object (assumes miniflare test setup):
+  const SB = new Snackabra(sb_config_matt)
+  // we need a channel name since that's our source of storage 'budget'
+  SB.create('password').then((channelHandle) => {
+    // generate a random 1MB block:
+    let testBlob = getRandomValues(new Uint8Array(1 * 1024 * 1024))
+    // now let's store it:
+    SB.storage.storeObject(testBlob, 'p', channelHandle.channelId).then((blobHandle) => {
+      // returns a handle containing everything we need for future access, let's test that:
+      console.log(blobHandle)
+      SB.storage.fetchData(blobHandle).then((d) => {
+        if (compareBuffers(testBlob, d)) {
+          console.log('Yupp we got same data back! Sweet.')
+        } else {
+          console.log('... wow can there be a bug in SB?  did not get the same data back')
+        }
+      })
+    })
+  })
+}
+
+if (false) {
   // create server object (assumes miniflare test setup):
   const SB = new Snackabra({
     channel_server: 'http://localhost:4001', // asynchronous API
@@ -288,33 +301,63 @@ if (true) {
     storage_server: 'http://localhost:4000' // default storage server
   })
   // create a new channel (room), returns (owner) key and channel name:
-  SB.create('password').then((handle) => {
+  SB.create('password').then((channelHandle) => {
     // we shouldn't need anything else to store stuff
-    const img = getElement('original-snackabra-img')
-    console.log("fetching this image:")
-    // @ts-ignore
-    console.log(img.src)
-    // @ts-ignore
-    fetch(img.src)
-      .then((res) => res.arrayBuffer())
-      .then((myBuf) => {
-        console.log('will try to send this buffer:')
-        console.log(myBuf)
-        SB.storage.storeObject(myBuf, 'b', handle.channelId).then((r) => {
-          console.log('got response from storeObject():')
-          console.log(r)
-          r.verification.then((v) => {
-            console.log('got verification:')
-            console.log(v)
-            console.log('will now try to fetch same object')
-            SB.storage.fetchData(r.id, v).then((d) => {
-              console.log('got this back:')
-              console.log(d)
-            })
-          })
-        })
-      })
-  })
+
+    // .. changing not to fetch an image but send a random blob
+    // const img = getElement('original-snackabra-img')
+    // console.log("fetching this image:")
+    // // @ts-ignore
+    // console.log(img.src)
+    // // @ts-ignore
+    // fetch(img.src)
+    //   .then((res) => res.arrayBuffer())
+    //   .then((myBuf) => {
+
+    let myBuf = new Uint8Array(3 * 1024 * 1024) // test making it bigger
+    getRandomValues(myBuf)
+
+    console.log('will try to send this buffer:')
+    console.log(myBuf)
+    SB.storage.storeObject(myBuf, 'b', channelHandle.channelId).then((blobHandle) => {
+      console.log('got response from storeObject():')
+      console.log(blobHandle)
+      console.log('________________ here is the nonce i see ... ')
+      console.log(blobHandle.iv)
+      console.log('will now try to fetch same object')
+      SB.storage.fetchData(blobHandle).then((d) => {
+        console.log('got this back:')
+        console.log(d)
+        if (compareBuffers(myBuf, d)) {
+          console.log('Got the same data back!')
+        } else {
+          console.log('============ DID NOT get the same data back ==========')
+          console.log(`sent:     ${arrayBufferToBase64(myBuf.slice(0, 48))}...`)
+          console.log(`received: ${arrayBufferToBase64(d.slice(0, 48))}...`)
+        }
+      }).catch((x) => console.log(`*********** Failed to fetch object: ${x}`))
+
+      // r.verification.then((v) => {
+      //   console.log('got verification:')
+      //   console.log(v)
+      //   console.log('will now try to fetch same object')
+      //   SB.storage.fetchData(r.id, v, 'b').then((d) => {
+      //     console.log('got this back:')
+      //     console.log(d)
+      //     if (compareBuffers(myBuf, d)) {
+      //       console.log('Got the same data back!')
+      //     } else {
+      //       console.log('============ DID NOT get the same data back ==========')
+      //       console.log(`sent:     ${arrayBufferToBase64(myBuf.slice(0,32))}...`)
+      //       console.log(`received: ${arrayBufferToBase64(d.slice(0,32))}...`)
+      //     }
+      //   }).catch((x) => console.log(`*********** Failed to fetch object: ${x}`))
+      // })
+
+    })
+  })/* .catch((e) => {
+    console.error(`got error trying to test storage: ${e}`)
+  })*/
 }
 
 

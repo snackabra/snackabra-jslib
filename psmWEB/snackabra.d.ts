@@ -99,12 +99,11 @@ interface ChannelKeys {
     SB standard wrapping encrypted messages.
 
     Encryption is done with AES-GCM, 16 bytes of salt (iv), The
-    ``contents`` are base64 and made web/net safe by running through
-    encodeURIComponent. Same thing with the nonce (iv).
+    ``contents`` are url-safe base64, same thing with the nonce (iv).
  */
 export interface EncryptedContents {
-    content: string;
-    iv: string;
+    content: string | ArrayBuffer;
+    iv: Uint8Array;
 }
 interface ChannelEncryptedMessage {
     type: 'channelMessage';
@@ -127,7 +126,6 @@ interface ChannelMessage1 {
     };
 }
 export declare type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage;
-export declare function SB_libraryVersion(): string;
 /**
  * SB simple events (mesage bus) class
  */
@@ -177,9 +175,8 @@ export declare function str2ab(string: string): Uint8Array;
  * Standardized 'ab2str()' function, array buffer to string.
  * This assumes one byte per character.
  *
- * @return {Uint8Array} Uint8Array
- *
- * @param buffer
+ * @param {Uint8Array} buffer
+ * @return {string} string
  */
 export declare function ab2str(buffer: Uint8Array): string;
 /**
@@ -192,6 +189,10 @@ export declare function ab2str(buffer: Uint8Array): string;
  * @return {Uint8Array} returns decoded binary result
  */
 export declare function base64ToArrayBuffer(str: string): Uint8Array;
+/**
+ * Compare buffers
+ */
+export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Uint8Array | ArrayBuffer | null): boolean;
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short
@@ -350,8 +351,8 @@ declare class SBCrypto {
      * that resolves either to raw array buffer or a packaged EncryptedContents.
      * Note that for the former, nonce must be given.
      */
-    encrypt(data: BufferSource, key: CryptoKey, _iv?: ArrayBuffer | null, returnType?: 'encryptedContents'): Promise<EncryptedContents>;
-    encrypt(data: BufferSource, key: CryptoKey, _iv?: ArrayBuffer | null, returnType?: 'arrayBuffer'): Promise<ArrayBuffer>;
+    encrypt(data: BufferSource, key: CryptoKey, _iv?: Uint8Array | null, returnType?: 'encryptedContents'): Promise<EncryptedContents>;
+    encrypt(data: BufferSource, key: CryptoKey, _iv?: Uint8Array | null, returnType?: 'arrayBuffer'): Promise<ArrayBuffer>;
     wrap(k: CryptoKey, b: string, bodyType: 'string'): Promise<EncryptedContents>;
     wrap(k: CryptoKey, b: ArrayBuffer, bodyType: 'arrayBuffer'): Promise<EncryptedContents>;
     /**
@@ -374,11 +375,12 @@ declare class SBCrypto {
      */
     verify(secretKey: CryptoKey, sign: string, contents: string): Promise<unknown>;
     /**
-     * SBCrypto.areKeysSame()
+     * SBCrypto.compareKeys()
      *
-     * Compare keys. (TODO: deprecate/ change)
+     * Compare keys, true if the 'same', false if different.
+     * TODO: type it up.
      */
-    areKeysSame(key1: Dictionary, key2: Dictionary): boolean;
+    compareKeys(key1: Dictionary, key2: Dictionary): boolean;
 }
 /**
  * SB384 - basic (core) capability object in SB
@@ -508,14 +510,15 @@ declare class ChannelSocket extends Channel {
     send(msg: SBMessage | string): Promise<string>;
 }
 export declare type SBObjectType = 'f' | 'p' | 'b';
-export interface SBObjectHandleV1 {
+export interface SBObjectHandle {
     version: '1';
     type: SBObjectType;
     id: string;
     key: string;
+    iv?: Uint8Array;
+    salt?: Uint8Array;
     verification: Promise<string>;
 }
-export declare type SBObjectHandle = SBObjectHandleV1;
 /**
  * Storage API
  * @class
@@ -527,6 +530,13 @@ declare class StorageApi {
     server: string;
     channelServer: string;
     constructor(server: string, channelServer: string);
+    /**
+     *
+     * @param buf
+     * @param type
+     * @param roomId
+     * @returns
+     */
     storeObject(buf: ArrayBuffer, type: 'f' | 'p' | 'b', roomId: string): Promise<SBObjectHandle>;
     /**
      * StorageApi.saveFile()
@@ -539,15 +549,20 @@ declare class StorageApi {
     /**
      * StorageApi().storeData()
      */
-    storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: ArrayBuffer): Promise<Dictionary>;
+    storeData(type: string, fileId: string, iv: Uint8Array, salt: Uint8Array, storageToken: string, data: ArrayBuffer): Promise<Dictionary>;
     /**
      * StorageApi().storeImage()
      */
     storeImage(image: string | ArrayBuffer, image_id: string, keyData: string, type: string): void;
     /**
      * StorageApi().fetchData()
+     *
+     * This assumes you have a complete SBObjectHandle. Note that
+     * if you only have the 'id' and 'verification fields, you
+     * can reconstruct / request the rest. The current interface
+     * will return both nonce, salt, and encrypted data.
      */
-    fetchData(msgId: string, verificationToken: string | undefined): Promise<ArrayBuffer>;
+    fetchData(h: SBObjectHandle): Promise<ArrayBuffer>;
     /**
      * StorageApi().retrieveData()
      * retrieves an object from storage

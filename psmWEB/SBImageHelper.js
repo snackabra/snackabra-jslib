@@ -608,27 +608,25 @@ export class SBImage {
     // });
   }
 
-
-  async #asImage(image: File, signKey: CryptoKey) {
-    // TODO: the getfile/restrict should be done by SBImage etc, other stuff is SB messaging
-    // throw new Error(`#asImage() needs carryover from SBImage etc (${image}, ${signKey})`)
-
-    this.data.previewImage = this.#padImage(await(await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
-    const previewHash: Dictionary = await this.#generateImageHash(this.data.previewImage);
-    this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await(await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
-    const fullHash: Dictionary = await this.#generateImageHash(this.data.fullImage);
-    this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
-    this.image_sign = await sbCrypto.sign(signKey, this.image);
-    this.imageMetaData = JSON.stringify({
-      imageId: fullHash.id,
-      previewId: previewHash.id,
-      imageKey: fullHash.key,
-      previewKey: previewHash.key
-    });
-    this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
-  }
-
 // TODO: typescript snippets, probably to be replaced by other code in this file
+//   async #asImage(image: File, signKey: CryptoKey) {
+//     // TODO: the getfile/restrict should be done by SBImage etc, other stuff is SB messaging
+//     // throw new Error(`#asImage() needs carryover from SBImage etc (${image}, ${signKey})`)
+
+//     this.data.previewImage = this.#padImage(await(await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
+//     const previewHash: Dictionary = await this.#generateImageHash(this.data.previewImage);
+//     this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await(await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
+//     const fullHash: Dictionary = await this.#generateImageHash(this.data.fullImage);
+//     this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
+//     this.image_sign = await sbCrypto.sign(signKey, this.image);
+//     this.imageMetaData = JSON.stringify({
+//       imageId: fullHash.id,
+//       previewId: previewHash.id,
+//       imageKey: fullHash.key,
+//       previewKey: previewHash.key
+//     });
+//     this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
+//   }
 //   #padImage(image_buffer: ArrayBuffer) {
 //     let _sizes: Array<number> = [128, 256, 512, 1024, 2048, 4096]; // in KB
 //     _sizes = _sizes.map((size) => size * 1024);
