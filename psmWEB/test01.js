@@ -7,8 +7,8 @@ const test_list = [
     /* SB API */
     /* 'test04c', 'test04a','test04b', */
     // 'test04d', 'test04',
-    // 'test05a',
-    'test05b'
+    'test05a',
+    // 'test05b'
     /* voprf test, not standard
        plus: need to uncomment the import far below on voprf
        (we will be removing this since snackabra-jslib is constrained to standardized web API */
@@ -250,7 +250,7 @@ if (false) {
 // test performance of 4KB blocks
 if (test_list.includes('test05a')) {
     const blockCount = 14;
-    console.log(`testing storing ${14}x4KB blocks against servers:`);
+    console.log(`testing storing ${blockCount}x64KB blocks against servers:`);
     console.log(sb_config_matt);
     const SB = new Snackabra(sb_config_matt);
     // we need a channel name since that's our source of storage 'budget'
@@ -259,9 +259,9 @@ if (test_list.includes('test05a')) {
         console.log('starting timer. SB object ready.');
         // now we generate a bunch of random 4KB blocks
         let blockSet = [];
-        // this in fact equates to 4KB writes in current design ... don't worry about that for now
+        // this in fact equates to 64KB writes in current design ... don't worry about that for now
         for (let i = 0; i < blockCount; i++)
-            blockSet.push(getRandomValues(new Uint8Array(2 * 1024)));
+            blockSet.push(getRandomValues(new Uint8Array(63 * 1024)));
         console.log(`[${Date.now() - t0}] random blocks generated, start writing them to storage:`);
         let handlePromiseSet = [];
         for (let i = 0; i < blockCount; i++)
@@ -291,7 +291,7 @@ if (test_list.includes('test05a')) {
                         if (!compareBuffers(blockSet[i], returnedBlockSet[i]))
                             console.error(`ugh - buffer ${i} did not come back the same`);
                     console.log(`[${Date.now() - t0}] if there were no errors, everything worked!`);
-                    console.log(`[${Date.now() - t0}] now let's try reading everything a second time:`);
+                    console.log(`[${Date.now() - t0}] now let's try reading everything a SECOND time:`);
                     let t1 = Date.now();
                     let fetchPromiseSet2 = [];
                     for (let i = 0; i < blockCount; i++)
