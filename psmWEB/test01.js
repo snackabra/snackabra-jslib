@@ -7,6 +7,7 @@ const test_list = [
     /* SB API */
     /* 'test04c', 'test04a','test04b', */
     // 'test04d', 'test04',
+    // note: for now do these one at a time, otherwise they overlap
     'test05a',
     // 'test05b'
     /* voprf test, not standard
