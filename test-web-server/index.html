@@ -1,14 +1,14 @@
 <!DOCTYPE HTML>
 <html lang="en">
 <head>
-    <meta http-equiv="content-type" content="text/html;charset=utf-8">
+    <meta charset="utf-8">
     <title>Testing Snackabra Cryptolibrary</title>
     <meta name="viewport" content="width=device-width,height=device-height,initial-scale=1.0" />
 </head>
 <body>
 
 <p>Note: if you want to test SB functions at the console command line, try:<br /><br />
-    <tt> let sb = await import('./browser.mjs');</tt><br />
+    <tt> let sb = await import('./snackabra.js');</tt><br />
     <tt> sb.SB_libraryVersion();</tt><br />
 </p>
 
@@ -39,21 +39,29 @@
 
 <p id="test03">Testing MessageBus class:<br /><br /></p>
 
-<h2>Create Channel ('test04c' set)</h2>
+<h2>Create Channel ('test04d' set)</h2>
 
-<p id="test04c"><br /><br /></p>
+<p id="test04d"><br /><br /></p>
 
+<h2>Create Channel ('test04a' set)</h2>
+
+<p id="test04a"><br /><br /></p>
 
 <h2>Channel Tests ('test04' set)</h2>
 
 <p id="test04">Testing Channel class:<br /><br /></p>
 
 <p>The left is starting point, the right is via the storage server:</p>
-<img id="original-snackabra-img" width="200" src="https://snackabra.io/_images/snackabra.svg">
+<img id="original-snackabra-img" width="200" src="https://snackabra.io/_images/snackabra.svg" alt="alt text">
 &nbsp;
 &nbsp;
-<img id="new-snackabra-img" width="200">
+<img id="new-snackabra-img" width="200" alt="alt text">
 
+
+<p>Click to send multiple messages</p>
+
+<button id="sayHello">Send a message!</button>
+<p></p>
 
 <script type="module" src="./test01.js"></script>
 

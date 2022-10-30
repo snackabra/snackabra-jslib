@@ -66,7 +66,7 @@ import {
   SBChannelHandle,
   SBServer,
   compareBuffers
-} from './snackabra.js';
+} from '../src/snackabra.js'
 
 
 

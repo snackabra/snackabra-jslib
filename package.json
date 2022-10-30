@@ -1,0 +1,43 @@
+{
+    "name": "snackabra",
+    "version": "0.5.b2",
+    "description": "Snackabra Core Libraries",
+    "type": "module",
+    "main": "index.mjs",
+    "scripts": {
+        "prepare": "tsc && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
+        "pretest": "tsc && rollup -c > index.mjs",
+        "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/snackabra/snackabra-jslib.git"
+    },
+    "keywords": [
+        "snackabra",
+        "chat",
+        "messaging",
+        "photo",
+        "file",
+        "share"
+    ],
+    "author": "Magnusson Institute and 384co",
+    "license": "GPL-3.0-only",
+    "bugs": {
+        "url": "https://github.com/snackabra/snackabra-jslib/issues"
+    },
+    "homepage": "https://snackabra.io",
+    "browser": {
+        "./index.mjs": "./browser.mjs"
+    },
+    "files": [
+        "index.mjs",
+        "browser.mjs"
+    ],
+    "sideEffects": false,
+    "devDependencies": {
+        "@rollup/plugin-replace": "^5.0.1",
+        "@rollup/plugin-terser": "^0.1.0",
+        "rollup": "^3.2.3"
+    }
+}

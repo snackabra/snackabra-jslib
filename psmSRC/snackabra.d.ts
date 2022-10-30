@@ -1,1 +1,0 @@
-../psmWEB/snackabra.d.ts
