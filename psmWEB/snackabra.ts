@@ -1493,7 +1493,7 @@ export class SBFile extends SBMessage {
  */
 abstract class Channel extends SB384 {
   ready: Promise<Channel>
-  channelReady: Promise<Channel>
+  channelReady: Promise<Channel> // can't figure out how to do super.ready.then() from children
   #readyFlag: boolean = false
 
   #sbServer: Snackabra

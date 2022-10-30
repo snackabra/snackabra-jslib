@@ -1209,7 +1209,7 @@ export class SBFile extends SBMessage {
  */
 class Channel extends SB384 {
     ready;
-    channelReady;
+    channelReady; // can't figure out how to do super.ready.then() from children
     #readyFlag = false;
     #sbServer;
     motd = '';

@@ -205,6 +205,44 @@ if (test_list.includes('test03')) {
     }
     z.innerHTML += '... MessageBus tests done ...<br\>';
 }
+let target = "n4vK8r";
+let best = "";
+function LCP(strs) {
+    if (strs.length === 0) {
+        return '';
+    }
+    return strs.reduce((p, n) => {
+        let i = 0;
+        while (p[i] && n[i] && p[i] === n[i])
+            i++;
+        return p.slice(0, i);
+    });
+}
+console.log(LCP(["abc", "abcdef"]));
+if (true) {
+    let i = 0;
+    let j = 2;
+    let t0 = Date.now();
+    while (i < 10000000) {
+        let k = await crypto.subtle.generateKey({
+            name: 'ECDH',
+            namedCurve: 'P-384'
+        }, true, ['deriveKey']);
+        // let p = await crypto.subtle.exportKey('jwk', k.publicKey)
+        i++;
+        if (i % j == 0) {
+            console.log(`${i} keys generated`);
+            j *= 2;
+            // console.log(Date.now() - t0)
+            console.log(`keys per second: ${(i) / ((Date.now() - t0) / 1000)}`);
+        }
+        // let z = LCP([target, p.x!])
+        // if (z.length > best.length) {
+        //   best = z
+        //   console.log(`new best: ${best} in ${(Date.now() - t0)/1000} seconds} (${p.x!})`)
+        // }
+    }
+}
 /* ******************************** *
     New 0.5.0 'snackabra.ts' tests!
  * ******************************** */
