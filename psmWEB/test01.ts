@@ -284,17 +284,18 @@ if (test_list.includes('test06a')) {
 if (test_list.includes('test06b')) {
   const channelId = "W4LAos8qfbWrDXrTPqW55ygyrZ3Nw7LzWppl3SoTqHn-JloV_tcK8vx1klJPII4U"
   const SB = new Snackabra()
-  console.log(`you can (probably) connect here: localhost:3000/rooms/${channelId}`)
-  SB.connect(
-    (m: ChannelMessage) => { console.log(`got message: ${m}`) },
-    undefined,
-    channelId
-  ).then((c) => c.ready).then((c) => {
-    console.log(`Connected, we found channel on server ${c.sbServer.channel_server}`)
-    c.userName = "TestBot";
-    (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`test message sent! (${c})`) })
-  })
+  SB.connect((m: ChannelMessage) => { console.log(`got message: ${m}`) }, undefined /* anonymous */, channelId)
+    .then((c) => c.ready).then((c) => {
+      console.log(`connected here: ${c.sbServer.channel_server}/rooms/${channelId}`)
+      c.userName = "TestBot";
+      (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`test message sent! (${c})`) })
+    })
+    .catch((e) => {
+      if (e instanceof AggregateError) console.log("Could not find any server with that room")
+      else console.log(`Failed to find a server, unknown problem: ${e}`)
+    })
 }
+
 
 if (false) {
   const sbServer = sb_config_matt
