@@ -3225,8 +3225,9 @@ class Snackabra {
 
   /**
    * Constructor expects an object with the names of the matching servers, for example
-   * (below shows the miniflare local dev config). Note that 'new Snackabra()' is
-   * guaranteed synchronous, so can be 'used' right away.
+   * below shows the miniflare local dev config. Note that 'new Snackabra()' is
+   * guaranteed synchronous, so can be 'used' right away. You can optionally call
+   * without a parameter in which case SB will ping known servers.
    *
    *
    * ::
@@ -3237,7 +3238,7 @@ class Snackabra {
    *       storage_server: 'http://127.0.0.1:4000'
    *     }
    *
-   * @param args {SnackabraOptions} interface
+   * @param args {SBServer} server names (optional)
    * 
    * 
    */
@@ -3269,7 +3270,9 @@ class Snackabra {
    * Snackabra.connect()
    * 
    * Connects to :term:`Channel Name` on this SB config.
-   * Returns a (promise to the) channel (socket) object
+   * Returns a (promise to the) channel (socket) object.
+   * It will throw an ``AggregateError`` if it fails
+   * to find the room anywhere.
    *
    */
   connect(onMessage: CallableFunction, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
