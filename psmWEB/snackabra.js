@@ -6,6 +6,11 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
+/**
+ * List of known servers. Nota bene: known does not mean *trusted*;
+ * currently this will be mostly development servers. Please let us
+ * know if there are global servers you would like us to add.
+ */
 const SBKnownServers = [
     {
         channel_server: 'http://localhost:4001',
@@ -17,6 +22,11 @@ const SBKnownServers = [
         channel_ws: 'wss://r.somethingstuff.workers.dev/',
         storage_server: 'https://s.somethingstuff.workers.dev/'
     },
+    {
+        channel_server: 'https://r.384co.workers.dev/',
+        channel_ws: 'wss://r.384co.workers.dev/',
+        storage_server: 'https://s.384co.workers.dev//'
+    }
 ];
 //#region - not so core stuff
 /******************************************************************************************************/
@@ -164,7 +174,6 @@ export function getRandomValues(buffer) {
         return buffer;
     }
 }
-
 // for later use - message ID formats
 const messageIdRegex = /([A-Za-z0-9+/_\-=]{64})([01]{42})/;
 // Strict b64 check:
@@ -1398,6 +1407,7 @@ class ChannelSocket extends Channel {
     // #channelId: string
     #ws;
     #keys;
+    #sbServer;
     adminData; // TODO: add getter
     // #queue: Array<SBMessage> = [];
     #onMessage; // the user message handler
@@ -1410,6 +1420,7 @@ class ChannelSocket extends Channel {
         super(sbServer, key, channelId /*, identity ? identity : new Identity() */); // initialize 'channel' parent       
         const url = sbServer.channel_ws + '/api/room/' + channelId + '/websocket';
         this.#onMessage = onMessage;
+        this.#sbServer = sbServer;
         this.#ws = {
             url: url,
             websocket: new WebSocket(url),
@@ -1645,10 +1656,13 @@ class ChannelSocket extends Channel {
                 this.#ws.websocket.addEventListener('close', (e) => {
                     this.#ws.closed = true;
                     if (!e.wasClean) {
-                        console.log('ChannelSocket() was closed (and NOT cleanly): ', e.reason);
+                        console.log(`ChannelSocket() was closed (and NOT cleanly: ${e.reason} from ${this.#sbServer.channel_server}`);
                     }
                     else {
-                        console.log('ChannelSocket() was closed (cleanly): ', e.reason);
+                        if (e.reason.includes("does not have an owner"))
+                            reject(`No such channel on this server (${this.#sbServer.channel_server})`);
+                        else
+                            console.log('ChannelSocket() was closed (cleanly): ', e.reason);
                     }
                     reject('wbSocket() closed before it was opened (?)');
                 });
@@ -2720,9 +2734,15 @@ class Snackabra {
      */
     connect(onMessage, key, channelId /*, identity?: SB384 */) {
         // if there's a 'preferred' (only) server then we we can return a promise right away
+        // return new Promise<ChannelSocket>((resolve, reject) =>
+        //   Promise.any(this.#preferredServer
+        //     ? [new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)]
+        //     : SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready))
+        //     .then((c) => resolve(c))
+        //     .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
         return this.#preferredServer
             ? new Promise((resolve) => resolve(new ChannelSocket(this.#preferredServer, onMessage, key, channelId)))
-            : Promise.race(SBKnownServers.map((s) => new ChannelSocket(s, onMessage, key, channelId)));
+            : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready));
     }
     /**
      * Snackabra.create()

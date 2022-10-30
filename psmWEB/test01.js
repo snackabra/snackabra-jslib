@@ -7,8 +7,9 @@ const test_list = [
     /* SB API */
     /* 'test04c', 'test04a','test04b', */
     // 'test04',
+    // 'test04d', // connect and activate button
     // 'test06a', // minimalist connect to SB and send a message
-    'test04d', // connect and activate button
+    'test06b', // connecting to known channel
     // for now only do one or the other of the following (or they overlap)
     // 'test05a',
     // 'test05b',
@@ -228,6 +229,16 @@ if (test_list.includes('test06a')) {
             // say hello to everybody! upon success it will return "success"
             (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`test message sent! (${c})`); });
         });
+    });
+}
+if (test_list.includes('test06b')) {
+    const channelId = "W4LAos8qfbWrDXrTPqW55ygyrZ3Nw7LzWppl3SoTqHn-JloV_tcK8vx1klJPII4U";
+    const SB = new Snackabra();
+    console.log(`you can (probably) connect here: localhost:3000/rooms/${channelId}`);
+    SB.connect((m) => { console.log(`got message: ${m}`); }, undefined, channelId).then((c) => c.ready).then((c) => {
+        console.log(`Connected, we found channel on server ${c.sbServer.channel_server}`);
+        c.userName = "TestBot";
+        (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`test message sent! (${c})`); });
     });
 }
 if (false) {

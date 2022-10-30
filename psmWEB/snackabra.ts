@@ -58,6 +58,11 @@ export interface SBServer {
   storage_server: string,
 }
 
+/**
+ * List of known servers. Nota bene: known does not mean *trusted*;
+ * currently this will be mostly development servers. Please let us
+ * know if there are global servers you would like us to add.
+ */
 const SBKnownServers: Array<SBServer> = [
   {
     channel_server: 'http://localhost:4001',
@@ -69,6 +74,11 @@ const SBKnownServers: Array<SBServer> = [
     channel_ws: 'wss://r.somethingstuff.workers.dev/',
     storage_server: 'https://s.somethingstuff.workers.dev/'
   },
+  {
+    channel_server: 'https://r.384co.workers.dev/',
+    channel_ws: 'wss://r.384co.workers.dev/',
+    storage_server: 'https://s.384co.workers.dev//'
+  }
 ]
 
 interface IndexedKVOptions {
@@ -1749,6 +1759,7 @@ class ChannelSocket extends Channel {
   // #channelId: string
   #ws: WSProtocolOptions
   #keys?: ChannelKeys
+  #sbServer: SBServer
   adminData?: Dictionary // TODO: add getter
   // #queue: Array<SBMessage> = [];
   #onMessage: CallableFunction // the user message handler
@@ -1762,6 +1773,7 @@ class ChannelSocket extends Channel {
     super(sbServer, key, channelId /*, identity ? identity : new Identity() */) // initialize 'channel' parent       
     const url = sbServer.channel_ws + '/api/room/' + channelId + '/websocket'
     this.#onMessage = onMessage
+    this.#sbServer = sbServer
     this.#ws = {
       url: url,
       websocket: new WebSocket(url),
@@ -1991,9 +2003,11 @@ class ChannelSocket extends Channel {
         this.#ws.websocket.addEventListener('close', (e: CloseEvent) => {
           this.#ws.closed = true
           if (!e.wasClean) {
-            console.log('ChannelSocket() was closed (and NOT cleanly): ', e.reason)
+            console.log(`ChannelSocket() was closed (and NOT cleanly: ${e.reason} from ${this.#sbServer.channel_server}`)
           } else {
-            console.log('ChannelSocket() was closed (cleanly): ', e.reason)
+            if (e.reason.includes("does not have an owner"))
+              reject(`No such channel on this server (${this.#sbServer.channel_server})`)
+            else console.log('ChannelSocket() was closed (cleanly): ', e.reason)
           }
           reject('wbSocket() closed before it was opened (?)')
         })
@@ -3260,9 +3274,16 @@ class Snackabra {
    */
   connect(onMessage: CallableFunction, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
     // if there's a 'preferred' (only) server then we we can return a promise right away
+    // return new Promise<ChannelSocket>((resolve, reject) =>
+    //   Promise.any(this.#preferredServer
+    //     ? [new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)]
+    //     : SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready))
+    //     .then((c) => resolve(c))
+    //     .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
+
     return this.#preferredServer
       ? new Promise<ChannelSocket>((resolve) => resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)))
-      : Promise.race(SBKnownServers.map((s) => new ChannelSocket(s, onMessage, key, channelId)))
+      : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready))
   }
 
   /**
