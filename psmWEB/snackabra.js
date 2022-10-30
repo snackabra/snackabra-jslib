@@ -25,7 +25,7 @@ const SBKnownServers = [
     {
         channel_server: 'https://r.384co.workers.dev/',
         channel_ws: 'wss://r.384co.workers.dev/',
-        storage_server: 'https://s.384co.workers.dev//'
+        storage_server: 'https://s.384co.workers.dev/'
     }
 ];
 //#region - not so core stuff
