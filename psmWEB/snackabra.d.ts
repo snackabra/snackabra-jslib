@@ -1,18 +1,19 @@
+/******************************************************************************************************/
 /**
  * Interfaces
  */
 /**
- * SBChanneHandle
+ * SBChannelHandle
  *
  * Complete descriptor of a channel. 'key' is stringified 'jwk' key.
  * The key is always private. If it matches the channelId, then it's
  * an 'owner' key.
  */
-interface SBChannelHandle {
+export interface SBChannelHandle {
     channelId: string;
     key: JsonWebKey;
 }
-interface SnackabraOptions {
+export interface SBServer {
     channel_server: string;
     channel_ws: string;
     storage_server: string;
@@ -62,6 +63,28 @@ interface ChannelAckMessage {
     type: 'ack';
     _id: string;
 }
+/** sample channelKeys contents
+ *
+ * { "ready": true,
+ *    "keys": {
+ *            "ownerKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+ *                        \"x\":\"9s17B4i0Cuf_w9XN_uAq2DFePOr6S3sMFMA95KjLN8akBUWEhPAcuMEMwNUlrrkN\",
+ *                        \"y\":\"6dAtcyMbtsO5ufKvlhxRsvjTmkABGlTYG1BrEjTpwrAgtmn6k25GR7akklz9klBr\"}",
+ *            "guestKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+ *                         \"x\":\"Lx0eJcbNuyEfHDobWaZqgy9UO7ppxVIsEpEtvbzkAlIjySh9lY2AvgnACREO6QXD\",
+ *                         \"y\":\"zEHPgpsl4jge_Q-K6ekuzi2bQOybnaPT1MozCFQJnXEePBX8emkHriOiwl6P8BAS\"}",
+ *            "encryptionKey": "{\"alg\":\"A256GCM\",\"ext\":true,
+ *                             \"k\":\"F0sQTTLXDhuvvmgGQLzMoeHPD-SJlFyhfOD-cqejEOU\",
+ *                             \"key_ops\":[\"encrypt\",\"decrypt\"],\"kty\":\"oct\"}",
+ *            "signKey": "{\"crv\":\"P-384\",
+ *                        \"d\":\"KCJHDZ34XgVFsS9-sU09HFzXZhnGCvnDgJ5a8GTSfjuJQaq-1N2acvchPRhknk8B\",
+ *                        \"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",
+ *                        \"x\":\"rdsyBle0DD1hvp2OE2mINyyI87Cyg7FS3tCQUIeVkfPiNOACtFxi6iP8oeYt-Dge\",
+ *                        \"y\":\"qW9VP72uf9rgUU117G7AfTkCMncJbT5scIaIRwBXfqET6FYcq20fwSP7R911J2_t\"}"
+ *             },
+ * "motd": "",
+ * "roomLocked": false}
+ */
 interface ChannelKeyStrings {
     encryptionKey: string;
     guestKey?: string;
@@ -89,12 +112,11 @@ interface ChannelKeys {
     SB standard wrapping encrypted messages.
 
     Encryption is done with AES-GCM, 16 bytes of salt (iv), The
-    ``contents`` are base64 and made web/net safe by running through
-    encodeURIComponent. Same thing with the nonce (iv).
+    ``contents`` are url-safe base64, same thing with the nonce (iv).
  */
 export interface EncryptedContents {
-    content: string;
-    iv: string;
+    content: string | ArrayBuffer;
+    iv: Uint8Array;
 }
 interface ChannelEncryptedMessage {
     type: 'channelMessage';
@@ -107,6 +129,7 @@ interface ChannelEncryptedMessageArray {
     messages: ChannelEncryptedMessageArray[];
 }
 export declare type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void;
+/******************************************************************************************************/
 export declare type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys';
 interface ChannelMessage1 {
     [key: string]: ChannelMessage2;
@@ -115,7 +138,7 @@ interface ChannelMessage1 {
     };
 }
 export declare type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage;
-export declare function SB_libraryVersion(): string;
+/******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
  */
@@ -144,6 +167,7 @@ export declare class MessageBus {
 export declare function _sb_exception(loc: string, msg: string): void;
 export declare function _sb_resolve(val: any): any;
 export declare function _sb_assert(val: unknown, msg: string): void;
+/******************************************************************************************************/
 /**
  * Fills buffer with random data
  */
@@ -165,9 +189,8 @@ export declare function str2ab(string: string): Uint8Array;
  * Standardized 'ab2str()' function, array buffer to string.
  * This assumes one byte per character.
  *
- * @return {Uint8Array} Uint8Array
- *
- * @param buffer
+ * @param {Uint8Array} buffer
+ * @return {string} string
  */
 export declare function ab2str(buffer: Uint8Array): string;
 /**
@@ -180,6 +203,10 @@ export declare function ab2str(buffer: Uint8Array): string;
  * @return {Uint8Array} returns decoded binary result
  */
 export declare function base64ToArrayBuffer(str: string): Uint8Array;
+/**
+ * Compare buffers
+ */
+export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Uint8Array | ArrayBuffer | null): boolean;
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short
@@ -301,6 +328,7 @@ export declare function encodeB64Url(input: string): string;
  * Decode b64 URL
  */
 export declare function decodeB64Url(input: string): string;
+/******************************************************************************************************/
 /**
  * SBCrypto contains all the SB specific crypto functions
  *
@@ -332,17 +360,14 @@ declare class SBCrypto {
      */
     deriveKey(privateKey: CryptoKey, publicKey: CryptoKey, type: string, extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
     /**
-     * SBCrypto.getFileKey()
-     *
-     * Get file key
-     */
-    getFileKey(fileHash: string, _salt: ArrayBuffer): Promise<unknown>;
-    /**
      * SBCrypto.encrypt()
      *
-     * Encrypt. if no nonce (iv) is given, will create it.
+     * Encrypt. if no nonce (iv) is given, will create it. Returns a Promise
+     * that resolves either to raw array buffer or a packaged EncryptedContents.
+     * Note that for the former, nonce must be given.
      */
-    encrypt(data: BufferSource, key: CryptoKey, _iv?: ArrayBuffer | null): Promise<EncryptedContents>;
+    encrypt(data: BufferSource, key: CryptoKey, _iv?: Uint8Array | null, returnType?: 'encryptedContents'): Promise<EncryptedContents>;
+    encrypt(data: BufferSource, key: CryptoKey, _iv?: Uint8Array | null, returnType?: 'arrayBuffer'): Promise<ArrayBuffer>;
     wrap(k: CryptoKey, b: string, bodyType: 'string'): Promise<EncryptedContents>;
     wrap(k: CryptoKey, b: ArrayBuffer, bodyType: 'arrayBuffer'): Promise<EncryptedContents>;
     /**
@@ -365,11 +390,12 @@ declare class SBCrypto {
      */
     verify(secretKey: CryptoKey, sign: string, contents: string): Promise<unknown>;
     /**
-     * SBCrypto.areKeysSame()
+     * SBCrypto.compareKeys()
      *
-     * Compare keys. (TODO: deprecate/ change)
+     * Compare keys, true if the 'same', false if different.
+     * TODO: type it up.
      */
-    areKeysSame(key1: Dictionary, key2: Dictionary): boolean;
+    compareKeys(key1: Dictionary, key2: Dictionary): boolean;
 }
 /**
  * SB384 - basic (core) capability object in SB
@@ -380,6 +406,7 @@ declare class SBCrypto {
 declare class SB384 {
     #private;
     ready: Promise<SB384>;
+    sb384Ready: Promise<SB384>;
     /**
      * new SB384()
      * @param key a jwk with which to create identity; if not provided,
@@ -415,7 +442,7 @@ declare class SBMessage {
     ready: Promise<SBMessage>;
     channel: Channel;
     contents: SBMessageContents;
-    constructor(channel: Channel, body: string);
+    constructor(channel: Channel, body?: string);
     /**
      * SBMessage.send()
      *
@@ -430,11 +457,11 @@ declare class SBMessage {
  * @public
  */
 export declare class SBFile extends SBMessage {
+    #private;
     data: Dictionary;
     image: string;
     image_sign: string;
     imageMetaData: ImageMetaData;
-    imageMetadata_sign: string;
     constructor(channel: Channel, file: File);
 }
 /**
@@ -455,12 +482,12 @@ declare abstract class Channel extends SB384 {
     verifiedGuest: boolean;
     userName: string;
     abstract get keys(): ChannelKeys;
-    abstract send(m: SBMessage): Promise<string>;
+    abstract send(m: SBMessage | string, messageType?: 'string' | 'SBMessage'): Promise<string>;
     abstract set onMessage(f: CallableFunction);
     abstract adminData?: Dictionary;
-    constructor(sbServer: Snackabra, key?: JsonWebKey, channelId?: string);
+    constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string);
     get api(): ChannelApi;
-    get sbServer(): Snackabra;
+    get sbServer(): SBServer;
     get channelId(): string | undefined;
     get readyFlag(): boolean;
 }
@@ -474,7 +501,7 @@ declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
     adminData?: Dictionary;
-    constructor(sbServer: Snackabra, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string);
+    constructor(sbServer: SBServer, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string);
     set onMessage(f: CallableFunction);
     get onMessage(): CallableFunction;
     /**
@@ -495,7 +522,17 @@ declare class ChannelSocket extends Channel {
       * Returns a promise that resolves to "success" when sent,
       * or an error message if it fails.
       */
-    send(message: SBMessage): Promise<string>;
+    send(msg: SBMessage | string): Promise<string>;
+}
+export declare type SBObjectType = 'f' | 'p' | 'b';
+export interface SBObjectHandle {
+    version: '1';
+    type: SBObjectType;
+    id: string;
+    key: string;
+    verification: Promise<string>;
+    iv?: Uint8Array;
+    salt?: Uint8Array;
 }
 /**
  * Storage API
@@ -506,11 +543,20 @@ declare class ChannelSocket extends Channel {
 declare class StorageApi {
     #private;
     server: string;
-    constructor(server: string);
+    channelServer: string;
+    constructor(server: string, channelServer: string);
+    /**
+     *
+     * @param buf
+     * @param type
+     * @param roomId
+     * @returns
+     */
+    storeObject(buf: ArrayBuffer, type: 'f' | 'p' | 'b', roomId: string): Promise<SBObjectHandle>;
     /**
      * StorageApi.saveFile()
      */
-    saveFile(sbFile: SBFile, channel: Channel): Promise<void>;
+    saveFile(channel: Channel, sbFile: SBFile): Promise<void>;
     /**
      * StorageApi().storeRequest
      */
@@ -518,15 +564,20 @@ declare class StorageApi {
     /**
      * StorageApi().storeData()
      */
-    storeData(type: string, fileId: string, encrypt_data: Dictionary, storageToken: string, data: Dictionary): Promise<Dictionary>;
+    storeData(type: string, fileId: string, iv: Uint8Array, salt: Uint8Array, storageToken: string, data: ArrayBuffer): Promise<Dictionary>;
     /**
      * StorageApi().storeImage()
      */
     storeImage(image: string | ArrayBuffer, image_id: string, keyData: string, type: string): void;
     /**
      * StorageApi().fetchData()
+     *
+     * This assumes you have a complete SBObjectHandle. Note that
+     * if you only have the 'id' and 'verification fields, you
+     * can reconstruct / request the rest. The current interface
+     * will return both nonce, salt, and encrypted data.
      */
-    fetchData(msgId: string, verificationToken: string | undefined): Promise<ArrayBuffer>;
+    fetchData(h: SBObjectHandle): Promise<ArrayBuffer>;
     /**
      * StorageApi().retrieveData()
      * retrieves an object from storage
@@ -595,11 +646,11 @@ declare class ChannelApi {
 }
 declare class Snackabra {
     #private;
-    options: SnackabraOptions;
     /**
      * Constructor expects an object with the names of the matching servers, for example
-     * (below shows the miniflare local dev config). Note that 'new Snackabra()' is
-     * guaranteed synchronous, so can be 'used' right away.
+     * below shows the miniflare local dev config. Note that 'new Snackabra()' is
+     * guaranteed synchronous, so can be 'used' right away. You can optionally call
+     * without a parameter in which case SB will ping known servers.
      *
      *
      * ::
@@ -610,19 +661,19 @@ declare class Snackabra {
      *       storage_server: 'http://127.0.0.1:4000'
      *     }
      *
-     * @param args {SnackabraOptions} interface
+     * @param args {SBServer} server names (optional)
      *
      *
      */
-    constructor(args: SnackabraOptions);
+    constructor(args?: SBServer);
     /**
      * Snackabra.connect()
      *
      * Connects to :term:`Channel Name` on this SB config.
-     * Returns a (promise to the) channel (socket) object
+     * Returns a (promise to the) channel (socket) object.
+     * It will throw an ``AggregateError`` if it fails
+     * to find the room anywhere.
      *
-     * @param {string} channelId - channel name
-     * @param {Identity} identity - default identity for all messages
      */
     connect(onMessage: CallableFunction, key?: JsonWebKey, channelId?: string): Promise<ChannelSocket>;
     /**
@@ -632,12 +683,13 @@ declare class Snackabra {
      * Returns the :term:`Channel Name`. Note that this does not
      * create a channel object, e.g. does not make a connection.
      * Therefore you need
+     *
      * (TODO: token-based approval of storage spend)
      */
-    create(serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle>;
+    create(sbServer: SBServer, serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle>;
     get channel(): Channel;
     get storage(): StorageApi;
     get crypto(): SBCrypto;
     sendFile(file: SBFile): void;
 }
-export { Channel, SBMessage, Snackabra, SBCrypto, };
+export { Channel, SBMessage, Snackabra, SBCrypto };
