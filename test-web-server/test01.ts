@@ -21,6 +21,8 @@ const test_list = [
   // 'test05a',
   // 'test05b',
 
+  // 'test07a', // tests key generation performance
+
   /* voprf test, not standard
      plus: need to uncomment the import far below on voprf
      (we will be removing this since snackabra-jslib is constrained to standardized web API */
@@ -66,7 +68,7 @@ import {
   SBChannelHandle,
   SBServer,
   compareBuffers
-} from '../src/snackabra.js'
+} from './snackabra.js'
 
 
 
@@ -254,7 +256,7 @@ function LCP(strs: Array<string>) {
 console.log(LCP(["abc", "abcdef"]))
 
 
-if (true) {
+if (test_list.includes('test07a')) {
   let i = 0
   let j = 2
   let t0 = Date.now()

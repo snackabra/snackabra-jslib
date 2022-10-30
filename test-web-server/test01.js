@@ -13,6 +13,7 @@ const test_list = [
     // for now only do one or the other of the following (or they overlap)
     // 'test05a',
     // 'test05b',
+    // 'test07a', // tests key generation performance
     /* voprf test, not standard
        plus: need to uncomment the import far below on voprf
        (we will be removing this since snackabra-jslib is constrained to standardized web API */
@@ -42,7 +43,7 @@ import { ab2str, str2ab, base64ToArrayBuffer, arrayBufferToBase64, getRandomValu
 // Identity,
 MessageBus, 
 // SBFile,
-SBMessage, Snackabra, compareBuffers } from '../src/snackabra.js';
+SBMessage, Snackabra, compareBuffers } from './snackabra.js';
 let test_pass = 0, test_fail = 0;
 // guarantees that it's not null
 function getElement(s) {
@@ -208,7 +209,7 @@ function LCP(strs) {
     });
 }
 console.log(LCP(["abc", "abcdef"]));
-if (true) {
+if (test_list.includes('test07a')) {
     let i = 0;
     let j = 2;
     let t0 = Date.now();
