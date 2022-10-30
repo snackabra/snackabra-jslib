@@ -1,8 +1,9 @@
+/******************************************************************************************************/
 /**
  * Interfaces
  */
 /**
- * SBChanneHandle
+ * SBChannelHandle
  *
  * Complete descriptor of a channel. 'key' is stringified 'jwk' key.
  * The key is always private. If it matches the channelId, then it's
@@ -12,7 +13,7 @@ export interface SBChannelHandle {
     channelId: string;
     key: JsonWebKey;
 }
-interface SnackabraOptions {
+export interface SBServer {
     channel_server: string;
     channel_ws: string;
     storage_server: string;
@@ -58,20 +59,32 @@ interface ChannelMessage2 {
     system?: boolean;
     verificationToken?: string;
 }
-declare type xChannelMessageType = 'ack' | 'system' | 'invalid' | 'ready';
-interface xChannelMessage {
-    type: xChannelMessageType;
-    _id: string;
-}
-interface xChannelMessage {
-    type: xChannelMessageType;
-    _id: string;
-    systemMessage: string;
-}
 interface ChannelAckMessage {
     type: 'ack';
     _id: string;
 }
+/** sample channelKeys contents
+ *
+ * { "ready": true,
+ *    "keys": {
+ *            "ownerKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+ *                        \"x\":\"9s17B4i0Cuf_w9XN_uAq2DFePOr6S3sMFMA95KjLN8akBUWEhPAcuMEMwNUlrrkN\",
+ *                        \"y\":\"6dAtcyMbtsO5ufKvlhxRsvjTmkABGlTYG1BrEjTpwrAgtmn6k25GR7akklz9klBr\"}",
+ *            "guestKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
+ *                         \"x\":\"Lx0eJcbNuyEfHDobWaZqgy9UO7ppxVIsEpEtvbzkAlIjySh9lY2AvgnACREO6QXD\",
+ *                         \"y\":\"zEHPgpsl4jge_Q-K6ekuzi2bQOybnaPT1MozCFQJnXEePBX8emkHriOiwl6P8BAS\"}",
+ *            "encryptionKey": "{\"alg\":\"A256GCM\",\"ext\":true,
+ *                             \"k\":\"F0sQTTLXDhuvvmgGQLzMoeHPD-SJlFyhfOD-cqejEOU\",
+ *                             \"key_ops\":[\"encrypt\",\"decrypt\"],\"kty\":\"oct\"}",
+ *            "signKey": "{\"crv\":\"P-384\",
+ *                        \"d\":\"KCJHDZ34XgVFsS9-sU09HFzXZhnGCvnDgJ5a8GTSfjuJQaq-1N2acvchPRhknk8B\",
+ *                        \"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",
+ *                        \"x\":\"rdsyBle0DD1hvp2OE2mINyyI87Cyg7FS3tCQUIeVkfPiNOACtFxi6iP8oeYt-Dge\",
+ *                        \"y\":\"qW9VP72uf9rgUU117G7AfTkCMncJbT5scIaIRwBXfqET6FYcq20fwSP7R911J2_t\"}"
+ *             },
+ * "motd": "",
+ * "roomLocked": false}
+ */
 interface ChannelKeyStrings {
     encryptionKey: string;
     guestKey?: string;
@@ -116,8 +129,7 @@ interface ChannelEncryptedMessageArray {
     messages: ChannelEncryptedMessageArray[];
 }
 export declare type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void;
-export declare function f(v: ChannelMessage): ChannelKeysMessage | null;
-export declare function g(v: xChannelMessage): xChannelMessage | null;
+/******************************************************************************************************/
 export declare type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys';
 interface ChannelMessage1 {
     [key: string]: ChannelMessage2;
@@ -126,6 +138,7 @@ interface ChannelMessage1 {
     };
 }
 export declare type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage;
+/******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
  */
@@ -154,6 +167,7 @@ export declare class MessageBus {
 export declare function _sb_exception(loc: string, msg: string): void;
 export declare function _sb_resolve(val: any): any;
 export declare function _sb_assert(val: unknown, msg: string): void;
+/******************************************************************************************************/
 /**
  * Fills buffer with random data
  */
@@ -314,6 +328,7 @@ export declare function encodeB64Url(input: string): string;
  * Decode b64 URL
  */
 export declare function decodeB64Url(input: string): string;
+/******************************************************************************************************/
 /**
  * SBCrypto contains all the SB specific crypto functions
  *
@@ -470,9 +485,9 @@ declare abstract class Channel extends SB384 {
     abstract send(m: SBMessage | string, messageType?: 'string' | 'SBMessage'): Promise<string>;
     abstract set onMessage(f: CallableFunction);
     abstract adminData?: Dictionary;
-    constructor(sbServer: Snackabra, key?: JsonWebKey, channelId?: string);
+    constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string);
     get api(): ChannelApi;
-    get sbServer(): Snackabra;
+    get sbServer(): SBServer;
     get channelId(): string | undefined;
     get readyFlag(): boolean;
 }
@@ -486,7 +501,7 @@ declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
     adminData?: Dictionary;
-    constructor(sbServer: Snackabra, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string);
+    constructor(sbServer: SBServer, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string);
     set onMessage(f: CallableFunction);
     get onMessage(): CallableFunction;
     /**
@@ -631,7 +646,6 @@ declare class ChannelApi {
 }
 declare class Snackabra {
     #private;
-    options: SnackabraOptions;
     /**
      * Constructor expects an object with the names of the matching servers, for example
      * (below shows the miniflare local dev config). Note that 'new Snackabra()' is
@@ -650,15 +664,13 @@ declare class Snackabra {
      *
      *
      */
-    constructor(args: SnackabraOptions);
+    constructor(args?: SBServer);
     /**
      * Snackabra.connect()
      *
      * Connects to :term:`Channel Name` on this SB config.
      * Returns a (promise to the) channel (socket) object
      *
-     * @param {string} channelId - channel name
-     * @param {Identity} identity - default identity for all messages
      */
     connect(onMessage: CallableFunction, key?: JsonWebKey, channelId?: string): Promise<ChannelSocket>;
     /**
@@ -668,12 +680,13 @@ declare class Snackabra {
      * Returns the :term:`Channel Name`. Note that this does not
      * create a channel object, e.g. does not make a connection.
      * Therefore you need
+     *
      * (TODO: token-based approval of storage spend)
      */
-    create(serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle>;
+    create(sbServer: SBServer, serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle>;
     get channel(): Channel;
     get storage(): StorageApi;
     get crypto(): SBCrypto;
     sendFile(file: SBFile): void;
 }
-export { Channel, SBMessage, Snackabra, SBCrypto, };
+export { Channel, SBMessage, Snackabra, SBCrypto };

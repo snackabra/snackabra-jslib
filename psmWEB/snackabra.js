@@ -1,28 +1,25 @@
-/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
+/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved
+   Distributed under GPL-v03, see 'LICENSE' file for details */
 var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
     return c > 3 && r && Object.defineProperty(target, key, r), r;
 };
-// demo / example / testing
-export function f(v) {
-    if (v.type === 'channelKeys') {
-        return v;
-    }
-    else {
-        return null;
-    }
-}
-export function g(v) {
-    if (v.type === 'system') {
-        return v;
-    }
-    else {
-        return null;
-    }
-}
+const SBKnownServers = [
+    {
+        channel_server: 'http://localhost:4001',
+        channel_ws: 'ws://localhost:4001',
+        storage_server: 'http://localhost:4000'
+    },
+    {
+        channel_server: 'https://r.somethingstuff.workers.dev/',
+        channel_ws: 'wss://r.somethingstuff.workers.dev/',
+        storage_server: 'https://s.somethingstuff.workers.dev/'
+    },
+];
 //#region - not so core stuff
+/******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
  */
@@ -134,7 +131,8 @@ export function _sb_assert(val, msg) {
     }
 }
 //#endregion
-//#region - crypto and translation stuff
+//#region - crypto and translation stuff used by SBCrypto etc
+/******************************************************************************************************/
 /**
  * Fills buffer with random data
  */
@@ -166,6 +164,7 @@ export function getRandomValues(buffer) {
         return buffer;
     }
 }
+
 // for later use - message ID formats
 const messageIdRegex = /([A-Za-z0-9+/_\-=]{64})([01]{42})/;
 // Strict b64 check:
@@ -798,7 +797,9 @@ export function decodeB64Url(input) {
     }
     return input;
 }
-//#endregion - crypto and translation stuff
+//#endregion - crypto and translation stuff used by SBCrypto etc
+//#region - SBCrypto
+/******************************************************************************************************/
 /**
  * SBCrypto contains all the SB specific crypto functions
  *
@@ -954,6 +955,10 @@ class SBCrypto {
                     else if (returnType === 'arrayBuffer') {
                         resolve(d);
                     }
+                }).catch((e) => {
+                    console.error(`failed to decrypt - rejecting: ${e}`);
+                    console.trace();
+                    reject(e);
                 });
             }
             catch (e) {
@@ -1027,7 +1032,9 @@ class SBCrypto {
     }
 } /* SBCrypto */
 const sbCrypto = new SBCrypto();
+//#endregion - SBCrypto
 //#region - local decorators
+/******************************************************************************************************/
 function Memoize(target, propertyKey, descriptor) {
     if (descriptor.get) {
         let get = descriptor.get;
@@ -1258,7 +1265,7 @@ class SBMessage {
         });
         // TODO: i've punted on queue here <--- queueMicrotaks maybe?
     }
-}
+} /* class SBMessage */
 /**
  * SBFile
  * @class
@@ -1309,7 +1316,7 @@ export class SBFile extends SBMessage {
         //   });
         //   this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
     }
-}
+} /* class SBFile */
 /**
  * Channel
  *
@@ -1374,7 +1381,7 @@ class Channel extends SB384 {
     get sbServer() { return this.#sbServer; }
     get channelId() { return this.#channelId; }
     get readyFlag() { return this.#ChannelReadyFlag; }
-} /* Channel */
+} /* class Channel */
 __decorate([
     Memoize,
     Ready
@@ -1401,14 +1408,14 @@ class ChannelSocket extends Channel {
         // console.log(sbServer)
         // console.log("----ChannelSocket.constructor() ... end")
         super(sbServer, key, channelId /*, identity ? identity : new Identity() */); // initialize 'channel' parent       
-        const url = sbServer.options.channel_ws + '/api/room/' + channelId + '/websocket';
+        const url = sbServer.channel_ws + '/api/room/' + channelId + '/websocket';
         this.#onMessage = onMessage;
         this.#ws = {
             url: url,
             websocket: new WebSocket(url),
             ready: false,
             closed: false,
-            timeout: 30000
+            timeout: 2000
         };
         // console.log("setting ChannelSocket.ready")
         this.ready = this.#readyPromise();
@@ -1764,7 +1771,7 @@ class ChannelSocket extends Channel {
             });
         });
     }
-} // ChannelSocket
+} /* class ChannelSocket */
 /**
  * Storage API
  * @class
@@ -2177,7 +2184,7 @@ class StorageApi {
         const img = await this.fetchData(obj);
         return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
     }
-}
+} /* class StorageApi */
 /**
  * Channel API
  * @class
@@ -2194,7 +2201,7 @@ class ChannelApi {
     constructor(/* sbServer: Snackabra, */ channel /*, identity?: Identity */) {
         this.#channel = channel;
         this.#sbServer = this.#channel.sbServer;
-        this.#server = this.#sbServer.options.channel_server;
+        this.#server = this.#sbServer.channel_server;
         // this.#payload = new Payload()
         this.#channelApi = this.#server + '/api/';
         this.#channelServer = this.#server + '/api/room/';
@@ -2485,7 +2492,9 @@ class ChannelApi {
             });
         });
     }
-}
+} /* class ChannelAPI */
+//#region IndexedKV - our (local storage) KV interface
+/******************************************************************************************************/
 /**
  * Augments IndexedDB to be used as a KV to easily
  * replace _localStorage for larger and more complex datasets
@@ -2654,17 +2663,13 @@ class IndexedKV {
     }
 }
 const _localStorage = new IndexedKV();
+//#endregion IndexedKV
 class Snackabra {
-    #listOfChannels = [];
     #storage;
     #channel;
     // #defaultIdentity = new Identity();
     // defaultIdentity?: Identity
-    options = {
-        channel_server: '',
-        channel_ws: '',
-        storage_server: ''
-    };
+    #preferredServer;
     /**
      * Constructor expects an object with the names of the matching servers, for example
      * (below shows the miniflare local dev config). Note that 'new Snackabra()' is
@@ -2684,14 +2689,18 @@ class Snackabra {
      *
      */
     constructor(args) {
-        _sb_assert(args, 'Snackabra(args) - missing args');
+        // _sb_assert(args, 'Snackabra(args) - missing args');
         try {
-            this.options = Object.assign(this.options, {
-                channel_server: args.channel_server,
-                channel_ws: args.channel_ws,
-                storage_server: args.storage_server
-            });
-            this.#storage = new StorageApi(args.storage_server, args.channel_server);
+            if (args) {
+                this.#preferredServer = Object.assign({}, args);
+                this.#storage = new StorageApi(args.storage_server, args.channel_server);
+            }
+            // this.options = Object.assign(this.options, {
+            //   channel_server: args.channel_server,
+            //   channel_ws: args.channel_ws,
+            //   storage_server: args.storage_server
+            // });
+            // this.#storage = new StorageApi(args.storage_server, args.channel_server)
         }
         catch (e) {
             if (e.hasOwnProperty('message')) {
@@ -2708,15 +2717,12 @@ class Snackabra {
      * Connects to :term:`Channel Name` on this SB config.
      * Returns a (promise to the) channel (socket) object
      *
-     * @param {string} channelId - channel name
-     * @param {Identity} identity - default identity for all messages
      */
     connect(onMessage, key, channelId /*, identity?: SB384 */) {
-        return new Promise((resolve, reject) => {
-            const c = new ChannelSocket(this, onMessage, key, channelId);
-            this.#listOfChannels.push(c);
-            resolve(c);
-        });
+        // if there's a 'preferred' (only) server then we we can return a promise right away
+        return this.#preferredServer
+            ? new Promise((resolve) => resolve(new ChannelSocket(this.#preferredServer, onMessage, key, channelId)))
+            : Promise.race(SBKnownServers.map((s) => new ChannelSocket(s, onMessage, key, channelId)));
     }
     /**
      * Snackabra.create()
@@ -2725,9 +2731,10 @@ class Snackabra {
      * Returns the :term:`Channel Name`. Note that this does not
      * create a channel object, e.g. does not make a connection.
      * Therefore you need
+     *
      * (TODO: token-based approval of storage spend)
      */
-    create(serverSecret, keys) {
+    create(sbServer, serverSecret, keys) {
         return new Promise(async (resolve, reject) => {
             try {
                 const owner384 = new SB384(keys);
@@ -2757,7 +2764,7 @@ class Snackabra {
                     SERVER_SECRET: serverSecret
                 };
                 const data = new TextEncoder().encode(JSON.stringify(channelData));
-                let resp = await fetch(this.options.channel_server + '/api/room/' + channelId + '/uploadRoom', {
+                let resp = await fetch(sbServer.channel_server + '/api/room/' + channelId + '/uploadRoom', {
                     method: 'POST',
                     body: data
                 });
@@ -2799,8 +2806,8 @@ class Snackabra {
     sendFile(file) {
         this.storage.saveFile(this.#channel, file);
     }
-}
+} /* class Snackabra */
 export { 
 // ChannelMessage,
-Channel, SBMessage, Snackabra, SBCrypto, };
+Channel, SBMessage, Snackabra, SBCrypto };
 //# sourceMappingURL=snackabra.js.map

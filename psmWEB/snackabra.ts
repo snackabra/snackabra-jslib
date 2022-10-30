@@ -1,7 +1,8 @@
-/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved */
+/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved
+   Distributed under GPL-v03, see 'LICENSE' file for details */
 
-/* Distributed under GPL-v03, see 'LICENSE' file for details */
-
+//#region header
+/******************************************************************************************************/
 
 /*
   current tsc command-line settings:
@@ -33,13 +34,14 @@
     https://www.iana.org/assignments/websocket/websocket.xml#subprotocol-name
 
 */
+//#endregion header
 
 /**
  * Interfaces
  */
 
 /**
- * SBChanneHandle
+ * SBChannelHandle
  * 
  * Complete descriptor of a channel. 'key' is stringified 'jwk' key.
  * The key is always private. If it matches the channelId, then it's
@@ -50,12 +52,24 @@ export interface SBChannelHandle {
   key: JsonWebKey,
 }
 
-interface SnackabraOptions {
+export interface SBServer {
   channel_server: string,
   channel_ws: string,
   storage_server: string,
 }
 
+const SBKnownServers: Array<SBServer> = [
+  {
+    channel_server: 'http://localhost:4001',
+    channel_ws: 'ws://localhost:4001',
+    storage_server: 'http://localhost:4000'
+  },
+  {
+    channel_server: 'https://r.somethingstuff.workers.dev/',
+    channel_ws: 'wss://r.somethingstuff.workers.dev/',
+    storage_server: 'https://s.somethingstuff.workers.dev/'
+  },
+]
 
 interface IndexedKVOptions {
   db: string,
@@ -83,12 +97,9 @@ interface WSProtocolOptions {
 
 type StorableDataType = string | number | bigint | boolean | symbol | object
 
+// TODO: get rid of all uses of this
 interface Dictionary {
   [index: string]: any;
-}
-
-interface DictDict {
-  [index: string]: DictDict;
 }
 
 interface ChannelData {
@@ -132,35 +143,14 @@ interface ChannelMessage2 {
   verificationToken?: string,
 }
 
-type xChannelMessageType = 'ack' | 'system' | 'invalid' | 'ready'
-
-interface xChannelMessage {
-  // type: 'ack'
-  type: xChannelMessageType,
-  _id: string
-}
-
-interface xChannelMessage {
-  // type: 'system'
-  type: xChannelMessageType,
-  _id: string,
-  systemMessage: string
-}
-
-
 interface ChannelAckMessage {
   type: 'ack',
   _id: string,
 }
 
-interface ChannelSystemMessage {
-  type: 'system',
-  _id: string,
-  systemMessage: string,
-}
 
-
-/*
+/** sample channelKeys contents
+ * 
  * { "ready": true,
  *    "keys": {
  *            "ownerKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
@@ -244,23 +234,49 @@ interface ChannelEncryptedMessageArray {
 // mtg: we shouldn't need the export here because we are using them internally
 export type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void
 
+//#region (currently unused) code experimenting with types and protocols
+/******************************************************************************************************/
 
-// demo / example / testing
-export function f(v: ChannelMessage): ChannelKeysMessage | null {
-  if (v!.type === 'channelKeys') {
-    return v as ChannelKeysMessage
-  } else {
-    return null
-  }
-}
+// interface ChannelSystemMessage {
+//   type: 'system',
+//   _id: string,
+//   systemMessage: string,
+// }
 
-export function g(v: xChannelMessage) {
-  if (v.type === 'system') {
-    return v
-  } else {
-    return null
-  }
-}
+
+// type xChannelMessageType = 'ack' | 'system' | 'invalid' | 'ready'
+
+// interface xChannelMessage {
+//   // type: 'ack'
+//   type: xChannelMessageType,
+//   _id: string
+// }
+
+// interface xChannelMessage {
+//   // type: 'system'
+//   type: xChannelMessageType,
+//   _id: string,
+//   systemMessage: string
+// }
+
+// // demo / example / testing
+// export function f(v: ChannelMessage): ChannelKeysMessage | null {
+//   if (v!.type === 'channelKeys') {
+//     return v as ChannelKeysMessage
+//   } else {
+//     return null
+//   }
+// }
+
+// export function g(v: xChannelMessage) {
+//   if (v.type === 'system') {
+//     return v
+//   } else {
+//     return null
+//   }
+// }
+
+//#endregion
 
 export type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys'
 
@@ -276,7 +292,7 @@ interface ChannelMessage1 {
 export type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
 
 //#region - not so core stuff
-
+/******************************************************************************************************/
 
 /**
  * SB simple events (mesage bus) class
@@ -400,7 +416,8 @@ export function _sb_assert(val: unknown, msg: string) {
 
 //#endregion
 
-//#region - crypto and translation stuff
+//#region - crypto and translation stuff used by SBCrypto etc
+/******************************************************************************************************/
 
 /**
  * Fills buffer with random data
@@ -441,7 +458,6 @@ const messageIdRegex = /([A-Za-z0-9+/_\-=]{64})([01]{42})/
 const b64_regex = /^([A-Za-z0-9+/_\-=]*)$/
 // stricter - only accepts URI friendly:
 const url_regex = /^([A-Za-z0-9_\-=]*)$/
-
 
 /**
  * Returns 'true' if (and only if) string is well-formed base64.
@@ -1100,8 +1116,10 @@ export function decodeB64Url(input: string) {
   return input;
 }
 
-//#endregion - crypto and translation stuff
+//#endregion - crypto and translation stuff used by SBCrypto etc
 
+//#region - SBCrypto
+/******************************************************************************************************/
 
 /**
  * SBCrypto contains all the SB specific crypto functions
@@ -1195,7 +1213,6 @@ class SBCrypto {
     });
   }
 
-
   /**
    * SBCrypto.encrypt()
    *
@@ -1276,6 +1293,10 @@ class SBCrypto {
           } else if (returnType === 'arrayBuffer') {
             resolve(d)
           }
+        }).catch((e) => {
+          console.error(`failed to decrypt - rejecting: ${e}`)
+          console.trace()
+          reject(e)
         })
       } catch (e) {
         console.error(`catching problem - rejecting: ${e}`)
@@ -1348,8 +1369,10 @@ class SBCrypto {
 } /* SBCrypto */
 
 const sbCrypto = new SBCrypto();
+//#endregion - SBCrypto
 
 //#region - local decorators
+/******************************************************************************************************/
 
 function Memoize(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
   if (descriptor.get) {
@@ -1576,7 +1599,7 @@ class SBMessage {
     })
     // TODO: i've punted on queue here <--- queueMicrotaks maybe?
   }
-}
+} /* class SBMessage */
 
 
 
@@ -1634,7 +1657,7 @@ export class SBFile extends SBMessage {
       //   this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
       }
   
-}
+} /* class SBFile */
 
 
 /**
@@ -1649,7 +1672,7 @@ abstract class Channel extends SB384 {
   channelReady: Promise<Channel>
   #ChannelReadyFlag: boolean = false // must be named <class>ReadyFlag
 
-  #sbServer: Snackabra
+  #sbServer: SBServer
   motd?: string = ''
   locked?: boolean = false
   owner: boolean = false
@@ -1679,7 +1702,7 @@ abstract class Channel extends SB384 {
    * @param {string} channelId (the :term:`Channel Name`) to find on that server
    * @param {Identity} the identity which you want to present (defaults to server default)
    */
-  constructor(sbServer: Snackabra, key?: JsonWebKey, channelId?: string) {
+  constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string) {
     super(key)
     this.#sbServer = sbServer
     this.#api = new ChannelApi(this)
@@ -1712,7 +1735,7 @@ abstract class Channel extends SB384 {
   @Memoize @Ready get channelId() { return this.#channelId }
   get readyFlag(): boolean { return this.#ChannelReadyFlag }
 
-} /* Channel */
+} /* class Channel */
 
 /**
  *
@@ -1732,19 +1755,19 @@ class ChannelSocket extends Channel {
   #ack: Dictionary = []
 
   /* ChannelSocket */
-  constructor(sbServer: Snackabra, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string) {
+  constructor(sbServer: SBServer, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string) {
     // console.log("----ChannelSocket.constructor() start:")
     // console.log(sbServer)
     // console.log("----ChannelSocket.constructor() ... end")
     super(sbServer, key, channelId /*, identity ? identity : new Identity() */) // initialize 'channel' parent       
-    const url = sbServer.options.channel_ws + '/api/room/' + channelId + '/websocket'
+    const url = sbServer.channel_ws + '/api/room/' + channelId + '/websocket'
     this.#onMessage = onMessage
     this.#ws = {
       url: url,
       websocket: new WebSocket(url),
       ready: false,
       closed: false,
-      timeout: 30000
+      timeout: 2000
     }
     // console.log("setting ChannelSocket.ready")
     this.ready = this.#readyPromise()
@@ -2096,7 +2119,7 @@ class ChannelSocket extends Channel {
   }
 
 
-} // ChannelSocket
+} /* class ChannelSocket */
 
 
 // these map to conventions and are different namespaces
@@ -2552,7 +2575,7 @@ class StorageApi {
 
   }
    */
-}
+} /* class StorageApi */
 
 /**
  * Channel API
@@ -2561,7 +2584,7 @@ class StorageApi {
  * @public
  */
 class ChannelApi {
-  #sbServer: Snackabra
+  #sbServer: SBServer
   #server: string; // channel server
   #channel: Channel;
   #channelApi: string;
@@ -2572,7 +2595,7 @@ class ChannelApi {
   constructor(/* sbServer: Snackabra, */ channel: Channel /*, identity?: Identity */) {
     this.#channel = channel
     this.#sbServer = this.#channel.sbServer
-    this.#server = this.#sbServer.options.channel_server
+    this.#server = this.#sbServer.channel_server
     // this.#payload = new Payload()
     this.#channelApi = this.#server + '/api/'
     this.#channelServer = this.#server + '/api/room/'
@@ -2877,6 +2900,8 @@ class ChannelApi {
     });
   }
 
+  //#region - class ChannelAPI - TODO implement these methods
+
   // lock(identity?: Identity) {
   //   const _identity: Identity | undefined = identity ? identity : this.#identity
   //   if (_identity === undefined) {
@@ -2967,27 +2992,28 @@ class ChannelApi {
   mtg: These methods have no implementation in the current webclient so I have skipped them for the time being
   // unused
   notifications() {
-
   }
 
   //unused
   getPubKeys() {
-
   }
 
   // unused
   ownerUnread() {
-
   }
-
 
   // unused
   registerDevice() {
-
   }
-
    */
-}
+
+  //#endregion - class ChannelAPI - TODO implement these methods
+
+} /* class ChannelAPI */
+
+
+//#region IndexedKV - our (local storage) KV interface
+/******************************************************************************************************/
 
 /**
  * Augments IndexedDB to be used as a KV to easily
@@ -3174,17 +3200,14 @@ class IndexedKV {
 
 const _localStorage = new IndexedKV();
 
+//#endregion IndexedKV
+
 class Snackabra {
-  #listOfChannels: Channel[] = []
   #storage!: StorageApi
   #channel!: Channel
   // #defaultIdentity = new Identity();
   // defaultIdentity?: Identity
-  options: SnackabraOptions = {
-    channel_server: '',
-    channel_ws: '',
-    storage_server: ''
-  };
+  #preferredServer?: SBServer
 
   /**
    * Constructor expects an object with the names of the matching servers, for example
@@ -3204,15 +3227,20 @@ class Snackabra {
    * 
    * 
    */
-  constructor(args: SnackabraOptions) {
-    _sb_assert(args, 'Snackabra(args) - missing args');
+  constructor(args?: SBServer) {
+    // _sb_assert(args, 'Snackabra(args) - missing args');
     try {
-      this.options = Object.assign(this.options, {
-        channel_server: args.channel_server,
-        channel_ws: args.channel_ws,
-        storage_server: args.storage_server
-      });
-      this.#storage = new StorageApi(args.storage_server, args.channel_server)
+      if (args) {
+        this.#preferredServer = Object.assign({}, args)
+        this.#storage = new StorageApi(args.storage_server, args.channel_server)
+      }
+  
+      // this.options = Object.assign(this.options, {
+      //   channel_server: args.channel_server,
+      //   channel_ws: args.channel_ws,
+      //   storage_server: args.storage_server
+      // });
+      // this.#storage = new StorageApi(args.storage_server, args.channel_server)
     } catch (e: any) {
       if (e.hasOwnProperty('message')) {
         _sb_exception('Snackabra.constructor()', e.message);
@@ -3228,16 +3256,13 @@ class Snackabra {
    * 
    * Connects to :term:`Channel Name` on this SB config.
    * Returns a (promise to the) channel (socket) object
-   * 
-   * @param {string} channelId - channel name
-   * @param {Identity} identity - default identity for all messages
+   *
    */
   connect(onMessage: CallableFunction, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
-    return new Promise<ChannelSocket>((resolve, reject) => {
-      const c = new ChannelSocket(this, onMessage, key, channelId)
-      this.#listOfChannels.push(c)
-      resolve(c)
-    });
+    // if there's a 'preferred' (only) server then we we can return a promise right away
+    return this.#preferredServer
+      ? new Promise<ChannelSocket>((resolve) => resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)))
+      : Promise.race(SBKnownServers.map((s) => new ChannelSocket(s, onMessage, key, channelId)))
   }
 
   /**
@@ -3247,9 +3272,10 @@ class Snackabra {
    * Returns the :term:`Channel Name`. Note that this does not
    * create a channel object, e.g. does not make a connection.
    * Therefore you need 
+   * 
    * (TODO: token-based approval of storage spend)
    */
-  create(serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle> {
+  create(sbServer: SBServer, serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle> {
     return new Promise<SBChannelHandle>(async (resolve, reject) => {
       try {
         const owner384 = new SB384(keys)
@@ -3279,7 +3305,7 @@ class Snackabra {
           SERVER_SECRET: serverSecret
         };
         const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
-        let resp: Dictionary = await fetch(this.options.channel_server + '/api/room/' + channelId + '/uploadRoom', {
+        let resp: Dictionary = await fetch(sbServer.channel_server + '/api/room/' + channelId + '/uploadRoom', {
           method: 'POST',
           body: data
         });
@@ -3296,7 +3322,6 @@ class Snackabra {
       }
     });
   }
-
 
   get channel(): Channel {
     return this.#channel;
@@ -3327,12 +3352,12 @@ class Snackabra {
   sendFile(file: SBFile) {
     this.storage.saveFile(this.#channel, file);
   }
-}
+} /* class Snackabra */
 
 export {
   // ChannelMessage,
   Channel,
   SBMessage,
   Snackabra,
-  SBCrypto,
+  SBCrypto
 };

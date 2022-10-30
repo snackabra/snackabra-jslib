@@ -1,15 +1,17 @@
 // Copyright (c) 2022 Magnusson Institute, All Rights Reserved.
 // to use this, simply add module script import in html:
 //  <script type="module" src="./test01.js"></script>
-// these are the tests to carry out:
+// UNCOMMENT the tests you want to run:
 const test_list = [
     /* 'test01a', 'test01b', 'test02', 'test02b', 'test03', */
     /* SB API */
     /* 'test04c', 'test04a','test04b', */
-    // 'test04d', 'test04',
-    // note: for now do these one at a time, otherwise they overlap
+    // 'test04',
+    // 'test06a', // minimalist connect to SB and send a message
+    'test04d', // connect and activate button
+    // for now only do one or the other of the following (or they overlap)
     // 'test05a',
-    'test05b',
+    // 'test05b',
     /* voprf test, not standard
        plus: need to uncomment the import far below on voprf
        (we will be removing this since snackabra-jslib is constrained to standardized web API */
@@ -205,15 +207,17 @@ const sb_config_matt = {
     channel_ws: 'wss://r.somethingstuff.workers.dev/',
     storage_server: 'https://s.somethingstuff.workers.dev/'
 };
-if (false) {
+if (test_list.includes('test06a')) {
     // create server object (assumes miniflare test setup):
-    const SB = new Snackabra({
+    const sb_config = {
         channel_server: 'http://localhost:4001',
         channel_ws: 'ws://localhost:4001',
-        storage_server: 'http://localhost:4000' // default storage server
-    });
+        storage_server: 'http://localhost:4000'
+    };
+    const SB = new Snackabra(sb_config);
     // create a new channel (room), returns (owner) key and channel name:
-    SB.create('password').then((handle) => {
+    SB.create(sb_config, 'password').then((handle) => {
+        console.log(`you can (probably) connect here: localhost:3000/rooms/${handle.channelId}`);
         // connect to the websocket with our handle info:
         SB.connect(
         // must have a message handler:
@@ -227,10 +231,11 @@ if (false) {
     });
 }
 if (false) {
-    console.log(`testing against servers: ${sb_config_matt}`);
-    const SB = new Snackabra(sb_config_matt);
+    const sbServer = sb_config_matt;
+    console.log(`testing against servers: ${sbServer}`);
+    const SB = new Snackabra(sbServer);
     // we need a channel name since that's our source of storage 'budget'
-    SB.create('password').then((channelHandle) => {
+    SB.create(sbServer, 'password').then((channelHandle) => {
         // generate a random 1MB block:
         let testBlob = getRandomValues(new Uint8Array(1 * 1024 * 1024));
         // now let's store it:
@@ -251,11 +256,12 @@ if (false) {
 // test performance of 4KB blocks
 if (test_list.includes('test05a')) {
     const blockCount = 14;
+    const sbServer = sb_config_matt;
     console.log(`testing storing ${blockCount}x64KB blocks against servers:`);
-    console.log(sb_config_matt);
+    console.log(sbServer);
     const SB = new Snackabra(sb_config_matt);
     // we need a channel name since that's our source of storage 'budget'
-    SB.create('password').then((c) => {
+    SB.create(sbServer, 'password').then((c) => {
         let t0 = Date.now();
         console.log('starting timer. SB object ready.');
         // now we generate a bunch of random 4KB blocks
@@ -343,12 +349,13 @@ async function testBlockWrites(j, SB, c, blockCount) {
     });
 }
 if (test_list.includes('test05b')) {
+    const sbServer = sb_config_matt;
     const blockCount = 14;
     const totalTestCount = 4;
     console.log(`testing storing ${blockCount}x46KB blocks INDIVIDUALLY against servers (${totalTestCount} times):`);
-    console.log(sb_config_matt);
+    console.log(sbServer);
     const SB = new Snackabra(sb_config_matt);
-    SB.create('password').then((c) => {
+    SB.create(sbServer, 'password').then((c) => {
         console.log('starting timer(s). SB object ready.');
         for (let j = 0; j < totalTestCount; j++)
             testBlockWrites(j, SB, c, blockCount);
@@ -356,13 +363,14 @@ if (test_list.includes('test05b')) {
 }
 if (false) {
     // create server object (assumes miniflare test setup):
-    const SB = new Snackabra({
+    const sbServer = {
         channel_server: 'http://localhost:4001',
         channel_ws: 'ws://localhost:4001',
         storage_server: 'http://localhost:4000' // default storage server
-    });
+    };
+    const SB = new Snackabra(sbServer);
     // create a new channel (room), returns (owner) key and channel name:
-    SB.create('password').then((channelHandle) => {
+    SB.create(sbServer, 'password').then((channelHandle) => {
         // we shouldn't need anything else to store stuff
         // .. changing not to fetch an image but send a random blob
         // const img = getElement('original-snackabra-img')
@@ -420,9 +428,10 @@ if (test_list.includes('test04d')) {
     const z = getElement('test04d');
     // create orchestration (master) object (synchronous)
     console.log("++++test04d++++ SB object:");
-    const SB = new Snackabra(sb_config);
+    const sbServer = sb_config;
+    const SB = new Snackabra(sbServer);
     // console.log("++++test04d++++ new owner keys:")
-    SB.create('password').then((handle) => {
+    SB.create(sbServer, 'password').then((handle) => {
         SB.connect(
         // print out any messages we get
         (m) => { console.log(`got message: ${m}`); }, handle.key, // if we omit then we're connecting anonymously
