@@ -128,6 +128,21 @@ interface ImageMetaData {
   previewKey?: string,
 }
 
+/*
+   for example the incoming message will look like this (after decryption)
+
+  { encrypted":false,
+   "contents":"Hello from test04d!",
+   "sign":"u7zAM-1fNLZjmuayOkwWvXTBGqMEimOuzp1DJGX4ECg",
+   "image":"",
+   "imageMetaData":{},
+   "sender_pubKey":{"crv":"P-384","ext":true,"key_ops":[],"kty":"EC","x":"edqHd4aUn7dGsuDMQxtvzuw-Q2N7l77HBW81KvWj9qtzU7ab-sFHUBqogg2PKihj","y":"Oqp27bXL4RUcAHpWUEFHZdyEuhTo8_8oyTsAKJDk1g_NQOA0FR5Sy_8ViTTWS9wT"},
+   "sender_username":"TestBot",
+   "image_sign":"3O0AYKthtWWYUX3AWDmdU4kTR49UyNyaA937CfKtcQw",
+   "imageMetadata_sign":"4LmewpsH6TcRhHYQLivd4Ce87SI1AJIaezhJB5sdD7M"
+  } */
+
+
 interface ChannelMessage2 {
   type?: 'invalid' | 'ready',
   keys?: {
@@ -143,8 +158,12 @@ interface ChannelMessage2 {
   channelID?: string, // base64 - 64 chars (512 bits)
   control?: boolean,
   encrypted_contents?: EncryptedContents,
+  contents?: string, // if present means unencrypted
+  sign?: string,
   image?: string,
-  imageMetaData?: ImageMetaData
+  image_sign?: string,
+  imageMetaData?: ImageMetaData,
+  imageMetadata_sign?: string,
   motd?: string,
   ready?: boolean,
   roomLocked?: boolean,
@@ -223,7 +242,7 @@ export interface EncryptedContents {
 }
 
 interface ChannelEncryptedMessage {
-  type: 'channelMessage',
+  type?: 'encryptedChannelMessage',
 
   // base64 - 64 chars (512 bits), e.g:
   // 'wDUMRbcfFhdmByuwMhFyR46MRlcZh-6gKRUhSPkWEQLSRUPE8_jqixV3VQevTDBy'
@@ -233,8 +252,12 @@ interface ChannelEncryptedMessage {
   // '011000001110001011010110101010000100000110'
   timestampPrefix?: string,
 
-  encrypted_contents: EncryptedContents,
+  encrypted_contents?: EncryptedContents,
+
+  contents?: string,
+
 }
+
 
 interface ChannelEncryptedMessageArray {
   type: 'channelMessageArray',
@@ -242,7 +265,7 @@ interface ChannelEncryptedMessageArray {
 }
 
 // mtg: we shouldn't need the export here because we are using them internally
-export type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void
+export type ChannelMessage = ChannelMessage2 | ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void
 
 //#region (currently unused) code experimenting with types and protocols
 /******************************************************************************************************/
@@ -1280,6 +1303,7 @@ class SBCrypto {
    * SBCrypto.unwrap
    *
    * Decrypts a wrapped object, returns (promise to) decrypted contents
+   * per se (either as a string or arrayBuffer)
    */
   unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'string'): Promise<string>
   unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'arrayBuffer'): Promise<ArrayBuffer>
@@ -1763,11 +1787,11 @@ class ChannelSocket extends Channel {
   #sbServer: SBServer
   adminData?: Dictionary // TODO: add getter
   // #queue: Array<SBMessage> = [];
-  #onMessage: CallableFunction // the user message handler
+  #onMessage: (m: ChannelMessage) => void  // CallableFunction // the user message handler
   #ack: Dictionary = []
 
   /* ChannelSocket */
-  constructor(sbServer: SBServer, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string) {
+  constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string) {
     // console.log("----ChannelSocket.constructor() start:")
     // console.log(sbServer)
     // console.log("----ChannelSocket.constructor() ... end")
@@ -1838,8 +1862,8 @@ class ChannelSocket extends Channel {
             // console.log(Object.entries(data)[0][1])
             // console.log("This should be the IV?????")
             // console.log(Object.entries(message)[0][1].encrypted_contents.iv)
-            const encryptedContents: ChannelEncryptedMessage = {
-              type: 'channelMessage',
+            let m: ChannelEncryptedMessage = {
+              type: 'encryptedChannelMessage',
               channelID: z[1],
               timestampPrefix: z[2],
               encrypted_contents: {
@@ -1847,17 +1871,22 @@ class ChannelSocket extends Channel {
                 iv: new Uint8Array(Array.from(Object.values(Object.entries(message)[0][1].encrypted_contents.iv)))
               }
             }
-            // console.log("constructed encrypted message:")
-            // console.log(encryptedContents)
+            // console.log("received encrypted message:")
+            // console.log(m)
             // const encryptedContents = (Object.entries(message)[0][1] as ChannelEncryptedMessage)
             // console.log('what are message iv type? string or what? ????????????????/')
             // console.log(encryptedContents)
-            sbCrypto.unwrap(this.keys.encryptionKey, encryptedContents.encrypted_contents, 'string').then((unwrapped) => {
-              // console.log("++++++++ #processMessage: unwrapped:")
+            sbCrypto.unwrap(this.keys.encryptionKey, m.encrypted_contents!, 'string').then((unwrapped) => {
+              // console.log("++++++++ #processMessage: unwrapped (should be ChannelMessage2):")
               // console.log(unwrapped)
-              const ret = unwrapped as ChannelMessage2
-              // console.log(ret)
-              this.#onMessage(ret)
+              // const ret: ChannelMessage2 = unwrapped as ChannelMessage2
+              // console.log(ret);
+              m = { ...m, ...JSON.parse(unwrapped) };
+              // console.log("this is what 'm' includes:")
+              // console.log(m)
+              // Object.kunwrapped).forEach((p) => console.log(p));
+              // this.#onMessage(ret)
+              this.#onMessage(m)
             })
           } else {
             console.log("++++++++ #processMessage: can't decipher message, passing along unchanged:")
@@ -2027,7 +2056,7 @@ class ChannelSocket extends Channel {
 
   // @Memoize @Ready get channelId(): string { return this.#channelId }
 
-  set onMessage(f: CallableFunction) {
+  set onMessage(f: (m: ChannelMessage) => void) {
     this.#onMessage = f
   }
 
@@ -3276,7 +3305,7 @@ class Snackabra {
    * to find the room anywhere.
    *
    */
-  connect(onMessage: CallableFunction, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
+  connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
     // if there's a 'preferred' (only) server then we we can return a promise right away
     // return new Promise<ChannelSocket>((resolve, reject) =>
     //   Promise.any(this.#preferredServer

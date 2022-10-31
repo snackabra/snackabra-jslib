@@ -1411,7 +1411,7 @@ class ChannelSocket extends Channel {
     #sbServer;
     adminData; // TODO: add getter
     // #queue: Array<SBMessage> = [];
-    #onMessage; // the user message handler
+    #onMessage; // CallableFunction // the user message handler
     #ack = [];
     /* ChannelSocket */
     constructor(sbServer, onMessage, key, channelId) {
@@ -1486,8 +1486,8 @@ class ChannelSocket extends Channel {
                         // console.log(Object.entries(data)[0][1])
                         // console.log("This should be the IV?????")
                         // console.log(Object.entries(message)[0][1].encrypted_contents.iv)
-                        const encryptedContents = {
-                            type: 'channelMessage',
+                        let m = {
+                            type: 'encryptedChannelMessage',
                             channelID: z[1],
                             timestampPrefix: z[2],
                             encrypted_contents: {
@@ -1495,17 +1495,22 @@ class ChannelSocket extends Channel {
                                 iv: new Uint8Array(Array.from(Object.values(Object.entries(message)[0][1].encrypted_contents.iv)))
                             }
                         };
-                        // console.log("constructed encrypted message:")
-                        // console.log(encryptedContents)
+                        // console.log("received encrypted message:")
+                        // console.log(m)
                         // const encryptedContents = (Object.entries(message)[0][1] as ChannelEncryptedMessage)
                         // console.log('what are message iv type? string or what? ????????????????/')
                         // console.log(encryptedContents)
-                        sbCrypto.unwrap(this.keys.encryptionKey, encryptedContents.encrypted_contents, 'string').then((unwrapped) => {
-                            // console.log("++++++++ #processMessage: unwrapped:")
+                        sbCrypto.unwrap(this.keys.encryptionKey, m.encrypted_contents, 'string').then((unwrapped) => {
+                            // console.log("++++++++ #processMessage: unwrapped (should be ChannelMessage2):")
                             // console.log(unwrapped)
-                            const ret = unwrapped;
-                            // console.log(ret)
-                            this.#onMessage(ret);
+                            // const ret: ChannelMessage2 = unwrapped as ChannelMessage2
+                            // console.log(ret);
+                            m = { ...m, ...JSON.parse(unwrapped) };
+                            // console.log("this is what 'm' includes:")
+                            // console.log(m)
+                            // Object.kunwrapped).forEach((p) => console.log(p));
+                            // this.#onMessage(ret)
+                            this.#onMessage(m);
                         });
                     }
                     else {

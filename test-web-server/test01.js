@@ -491,7 +491,7 @@ if (test_list.includes('test04d')) {
     SB.create(sbServer, 'password').then((handle) => {
         SB.connect(
         // print out any messages we get
-        (m) => { console.log(`got message: ${m}`); }, handle.key, // if we omit then we're connecting anonymously
+        (m) => { console.log('got message:'); console.log(m); }, handle.key, // if we omit then we're connecting anonymously
         handle.channelId).then((c) => c.ready).then((c) => {
             console.log("++++test04d++++ channel:");
             console.log(c);

@@ -50,8 +50,12 @@ interface ChannelMessage2 {
     channelID?: string;
     control?: boolean;
     encrypted_contents?: EncryptedContents;
+    contents?: string;
+    sign?: string;
     image?: string;
+    image_sign?: string;
     imageMetaData?: ImageMetaData;
+    imageMetadata_sign?: string;
     motd?: string;
     ready?: boolean;
     roomLocked?: boolean;
@@ -119,16 +123,17 @@ export interface EncryptedContents {
     iv: Uint8Array;
 }
 interface ChannelEncryptedMessage {
-    type: 'channelMessage';
+    type?: 'encryptedChannelMessage';
     channelID?: string;
     timestampPrefix?: string;
-    encrypted_contents: EncryptedContents;
+    encrypted_contents?: EncryptedContents;
+    contents?: string;
 }
 interface ChannelEncryptedMessageArray {
     type: 'channelMessageArray';
     messages: ChannelEncryptedMessageArray[];
 }
-export declare type ChannelMessage = ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void;
+export declare type ChannelMessage = ChannelMessage2 | ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void;
 /******************************************************************************************************/
 export declare type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys';
 interface ChannelMessage1 {
@@ -374,6 +379,7 @@ declare class SBCrypto {
      * SBCrypto.unwrap
      *
      * Decrypts a wrapped object, returns (promise to) decrypted contents
+     * per se (either as a string or arrayBuffer)
      */
     unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'string'): Promise<string>;
     unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'arrayBuffer'): Promise<ArrayBuffer>;
@@ -501,9 +507,9 @@ declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
     adminData?: Dictionary;
-    constructor(sbServer: SBServer, onMessage: CallableFunction, key?: JsonWebKey, channelId?: string);
-    set onMessage(f: CallableFunction);
-    get onMessage(): CallableFunction;
+    constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string);
+    set onMessage(f: (m: ChannelMessage) => void);
+    get onMessage(): (m: ChannelMessage) => void;
     /**
      * ChannelSocket.keys
      *
@@ -675,7 +681,7 @@ declare class Snackabra {
      * to find the room anywhere.
      *
      */
-    connect(onMessage: CallableFunction, key?: JsonWebKey, channelId?: string): Promise<ChannelSocket>;
+    connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string): Promise<ChannelSocket>;
     /**
      * Snackabra.create()
      *
