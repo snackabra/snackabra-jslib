@@ -324,12 +324,11 @@ if (test_list.includes('test06a')) {
 }
 
 if (test_list.includes('test06b')) {
-  const SB = new Snackabra();
   Promise.any(([
     "W4LAos8qfbWrDXrTPqW55ygyrZ3Nw7LzWppl3SoTqHn-JloV_tcK8vx1klJPII4U",
     "rSM2Zu-T3UF-99o6KxXBZOcfLam7Qdqj6CDVMRwmBH5ASNskgOCr27GgLO8re-gY"
   ]).map((channelId) =>
-    SB.connect((m: ChannelMessage) => { console.log(`got message: ${m}`) }, undefined /* anonymous */, channelId)))
+    (new Snackabra()).connect((m: ChannelMessage) => { console.log(`got message: ${m}`) }, undefined /* anonymous */, channelId)))
     .then((c) => c.ready).then((c) => {
       console.log(`found the channel here: ${c.sbServer.channel_server}/rooms/${c.channelId}`)
       c.userName = "TestBot";
