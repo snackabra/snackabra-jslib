@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "strict": true,
+    "strictNullChecks": true,
+  },
+  "test": {
+    "files": {
+      "include": ["deno.ts"],
+    }
+  }
+}

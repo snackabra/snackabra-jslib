@@ -1,49 +1,43 @@
 {
-  "name": "snackabra",
-  "version": "0.4.13",
-  "description": "Snackabra JS Library",
-  "main": "index.mjs",
-  "scripts": {
-    "prepare": "eslint src/main.js && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
-    "pretest": "eslint src/main.js && rollup -c > index.mjs",
-    "test": "NODE_OPTIONS=--experimental-vm-modules jest"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/snackabra/snackabra-jslib.git"
-  },
-  "keywords": [
-    "snackabra",
-    "chat",
-    "messaging",
-    "photo",
-    "file",
-    "share"
-  ],
-  "author": "Magnusson Institute",
-  "license": "GPL-3.0-only",
-  "bugs": {
-    "url": "https://github.com/snackabra/snackabra-jslib/issues"
-  },
-  "homepage": "https://snackabra.io",
-  "browser": {
-    "./index.mjs": "./browser.mjs"
-  },
-  "files": [
-    "index.mjs",
-    "browser.mjs"
-  ],
-  "sideEffects": false,
-  "devDependencies": {
-    "@rollup/plugin-replace": "^4.0.0",
-    "eslint": "^8.9.0",
-    "eslint-config-google": "^0.14.0",
-    "jest": "^27.5.1",
-    "jsdoc": "^3.6.10",
-    "node-resolve": "^1.3.4",
-    "puppeteer": "^13.4.0",
-    "rollup": "^2.68.0",
-    "webpack": "^5.69.1",
-    "webpack-cli": "^4.9.2"
-  }
+    "name": "snackabra",
+    "version": "0.4.15",
+    "description": "Snackabra Core Libraries",
+    "type": "module",
+    "main": "index.mjs",
+    "scripts": {
+        "prepare": "tsc -p src/tsconfig.json && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
+        "pretest": "tsc -p src/tsconfig.json && rollup -c > index.mjs",
+        "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/snackabra/snackabra-jslib.git"
+    },
+    "keywords": [
+        "snackabra",
+        "chat",
+        "messaging",
+        "photo",
+        "file",
+        "share"
+    ],
+    "author": "Magnusson Institute and 384co",
+    "license": "GPL-3.0-only",
+    "bugs": {
+        "url": "https://github.com/snackabra/snackabra-jslib/issues"
+    },
+    "homepage": "https://snackabra.io",
+    "browser": {
+        "./index.mjs": "./browser.mjs"
+    },
+    "files": [
+        "index.mjs",
+        "browser.mjs"
+    ],
+    "sideEffects": false,
+    "devDependencies": {
+        "@rollup/plugin-replace": "^5.0.1",
+        "@rollup/plugin-terser": "^0.1.0",
+        "rollup": "^3.2.3"
+    }
 }

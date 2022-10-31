@@ -8,6 +8,11 @@ Javascript utilities, shared by, amongst others:
 
 For general documentation on Snackabra see: https://snackabra.io
 
+JSDOC is used for javascript documentation. See
+https://google.github.io/styleguide/jsguide.html for format.
+Currently the library needs to be explicitly copied into
+the ``snackabra-jslib`` directory in https://github.com/snackabra/docs
+
 If you would like to contribute or help out with the snackabra
 project, please feel free to reach out to us at snackabra@gmail.com or
 snackabra@protonmail.com
