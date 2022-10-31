@@ -7,7 +7,7 @@ const test_list = [
     /* SB API */
     /* 'test04c', 'test04a','test04b', */
     // 'test04',
-    // 'test04d', // connect and activate button
+    'test04d',
     // 'test06a', // minimalist connect to SB and send a message
     'test06b', // connecting to known channel
     // for now only do one or the other of the following (or they overlap)
@@ -271,17 +271,19 @@ if (test_list.includes('test06a')) {
     });
 }
 if (test_list.includes('test06b')) {
-    const channelId = "W4LAos8qfbWrDXrTPqW55ygyrZ3Nw7LzWppl3SoTqHn-JloV_tcK8vx1klJPII4U";
     const SB = new Snackabra();
-    SB.connect((m) => { console.log(`got message: ${m}`); }, undefined /* anonymous */, channelId)
+    Promise.any(([
+        "W4LAos8qfbWrDXrTPqW55ygyrZ3Nw7LzWppl3SoTqHn-JloV_tcK8vx1klJPII4U",
+        "rSM2Zu-T3UF-99o6KxXBZOcfLam7Qdqj6CDVMRwmBH5ASNskgOCr27GgLO8re-gY"
+    ]).map((channelId) => SB.connect((m) => { console.log(`got message: ${m}`); }, undefined /* anonymous */, channelId)))
         .then((c) => c.ready).then((c) => {
-        console.log(`connected here: ${c.sbServer.channel_server}/rooms/${channelId}`);
+        console.log(`found the channel here: ${c.sbServer.channel_server}/rooms/${c.channelId}`);
         c.userName = "TestBot";
         (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`test message sent! (${c})`); });
     })
         .catch((e) => {
         if (e instanceof AggregateError)
-            console.log("Could not find any server with that room");
+            console.log("Could not find server for room ${channelId}");
         else
             console.log(`Failed to find a server, unknown problem: ${e}`);
     });
