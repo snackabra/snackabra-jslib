@@ -603,12 +603,13 @@ function packageEncryptDict(dict, publicKeyPEM, callback) {
  * Partition
  */
 function partition(str, n) {
-    const returnArr = [];
-    let i, l;
-    for (i = 0, l = str.length; i < l; i += n) {
-        returnArr.push(str.substr(i, n));
-    }
-    return returnArr;
+    throw (`partition() not tested on TS yet - (${str}, ${n})`);
+    // const returnArr = [];
+    // let i, l;
+    // for (i = 0, l = str.length; i < l; i += n) {
+    //   returnArr.push(str.slice(i, l + n));
+    // }
+    // return returnArr;
 }
 /**
  * There are many problems with JSON parsing, adding a wrapper to capture more info.

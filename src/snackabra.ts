@@ -942,12 +942,13 @@ export function packageEncryptDict(dict: Dictionary, publicKeyPEM: string, callb
  * Partition
  */
 export function partition(str: string, n: number) {
-  const returnArr = [];
-  let i, l;
-  for (i = 0, l = str.length; i < l; i += n) {
-    returnArr.push(str.substr(i, n));
-  }
-  return returnArr;
+  throw(`partition() not tested on TS yet - (${str}, ${n})`)
+  // const returnArr = [];
+  // let i, l;
+  // for (i = 0, l = str.length; i < l; i += n) {
+  //   returnArr.push(str.slice(i, l + n));
+  // }
+  // return returnArr;
 }
 
 /**
@@ -3383,5 +3384,5 @@ export {
   Channel,
   SBMessage,
   Snackabra,
-  SBCrypto
+  SBCrypto,  
 };

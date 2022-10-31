@@ -1,12 +1,12 @@
 {
     "name": "snackabra",
-    "version": "0.5.b2",
+    "version": "0.4.15",
     "description": "Snackabra Core Libraries",
     "type": "module",
     "main": "index.mjs",
     "scripts": {
-        "prepare": "tsc && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
-        "pretest": "tsc && rollup -c > index.mjs",
+        "prepare": "tsc -p src/tsconfig.json && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
+        "pretest": "tsc -p src/tsconfig.json && rollup -c > index.mjs",
         "test": "NODE_OPTIONS=--experimental-vm-modules jest"
     },
     "repository": {

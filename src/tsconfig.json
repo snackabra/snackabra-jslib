@@ -15,13 +15,8 @@
     // "watch": true,
     "declaration": true,
     "forceConsistentCasingInFileNames": true,
-    "paths": { // this is to fix node bull$
-      "@babel/*": [
-          "./node_modules/@types/babel__*"
-      ]
-  }
   },
-  "include": ["./src/*.ts", "./test-web-server/*.ts"],
+  "include": [ "*.ts"],
   "watchOptions": {
     // Use native file system events for files and directories
     "watchFile": "useFsEvents",

@@ -299,7 +299,7 @@ export declare function packageEncryptDict(dict: Dictionary, publicKeyPEM: strin
 /**
  * Partition
  */
-export declare function partition(str: string, n: number): string[];
+export declare function partition(str: string, n: number): void;
 /**
  * There are many problems with JSON parsing, adding a wrapper to capture more info.
  * The 'loc' parameter should be a (unique) string that allows you to find the usage
@@ -692,4 +692,4 @@ declare class Snackabra {
     get crypto(): SBCrypto;
     sendFile(file: SBFile): void;
 }
-export { Channel, SBMessage, Snackabra, SBCrypto };
+export { Channel, SBMessage, Snackabra, SBCrypto, };

@@ -624,12 +624,13 @@ export function packageEncryptDict(dict, publicKeyPEM, callback) {
  * Partition
  */
 export function partition(str, n) {
-    const returnArr = [];
-    let i, l;
-    for (i = 0, l = str.length; i < l; i += n) {
-        returnArr.push(str.substr(i, n));
-    }
-    return returnArr;
+    throw (`partition() not tested on TS yet - (${str}, ${n})`);
+    // const returnArr = [];
+    // let i, l;
+    // for (i = 0, l = str.length; i < l; i += n) {
+    //   returnArr.push(str.slice(i, l + n));
+    // }
+    // return returnArr;
 }
 /**
  * There are many problems with JSON parsing, adding a wrapper to capture more info.
@@ -2832,5 +2833,5 @@ class Snackabra {
 } /* class Snackabra */
 export { 
 // ChannelMessage,
-Channel, SBMessage, Snackabra, SBCrypto };
+Channel, SBMessage, Snackabra, SBCrypto, };
 //# sourceMappingURL=snackabra.js.map
