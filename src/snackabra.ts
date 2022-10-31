@@ -3067,7 +3067,7 @@ class ChannelApi {
  * @constructor
  * @public
  */
-class IndexedKV {
+export class IndexedKV {
   db!: IDBDatabase;
   events = new MessageBus();
   options: IndexedKVOptions = {

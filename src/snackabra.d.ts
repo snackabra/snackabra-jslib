@@ -18,6 +18,12 @@ export interface SBServer {
     channel_ws: string;
     storage_server: string;
 }
+interface IndexedKVOptions {
+    db: string;
+    table: string;
+    onReady: CallableFunction;
+}
+declare type StorableDataType = string | number | bigint | boolean | symbol | object;
 interface Dictionary {
     [index: string]: any;
 }
@@ -649,6 +655,27 @@ declare class ChannelApi {
     authorize(ownerPublicKey: Dictionary, serverSecret: string): Promise<unknown>;
     postPubKey(_exportable_pubKey: Dictionary): Promise<unknown>;
     storageRequest(byteLength: number): Promise<Dictionary>;
+}
+/******************************************************************************************************/
+/**
+ * Augments IndexedDB to be used as a KV to easily
+ * replace _localStorage for larger and more complex datasets
+ *
+ * @class
+ * @constructor
+ * @public
+ */
+export declare class IndexedKV {
+    #private;
+    db: IDBDatabase;
+    events: MessageBus;
+    options: IndexedKVOptions;
+    constructor();
+    openCursor(match: string, callback: CallableFunction): Promise<unknown>;
+    setItem(key: string, value: StorableDataType): Promise<unknown>;
+    add(key: string, value: StorableDataType): Promise<unknown>;
+    getItem(key: string): Promise<string | null>;
+    removeItem(key: string): Promise<unknown>;
 }
 declare class Snackabra {
     #private;

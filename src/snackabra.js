@@ -2523,7 +2523,7 @@ class ChannelApi {
  * @constructor
  * @public
  */
-class IndexedKV {
+export class IndexedKV {
     db;
     events = new MessageBus();
     options = {
