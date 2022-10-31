@@ -55,7 +55,7 @@ export interface SBChannelHandle {
 export interface SBServer {
   channel_server: string,
   channel_ws: string,
-  storage_server: string,
+  storage_server: string
 }
 
 /**
@@ -72,7 +72,7 @@ const SBKnownServers: Array<SBServer> = [
   {
     channel_server: 'https://r.somethingstuff.workers.dev/',
     channel_ws: 'wss://r.somethingstuff.workers.dev/',
-    storage_server: 'https://s.somethingstuff.workers.dev/'
+    storage_server: 'https://s.somethingstuff.workers.dev/'    
   },
   {
     channel_server: 'https://r.384co.workers.dev/',

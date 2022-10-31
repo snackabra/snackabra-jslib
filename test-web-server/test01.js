@@ -276,7 +276,7 @@ if (test_list.includes('test06b')) {
         "rSM2Zu-T3UF-99o6KxXBZOcfLam7Qdqj6CDVMRwmBH5ASNskgOCr27GgLO8re-gY"
     ]).map((channelId) => (new Snackabra()).connect((m) => { console.log(`got message: ${m}`); }, undefined /* anonymous */, channelId)))
         .then((c) => c.ready).then((c) => {
-        console.log(`found the channel here: ${c.sbServer.channel_server}/rooms/${c.channelId}`);
+        console.log(`found a channel here: ${c.sbServer.channel_server}/rooms/${c.channelId}`);
         c.userName = "TestBot";
         (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`test message sent! (${c})`); });
     })
