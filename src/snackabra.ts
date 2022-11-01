@@ -159,6 +159,7 @@ interface ChannelMessage2 {
   control?: boolean,
   encrypted_contents?: EncryptedContents,
   contents?: string, // if present means unencrypted
+  text?: string, // backwards compat, same as contents
   sign?: string,
   image?: string,
   image_sign?: string,
@@ -168,7 +169,9 @@ interface ChannelMessage2 {
   ready?: boolean,
   roomLocked?: boolean,
   sender_pubKey?: JsonWebKey,
+  sender_username?: string,
   system?: boolean,
+  user?: { name: string, _id?: JsonWebKey },
   verificationToken?: string,
 }
 
@@ -251,6 +254,8 @@ interface ChannelEncryptedMessage {
   // fourty-two (42) 0s and 1s as string, e.g.:
   // '011000001110001011010110101010000100000110'
   timestampPrefix?: string,
+
+  _id: string, // backwards compatibility (channelID + timestampPrefix)
 
   encrypted_contents?: EncryptedContents,
 
@@ -443,6 +448,7 @@ export function _sb_resolve(val: any) {
 export function _sb_assert(val: unknown, msg: string) {
   if (!(val)) {
     const m = `<< SB assertion error: ${msg} >>`;
+    // debugger;
     throw new Error(m);
   }
 }
@@ -1772,13 +1778,44 @@ abstract class Channel extends SB384 {
 
 } /* class Channel */
 
+function deCryptChannelMessage(m00: any, m01: EncryptedContents, encryptionKey: CryptoKey): Promise<ChannelMessage> {
+  return new Promise<ChannelMessage>((resolve, reject) => {
+    const z = messageIdRegex.exec(m00)
+    if (z) {
+      let m: ChannelEncryptedMessage = {
+        type: 'encryptedChannelMessage',
+        channelID: z[1],
+        timestampPrefix: z[2],
+        _id: z[1] + z[2],
+        encrypted_contents: {
+          content: m01.content,
+          iv: new Uint8Array(Array.from(Object.values(m01.iv)))
+        }
+      }
+      sbCrypto.unwrap(encryptionKey, m.encrypted_contents!, 'string').then((unwrapped) => {
+        let m2: ChannelMessage2 = { ...m, ...JSON.parse(unwrapped) };
+        if (m2.contents) m2.text = m.contents
+        m2.user = {
+          name: m2.sender_username ? m2.sender_username : 'Unknown',
+          _id: m2.sender_pubKey
+        }
+        resolve(m2)
+      })
+    } else {
+      console.log("++++++++ #processMessage: ERROR - cannot parse channel ID / timestamp, invalid message")
+      console.log(m00, m01)
+      reject(null)
+    }
+  })
+}
+
 /**
  *
  * ChannelSocket
  *
  *  Class managing connections
  */
-class ChannelSocket extends Channel {
+export class ChannelSocket extends Channel {
   ready
   #ChannelSocketReadyFlag: boolean = false // must be named <class>ReadyFlag
   // #channelId: string
@@ -1810,6 +1847,8 @@ class ChannelSocket extends Channel {
     this.ready = this.#readyPromise()
   }
 
+  
+
   /* ChannelSocket
      internal to channelsocket: this always gets all messages; certain
     protocol aspects are low-level (independent of 'app') and those
@@ -1834,69 +1873,17 @@ class ChannelSocket extends Channel {
       // if (this.#websocket) this.#websocket.close()
     } else if (typeof this.#onMessage === 'function') {
       const message = data as ChannelMessage2
-      // 'id' will be first property
-      // console.log("++++++++ ChannelSocket.#processMessage():")
-      // const id = Object.keys(message)[0];
-      // console.log("++++++++ #processMessage: note .. 'id' was:")
-      // console.log(id)
-      // TODO: we should regex on Object.entries(message)[0] but we can't quite yet because
-      //       some versions of channel server return 'undefined' as channel name
-      // let unwrapped: string = ''
-      // console.log("++++++++ #processMessage: ... parsing ...:")
-      // console.log(data)
-      // console.log(Object.entries(data))
-      // console.log(Object.entries(data)[0][1].encrypted_contents)
-      // console.log(Object.entries(message))
       try {
         // console.log("++++++++ #processMessage: will attempt to decipher ...:")
+        let m01 = Object.entries(message)[0][1]
         // @ts-ignore
-        if (Object.keys(Object.entries(data)[0][1])[0] === 'encrypted_contents') {
+        if (Object.keys(m01)[0] === 'encrypted_contents') {
           // TODO: parse out ID and time stamp, regex:
-          const m = Object.entries(data)[0][0]
-          // console.log(m)
-          const z = messageIdRegex.exec(m)
-          if (z) {
-            // console.log('found regex matches:')
-            // console.log(z)
-            // console.log("++++++++++ Object.entries .... ++++++++++")
-            // console.log(Object.entries(data)[0][1])
-            // console.log("This should be the IV?????")
-            // console.log(Object.entries(message)[0][1].encrypted_contents.iv)
-            let m: ChannelEncryptedMessage = {
-              type: 'encryptedChannelMessage',
-              channelID: z[1],
-              timestampPrefix: z[2],
-              encrypted_contents: {
-                content: Object.entries(message)[0][1].encrypted_contents.content,
-                iv: new Uint8Array(Array.from(Object.values(Object.entries(message)[0][1].encrypted_contents.iv)))
-              }
-            }
-            // console.log("received encrypted message:")
-            // console.log(m)
-            // const encryptedContents = (Object.entries(message)[0][1] as ChannelEncryptedMessage)
-            // console.log('what are message iv type? string or what? ????????????????/')
-            // console.log(encryptedContents)
-            sbCrypto.unwrap(this.keys.encryptionKey, m.encrypted_contents!, 'string').then((unwrapped) => {
-              // console.log("++++++++ #processMessage: unwrapped (should be ChannelMessage2):")
-              // console.log(unwrapped)
-              // const ret: ChannelMessage2 = unwrapped as ChannelMessage2
-              // console.log(ret);
-              m = { ...m, ...JSON.parse(unwrapped) };
-              // console.log("this is what 'm' includes:")
-              // console.log(m)
-              // Object.kunwrapped).forEach((p) => console.log(p));
-              // this.#onMessage(ret)
-              this.#onMessage(m)
-            })
-          } else {
-            console.log("++++++++ #processMessage: can't decipher message, passing along unchanged:")
-            console.log(message)
-            this.#onMessage(message)
-          }
-
-        } else if (Object.entries(message)[0][1].type === 'ack') {
+          const m00 = Object.entries(data)[0][0]
+          deCryptChannelMessage(m00, m01.encrypted_contents, this.keys.encryptionKey).then((m) => { this.#onMessage(m) })
+        } else if (m01.type === 'ack') {
           // console.log("++++++++ Received 'ack'")
-          const ack_id = Object.entries(message)[0][1]._id
+          const ack_id = m01._id
           const r = this.#ack[ack_id]
           if (r) {
             // console.log(`++++++++ found matching ack for id ${ack_id}`)
@@ -1908,7 +1895,7 @@ class ChannelSocket extends Channel {
           }
         } else {
           // 
-          // TODO: other message types (low level) are parsed here ...
+          // TODO: other message types (low level?) are parsed here ...
           //
           console.log("++++++++ #processMessage: can't decipher message, passing along unchanged:")
           console.log(message)
@@ -1951,8 +1938,7 @@ class ChannelSocket extends Channel {
           this.channelReady.then(() => {
             // console.log("++++++++ readyPromise() has identity:")
             // console.log(id)
-            this.#ws.init = { name: JSON.stringify(this.exportable_pubKey) }
-            this.#ws.init = { name: JSON.stringify(this.exportable_pubKey) }
+            this.#ws.init = { name: JSON.stringify(this.exportable_pubKey) } // TODO: sometimes this is null?
             // console.log("++++++++ readyPromise() constructed init:")
             // console.log(this.#ws.init)
             this.#ws.websocket.send(JSON.stringify(this.#ws.init))
@@ -2669,17 +2655,21 @@ class ChannelApi {
   /**
    * getOldMessages
    */
-  getOldMessages(currentMessagesLength: number) {
+  getOldMessages(currentMessagesLength: number): Promise<Array<ChannelMessage>> {
     return new Promise((resolve, reject) => {
+      const encryptionKey = this.#channel.keys.encryptionKey
       fetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
         method: 'GET',
       }).then((response: Response) => {
-        if (!response.ok) {
-          reject(new Error('Network response was not OK'));
-        }
+        if (!response.ok) { reject(new Error('Network response was not OK')); }
         return response.json();
-      }).then((_encrypted_messages) => {
-        resolve(_encrypted_messages);
+      }).then((messages) => {
+        // console.log(Object.values(messages))
+        Promise.all(Object
+          .keys(messages)
+          .filter((v) => messages[v].hasOwnProperty('encrypted_contents'))
+          .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, encryptionKey)))
+          .then((decryptedMessageArray) => resolve(decryptedMessageArray))
       }).catch((e: Error) => {
         reject(e);
       });

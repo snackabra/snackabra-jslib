@@ -57,6 +57,7 @@ interface ChannelMessage2 {
     control?: boolean;
     encrypted_contents?: EncryptedContents;
     contents?: string;
+    text?: string;
     sign?: string;
     image?: string;
     image_sign?: string;
@@ -66,7 +67,12 @@ interface ChannelMessage2 {
     ready?: boolean;
     roomLocked?: boolean;
     sender_pubKey?: JsonWebKey;
+    sender_username?: string;
     system?: boolean;
+    user?: {
+        name: string;
+        _id?: JsonWebKey;
+    };
     verificationToken?: string;
 }
 interface ChannelAckMessage {
@@ -132,6 +138,7 @@ interface ChannelEncryptedMessage {
     type?: 'encryptedChannelMessage';
     channelID?: string;
     timestampPrefix?: string;
+    _id: string;
     encrypted_contents?: EncryptedContents;
     contents?: string;
 }
@@ -509,7 +516,7 @@ declare abstract class Channel extends SB384 {
  *
  *  Class managing connections
  */
-declare class ChannelSocket extends Channel {
+export declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
     adminData?: Dictionary;
@@ -622,7 +629,7 @@ declare class ChannelApi {
     /**
      * getOldMessages
      */
-    getOldMessages(currentMessagesLength: number): Promise<unknown>;
+    getOldMessages(currentMessagesLength: number): Promise<Array<ChannelMessage>>;
     /**
      * updateCapacity
      */

@@ -32,6 +32,7 @@
     },
     "files": [
         "index.mjs",
+        "index.d.ts",
         "browser.mjs"
     ],
     "sideEffects": false,

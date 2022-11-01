@@ -7,9 +7,10 @@ const test_list = [
     /* SB API */
     /* 'test04c', 'test04a','test04b', */
     // 'test04',
-    'test04d',
-    // 'test06a', // minimalist connect to SB and send a message
-    'test06b', // connecting to known channel
+    // 'test04d', // connect and activate button
+    // 'test06a', // minimalist connect to SB and send a message (creates new channel)
+    // 'test06b', // connecting to known channel
+    'test06c', // test getting old messages (uses only old channels)
     // for now only do one or the other of the following (or they overlap)
     // 'test05a',
     // 'test05b',
@@ -236,6 +237,13 @@ if (test_list.includes('test07a')) {
 /* ******************************** *
     New 0.5.0 'snackabra.ts' tests!
  * ******************************** */
+const someKnownRooms = [
+    "W4LAos8qfbWrDXrTPqW55ygyrZ3Nw7LzWppl3SoTqHn-JloV_tcK8vx1klJPII4U",
+    "rSM2Zu-T3UF-99o6KxXBZOcfLam7Qdqj6CDVMRwmBH5ASNskgOCr27GgLO8re-gY",
+    "2fLf7t3ICjsjSKXzsMTyy514KeoVAGyHTdlGVSaQjgeDYc31bSiZR-dTvWmuHcwf",
+    "2Hi26GZ3N5vuYt8Gbvn3eM881s0L3VS3p_tx-gzIwfObUR3redN2ylvba0Y0AgVY",
+    "goiGm90DfIJ0B4dgRx_hu6rG7O-aDMASiiwlIOsA55BpBgLGkFxDSjlRX7L_GtU2"
+];
 const sb_config = {
     channel_server: 'http://localhost:4001',
     channel_ws: 'ws://localhost:4001',
@@ -271,10 +279,7 @@ if (test_list.includes('test06a')) {
     });
 }
 if (test_list.includes('test06b')) {
-    Promise.any(([
-        "W4LAos8qfbWrDXrTPqW55ygyrZ3Nw7LzWppl3SoTqHn-JloV_tcK8vx1klJPII4U",
-        "rSM2Zu-T3UF-99o6KxXBZOcfLam7Qdqj6CDVMRwmBH5ASNskgOCr27GgLO8re-gY"
-    ]).map((channelId) => (new Snackabra()).connect((m) => { console.log(`got message: ${m}`); }, undefined /* anonymous */, channelId)))
+    Promise.any((someKnownRooms).map((channelId) => (new Snackabra()).connect((m) => { console.log(`got message: ${m}`); }, undefined /* anonymous */, channelId)))
         .then((c) => c.ready).then((c) => {
         console.log(`found a channel here: ${c.sbServer.channel_server}/rooms/${c.channelId}`);
         c.userName = "TestBot";
@@ -285,6 +290,40 @@ if (test_list.includes('test06b')) {
             console.log("Could not find server for room ${channelId}");
         else
             console.log(`Failed to find a server, unknown problem: ${e}`);
+    });
+}
+// helper function, tries to get you a channel (ChannelSocket),
+// 'normal' failure will reject(null)
+function getAnyChannel(channelIdArray, onMessage) {
+    return new Promise((resolve, reject) => Promise.any(channelIdArray.map((channelId) => (new Snackabra()).connect(onMessage, undefined /* anonymous */, channelId)))
+        .then((c) => c.ready).then((c) => { resolve(c); })
+        .catch((e) => {
+        if (e instanceof AggregateError) {
+            console.log("Could not find server for room ${channelId}");
+            reject(null); // 'normal' failure
+        }
+        else {
+            console.log(`Failed to find a server, unknown problem: ${e}`);
+            throw new Error(`getAnyChannel() fails with unknown error (${e})`);
+        }
+    }));
+}
+if (test_list.includes('test06c')) {
+    getAnyChannel(["npOtKNgVgegDTJfLvwdtsb-N0nwxAV7iawhDQxU52VnxYfCaJIimNh7kT6mIKnHJ"], (m) => { console.log('test06c got message:'); console.log(m); })
+        .then((c) => {
+        if (c) {
+            console.log(`test06c found a channel ("${c.channelId}") on server ${c.sbServer.channel_server}`);
+            c.userName = "TestBot";
+            (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`[test06c] test message sent! (${c})`); });
+            console.log("now trying to fetch old messages:");
+            c.api.getOldMessages(0).then((oldMessages) => {
+                console.log("got a reply:");
+                console.log(oldMessages);
+            });
+        }
+        else {
+            console.log("Could not find server for room ${channelId}");
+        }
     });
 }
 if (false) {
