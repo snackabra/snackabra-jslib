@@ -4,6 +4,7 @@
     "description": "Snackabra Core Libraries",
     "type": "module",
     "main": "index.mjs",
+    "types": "index.d.ts",
     "scripts": {
         "prepare": "tsc -p src/tsconfig.json && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
         "pretest": "tsc -p src/tsconfig.json && rollup -c > index.mjs",
