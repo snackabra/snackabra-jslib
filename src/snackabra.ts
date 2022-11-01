@@ -1794,7 +1794,7 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, encryptionKe
       }
       sbCrypto.unwrap(encryptionKey, m.encrypted_contents!, 'string').then((unwrapped) => {
         let m2: ChannelMessage2 = { ...m, ...JSON.parse(unwrapped) };
-        if (m2.contents) m2.text = m.contents
+        if (m2.contents) m2.text = m2.contents
         m2.user = {
           name: m2.sender_username ? m2.sender_username : 'Unknown',
           _id: m2.sender_pubKey
