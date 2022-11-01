@@ -2230,7 +2230,6 @@ class ChannelApi {
      * getOldMessages
      */
     getOldMessages(currentMessagesLength) {
-        debugger;
         return new Promise((resolve, reject) => {
             const encryptionKey = this.#channel.keys.encryptionKey;
             fetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {

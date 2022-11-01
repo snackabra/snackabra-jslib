@@ -1778,7 +1778,7 @@ abstract class Channel extends SB384 {
 
 } /* class Channel */
 
-function deCryptChannelMessage(m00: any, m01: EncryptedContents, encryptionKey: CryptoKey): Promise<ChannelMessage> {
+function deCryptChannelMessage(m00: string, m01: EncryptedContents, encryptionKey: CryptoKey): Promise<ChannelMessage> {
   return new Promise<ChannelMessage>((resolve, reject) => {
     const z = messageIdRegex.exec(m00)
     if (z) {
@@ -2679,7 +2679,7 @@ class ChannelApi {
       });
     });
   }
-  
+
 
   /**
    * updateCapacity

@@ -2223,7 +2223,11 @@ class ChannelApi {
                     .keys(messages)
                     .filter((v) => messages[v].hasOwnProperty('encrypted_contents'))
                     .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, encryptionKey)))
-                    .then((decryptedMessageArray) => resolve(decryptedMessageArray));
+                    .then((decryptedMessageArray) => {
+                    console.log("getOldMessages is returning:");
+                    console.log(decryptedMessageArray);
+                    resolve(decryptedMessageArray);
+                });
             }).catch((e) => {
                 reject(e);
             });
