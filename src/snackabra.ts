@@ -2679,6 +2679,7 @@ class ChannelApi {
       });
     });
   }
+  
 
   /**
    * updateCapacity
