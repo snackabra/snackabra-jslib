@@ -28,6 +28,14 @@ const SBKnownServers = [
         storage_server: 'https://s.384co.workers.dev/'
     }
 ];
+// interface ChannelMessage1 {
+//   // currently we can't do a regex match here, and i can't figure
+//   // out a more clever way of collapsing this.  TODO maybe we should
+//   // change the message format
+//   [key: string]: ChannelMessage2,
+//   message: { [prop: string]: any },
+// }
+// export type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
 //#region - not so core stuff
 /******************************************************************************************************/
 /**
@@ -1008,17 +1016,21 @@ class SBCrypto {
     /**
      * SBCrypto.verify()
      *
-     * Verify
+     * Verify signature.
      */
     verify(secretKey, sign, contents) {
         return new Promise(async (resolve, reject) => {
             try {
-                const _sign = base64ToArrayBuffer(decodeURIComponent(sign));
-                const encoder = new TextEncoder();
-                const encoded = encoder.encode(contents);
+                // const _sign = base64ToArrayBuffer(decodeURIComponent(sign));
+                const _sign = base64ToArrayBuffer(sign);
+                // const encoder = new TextEncoder();
+                // const encoded = encoder.encode(contents);
+                const encoded = str2ab(contents);
                 try {
-                    const verified = await crypto.subtle.verify('HMAC', secretKey, _sign, encoded);
-                    resolve(verified);
+                    // const verified = await crypto.subtle.verify('HMAC', secretKey, _sign, encoded)
+                    crypto.subtle.verify('HMAC', secretKey, _sign, encoded).then((verified) => {
+                        resolve(verified);
+                    });
                 }
                 catch (e) {
                     reject(e);
@@ -1397,12 +1409,14 @@ __decorate([
     Memoize,
     Ready
 ], Channel.prototype, "channelId", null);
-function deCryptChannelMessage(m00, m01, encryptionKey) {
+function deCryptChannelMessage(m00, m01, keys) {
     return new Promise((resolve, reject) => {
         const z = messageIdRegex.exec(m00);
+        const encryptionKey = keys.encryptionKey;
+        const channelSignKey = keys.channelSignKey;
         if (z) {
             let m = {
-                type: 'encryptedChannelMessage',
+                type: 'encrypted',
                 channelID: z[1],
                 timestampPrefix: z[2],
                 _id: z[1] + z[2],
@@ -1419,7 +1433,18 @@ function deCryptChannelMessage(m00, m01, encryptionKey) {
                     name: m2.sender_username ? m2.sender_username : 'Unknown',
                     _id: m2.sender_pubKey
                 };
-                resolve(m2);
+                sbCrypto.verify(channelSignKey, m2.sign, m2.contents).then((v) => {
+                    if (v) {
+                        console.log("signature on message is correct:");
+                    }
+                    else {
+                        console.log("***** signature is NOT correct on this message: (TODO)");
+                    }
+                    console.log(m2);
+                    console.log("signature key used was:");
+                    console.log(keys.channelSignKey);
+                    resolve(m2);
+                });
             });
         }
         else {
@@ -1498,7 +1523,8 @@ export class ChannelSocket extends Channel {
                 if (Object.keys(m01)[0] === 'encrypted_contents') {
                     // TODO: parse out ID and time stamp, regex:
                     const m00 = Object.entries(data)[0][0];
-                    deCryptChannelMessage(m00, m01.encrypted_contents, this.keys.encryptionKey).then((m) => { this.#onMessage(m); });
+                    deCryptChannelMessage(m00, m01.encrypted_contents, this.keys)
+                        .then((m) => { this.#onMessage(m); });
                 }
                 else if (m01.type === 'ack') {
                     // console.log("++++++++ Received 'ack'")
@@ -2231,7 +2257,7 @@ class ChannelApi {
      */
     getOldMessages(currentMessagesLength) {
         return new Promise((resolve, reject) => {
-            const encryptionKey = this.#channel.keys.encryptionKey;
+            // const encryptionKey = this.#channel.keys.encryptionKey
             fetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
                 method: 'GET',
             }).then((response) => {
@@ -2244,7 +2270,7 @@ class ChannelApi {
                 Promise.all(Object
                     .keys(messages)
                     .filter((v) => messages[v].hasOwnProperty('encrypted_contents'))
-                    .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, encryptionKey)))
+                    .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, this.#channel.keys)))
                     .then((decryptedMessageArray) => {
                     console.log("getOldMessages is returning:");
                     console.log(decryptedMessageArray);

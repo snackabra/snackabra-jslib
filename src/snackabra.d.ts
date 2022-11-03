@@ -41,14 +41,9 @@ interface ImageMetaData {
     imageKey?: string;
     previewKey?: string;
 }
-interface ChannelMessage2 {
-    type?: 'invalid' | 'ready';
-    keys?: {
-        ownerKey: Dictionary;
-        encryptionKey: Dictionary;
-        guestKey?: Dictionary;
-        signKey: Dictionary;
-    };
+export interface ChannelMessage {
+    type?: ChannelMessageTypes;
+    keys?: ChannelKeyStrings;
     _id?: string;
     id?: string;
     timestamp?: number;
@@ -74,10 +69,6 @@ interface ChannelMessage2 {
         _id?: JsonWebKey;
     };
     verificationToken?: string;
-}
-interface ChannelAckMessage {
-    type: 'ack';
-    _id: string;
 }
 /** sample channelKeys contents
  *
@@ -108,13 +99,6 @@ interface ChannelKeyStrings {
     signKey: string;
     lockedKey?: string;
 }
-interface ChannelKeysMessage {
-    type: 'channelKeys';
-    ready: boolean;
-    keys: ChannelKeyStrings;
-    motd: string;
-    roomLocked: boolean;
-}
 interface ChannelKeys {
     ownerKey: CryptoKey;
     guestKey?: CryptoKey;
@@ -134,28 +118,8 @@ export interface EncryptedContents {
     content: string | ArrayBuffer;
     iv: Uint8Array;
 }
-interface ChannelEncryptedMessage {
-    type?: 'encryptedChannelMessage';
-    channelID?: string;
-    timestampPrefix?: string;
-    _id: string;
-    encrypted_contents?: EncryptedContents;
-    contents?: string;
-}
-interface ChannelEncryptedMessageArray {
-    type: 'channelMessageArray';
-    messages: ChannelEncryptedMessageArray[];
-}
-export declare type ChannelMessage = ChannelMessage2 | ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void;
 /******************************************************************************************************/
-export declare type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys';
-interface ChannelMessage1 {
-    [key: string]: ChannelMessage2;
-    message: {
-        [prop: string]: any;
-    };
-}
-export declare type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage;
+export declare type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
 /******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
@@ -405,9 +369,9 @@ declare class SBCrypto {
     /**
      * SBCrypto.verify()
      *
-     * Verify
+     * Verify signature.
      */
-    verify(secretKey: CryptoKey, sign: string, contents: string): Promise<unknown>;
+    verify(secretKey: CryptoKey, sign: string, contents: string): Promise<boolean>;
     /**
      * SBCrypto.compareKeys()
      *
@@ -601,7 +565,7 @@ declare class StorageApi {
      * StorageApi().retrieveData()
      * retrieves an object from storage
      */
-    retrieveData(msgId: string, messages: Array<ChannelMessage2>, controlMessages: Array<ChannelMessage2>): Promise<Dictionary>;
+    retrieveData(msgId: string, messages: Array<ChannelMessage>, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
     /**
      * StorageApi().retrieveDataFromMessage()
      */

@@ -309,7 +309,7 @@ function getAnyChannel(channelIdArray, onMessage) {
     }));
 }
 if (test_list.includes('test06c')) {
-    getAnyChannel(["npOtKNgVgegDTJfLvwdtsb-N0nwxAV7iawhDQxU52VnxYfCaJIimNh7kT6mIKnHJ"], (m) => { console.log('test06c got message:'); console.log(m); })
+    getAnyChannel(["m7HW8L-sImwZG5GermF7NmtIOgi6CSWC537WdsXKRf3yA6qmtQIQjOGjiXJxsvgf"], (m) => { console.log('test06c got message:'); console.log(m); })
         .then((c) => {
         if (c) {
             console.log(`test06c found a channel ("${c.channelId}") on server ${c.sbServer.channel_server}`);

@@ -143,14 +143,15 @@ interface ImageMetaData {
   } */
 
 
-interface ChannelMessage2 {
-  type?: 'invalid' | 'ready',
-  keys?: {
-    ownerKey: Dictionary,
-    encryptionKey: Dictionary,
-    guestKey?: Dictionary,
-    signKey: Dictionary,
-  },
+export interface ChannelMessage {
+  type?: ChannelMessageTypes,
+  // keys?: {
+  //   ownerKey: Dictionary,
+  //   encryptionKey: Dictionary,
+  //   guestKey?: Dictionary,
+  //   signKey: Dictionary,
+  // },
+  keys?: ChannelKeyStrings,
   _id?: string,
   id?: string,
   timestamp?: number,
@@ -245,7 +246,7 @@ export interface EncryptedContents {
 }
 
 interface ChannelEncryptedMessage {
-  type?: 'encryptedChannelMessage',
+  type?: 'encrypted',
 
   // base64 - 64 chars (512 bits), e.g:
   // 'wDUMRbcfFhdmByuwMhFyR46MRlcZh-6gKRUhSPkWEQLSRUPE8_jqixV3VQevTDBy'
@@ -264,13 +265,13 @@ interface ChannelEncryptedMessage {
 }
 
 
-interface ChannelEncryptedMessageArray {
-  type: 'channelMessageArray',
-  messages: ChannelEncryptedMessageArray[]
-}
+// interface ChannelEncryptedMessageArray {
+//   type: 'channelMessageArray',
+//   messages: ChannelEncryptedMessageArray[]
+// }
 
 // mtg: we shouldn't need the export here because we are using them internally
-export type ChannelMessage = ChannelMessage2 | ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray | void
+// export type ChannelMessage = ChannelMessage2 | ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray
 
 //#region (currently unused) code experimenting with types and protocols
 /******************************************************************************************************/
@@ -316,18 +317,18 @@ export type ChannelMessage = ChannelMessage2 | ChannelKeysMessage | ChannelEncry
 
 //#endregion
 
-export type ChannelMessageTypes = 'ack' | 'channelMessage' | 'channelMessageArray' | 'channelKeys'
+export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted'
 
-interface ChannelMessage1 {
-  // currently we can't do a regex match here, and i can't figure
-  // out a more clever way of collapsing this.  TODO maybe we should
-  // change the message format
-  [key: string]: ChannelMessage2,
+// interface ChannelMessage1 {
+//   // currently we can't do a regex match here, and i can't figure
+//   // out a more clever way of collapsing this.  TODO maybe we should
+//   // change the message format
+//   [key: string]: ChannelMessage2,
 
-  message: { [prop: string]: any },
-}
+//   message: { [prop: string]: any },
+// }
 
-export type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
+// export type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
 
 //#region - not so core stuff
 /******************************************************************************************************/
@@ -1375,17 +1376,21 @@ class SBCrypto {
   /**
    * SBCrypto.verify()
    *
-   * Verify
+   * Verify signature.
    */
   verify(secretKey: CryptoKey, sign: string, contents: string) {
-    return new Promise(async (resolve, reject) => {
+    return new Promise<boolean>(async (resolve, reject) => {
       try {
-        const _sign = base64ToArrayBuffer(decodeURIComponent(sign));
-        const encoder = new TextEncoder();
-        const encoded = encoder.encode(contents);
+        // const _sign = base64ToArrayBuffer(decodeURIComponent(sign));
+        const _sign = base64ToArrayBuffer(sign);
+        // const encoder = new TextEncoder();
+        // const encoded = encoder.encode(contents);
+        const encoded = str2ab(contents)
         try {
-          const verified = await crypto.subtle.verify('HMAC', secretKey, _sign, encoded);
-          resolve(verified);
+          // const verified = await crypto.subtle.verify('HMAC', secretKey, _sign, encoded)
+          crypto.subtle.verify('HMAC', secretKey, _sign, encoded).then((verified) => {
+            resolve(verified)
+          })
         } catch (e) {
           reject(e);
         }
@@ -1778,12 +1783,14 @@ abstract class Channel extends SB384 {
 
 } /* class Channel */
 
-function deCryptChannelMessage(m00: string, m01: EncryptedContents, encryptionKey: CryptoKey): Promise<ChannelMessage> {
+function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: ChannelKeys): Promise<ChannelMessage> {
   return new Promise<ChannelMessage>((resolve, reject) => {
     const z = messageIdRegex.exec(m00)
+    const encryptionKey = keys.encryptionKey
+    const channelSignKey = keys.channelSignKey
     if (z) {
       let m: ChannelEncryptedMessage = {
-        type: 'encryptedChannelMessage',
+        type: 'encrypted',
         channelID: z[1],
         timestampPrefix: z[2],
         _id: z[1] + z[2],
@@ -1793,13 +1800,23 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, encryptionKe
         }
       }
       sbCrypto.unwrap(encryptionKey, m.encrypted_contents!, 'string').then((unwrapped) => {
-        let m2: ChannelMessage2 = { ...m, ...JSON.parse(unwrapped) };
+        let m2: ChannelMessage = { ...m, ...JSON.parse(unwrapped) };
         if (m2.contents) m2.text = m2.contents
         m2.user = {
           name: m2.sender_username ? m2.sender_username : 'Unknown',
           _id: m2.sender_pubKey
         }
-        resolve(m2)
+        sbCrypto.verify(channelSignKey, m2.sign!, m2.contents!).then((v) => {
+          if (v) {
+            console.log("signature on message is correct:")
+          } else {
+            console.log("***** signature is NOT correct on this message: (TODO)")
+          }
+          console.log(m2)
+          console.log("signature key used was:")
+          console.log(keys.channelSignKey)
+          resolve(m2)
+        })
       })
     } else {
       console.log("++++++++ #processMessage: ERROR - cannot parse channel ID / timestamp, invalid message")
@@ -1872,7 +1889,7 @@ export class ChannelSocket extends Channel {
       this.#ws.closed = true
       // if (this.#websocket) this.#websocket.close()
     } else if (typeof this.#onMessage === 'function') {
-      const message = data as ChannelMessage2
+      const message = data as ChannelMessage
       try {
         // console.log("++++++++ #processMessage: will attempt to decipher ...:")
         let m01 = Object.entries(message)[0][1]
@@ -1880,7 +1897,8 @@ export class ChannelSocket extends Channel {
         if (Object.keys(m01)[0] === 'encrypted_contents') {
           // TODO: parse out ID and time stamp, regex:
           const m00 = Object.entries(data)[0][0]
-          deCryptChannelMessage(m00, m01.encrypted_contents, this.keys.encryptionKey).then((m) => { this.#onMessage(m) })
+          deCryptChannelMessage(m00, m01.encrypted_contents, this.keys)
+          .then((m) => { this.#onMessage(m) })
         } else if (m01.type === 'ack') {
           // console.log("++++++++ Received 'ack'")
           const ack_id = m01._id
@@ -2526,15 +2544,15 @@ class StorageApi {
    * retrieves an object from storage
    */
   async retrieveData(msgId: string,
-    messages: Array<ChannelMessage2>,
-    controlMessages: Array<ChannelMessage2>): Promise<Dictionary> {
+    messages: Array<ChannelMessage>,
+    controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
     console.log("... need to code up retrieveData() with new typing ..")
     console.log(msgId)
     console.log(messages)
     console.log(controlMessages)
     console.error("... need to code up retrieveData() with new typing ..")
 
-    const imageMetaData = messages.find((msg: ChannelMessageV1) => msg!._id === msgId)!.imageMetaData
+    const imageMetaData = messages.find((msg: ChannelMessage) => msg!._id === msgId)!.imageMetaData
     const image_id = imageMetaData!.previewId;
     // const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id.startsWith(image_id));
     const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id)!
@@ -2657,7 +2675,7 @@ class ChannelApi {
    */
   getOldMessages(currentMessagesLength: number): Promise<Array<ChannelMessage>> {
     return new Promise((resolve, reject) => {
-      const encryptionKey = this.#channel.keys.encryptionKey
+      // const encryptionKey = this.#channel.keys.encryptionKey
       fetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
         method: 'GET',
       }).then((response: Response) => {
@@ -2668,7 +2686,7 @@ class ChannelApi {
         Promise.all(Object
           .keys(messages)
           .filter((v) => messages[v].hasOwnProperty('encrypted_contents'))
-          .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, encryptionKey)))
+          .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, this.#channel.keys)))
           .then((decryptedMessageArray) => {
             console.log("getOldMessages is returning:")
             console.log(decryptedMessageArray)
