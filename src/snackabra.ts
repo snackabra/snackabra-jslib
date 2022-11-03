@@ -1817,8 +1817,9 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
           sbCrypto.deriveKey(keys.signKey, senderPubKey, 'HMAC', false, ['sign', 'verify']).then((verifyKey) => {
             sbCrypto.verify(verifyKey, m2.sign!, m2.contents!).then((v) => { // SIGN
               if (!v) {
-                console.log("***** signature is NOT correct on this message:")
+                console.log("***** signature is NOT correct on this message: (rejecting)")
                 console.log(m2)
+                reject(null)
               }
               resolve(m2)
             })
