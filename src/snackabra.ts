@@ -229,9 +229,9 @@ interface ChannelKeys {
   encryptionKey: CryptoKey,
   signKey: CryptoKey,
   lockedKey?: CryptoKey,
-  // these are derived from the above:
-  channelSignKey: CryptoKey, // SIGN - think this was wrong but we generate it anyway
-  // our identity if we write anything:
+  // these are derived from the above and used for signing messages we send:
+  channelSignKey: CryptoKey,
+  // our identity in case we want easy access to that:
   privateKey: CryptoKey
 }
 
@@ -1601,21 +1601,14 @@ class SBMessage {
     this.contents = { encrypted: false, contents: body, sign: '', image: '', imageMetaData: {} }
     this.contents.sender_pubKey = this.channel.exportable_pubKey!
 
-    this.ready = new Promise<SBMessage>((resolve, reject) => {
-      // console.log("SBMessage: waiting on channel to be ready... ")
+    this.ready = new Promise<SBMessage>((resolve) => {
       channel.ready.then(() => {
-        // console.log("SBMessage: ... got keys .. here are keys and sign key ")
-        // console.log(this.channel.keys)
-        // console.log(this.channel.keys.signKey)
         if (channel.userName) this.contents.sender_username = channel.userName
-        const signKey = this.channel.keys.channelSignKey // SIGN
-        // const signKey = this.channel.privateKey!        
-        // console.log("SBMessage: ... got sign key ... waiting on closure")
-        const sign = sbCrypto.sign(signKey, body) // SIGN
+        const signKey = this.channel.keys.channelSignKey
+        const sign = sbCrypto.sign(signKey, body)
         const image_sign = sbCrypto.sign(signKey!, this.contents.image)
         const imageMetadata_sign = sbCrypto.sign(signKey, JSON.stringify(this.contents.imageMetaData))
         Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
-          // console.log("SBMessage: ... got everything, about to resolve")
           this.contents.sign = values[0]
           this.contents.image_sign = values[1]
           this.contents.imageMetadata_sign = values[2]
@@ -1789,8 +1782,7 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
   return new Promise<ChannelMessage>((resolve, reject) => {
     const z = messageIdRegex.exec(m00)
     const encryptionKey = keys.encryptionKey
-    // const channelSignKey = keys.channelSignKey // SIGN
-    if (z) {
+        if (z) {
       let m: ChannelEncryptedMessage = {
         type: 'encrypted',
         channelID: z[1],
@@ -1808,14 +1800,10 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
           name: m2.sender_username ? m2.sender_username : 'Unknown',
           _id: m2.sender_pubKey
         }
-        // console.log("getting sender pubkey from:")
-        // console.log(m2)
-        // console.log(m2.sender_pubKey)
-        // m2.sender_pubKey!.key_ops = ['deriveKey']
-        // console.log(m2.sender_pubKey)
+        // TODO: we could speed this up by caching imported keys from known senders
         sbCrypto.importKey('jwk', m2.sender_pubKey!, 'ECDH', true, []).then((senderPubKey) => {
           sbCrypto.deriveKey(keys.signKey, senderPubKey, 'HMAC', false, ['sign', 'verify']).then((verifyKey) => {
-            sbCrypto.verify(verifyKey, m2.sign!, m2.contents!).then((v) => { // SIGN
+            sbCrypto.verify(verifyKey, m2.sign!, m2.contents!).then((v) => {
               if (!v) {
                 console.log("***** signature is NOT correct on this message: (rejecting)")
                 console.log(m2)
