@@ -370,7 +370,7 @@ function getAnyChannel(channelIdArray: Array<string>, onMessage: (m: ChannelMess
 
 
 if (test_list.includes('test06c')) {
-  getAnyChannel(["m7HW8L-sImwZG5GermF7NmtIOgi6CSWC537WdsXKRf3yA6qmtQIQjOGjiXJxsvgf"], (m: ChannelMessage) => { console.log('test06c got message:'); console.log(m); })
+  getAnyChannel(["jxEDB2VfB2mtk-nNcnX6bVlS5QTCeckgInz2Je8ZKEY7dKxGm-XxwWK3RiB07dLp"], (m: ChannelMessage) => { console.log('test06c got message:'); console.log(m); })
     .then((c) => {
       if (c) {
         console.log(`test06c found a channel ("${c.channelId}") on server ${c.sbServer.channel_server}`)

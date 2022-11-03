@@ -106,6 +106,7 @@ interface ChannelKeys {
     signKey: CryptoKey;
     lockedKey?: CryptoKey;
     channelSignKey: CryptoKey;
+    privateKey: CryptoKey;
 }
 /** Encryptedcontents
 
@@ -371,7 +372,7 @@ declare class SBCrypto {
      *
      * Verify signature.
      */
-    verify(secretKey: CryptoKey, sign: string, contents: string): Promise<boolean>;
+    verify(verifyKey: CryptoKey, sign: string, contents: string): Promise<boolean>;
     /**
      * SBCrypto.compareKeys()
      *

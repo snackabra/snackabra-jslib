@@ -230,7 +230,9 @@ interface ChannelKeys {
   signKey: CryptoKey,
   lockedKey?: CryptoKey,
   // these are derived from the above:
-  channelSignKey: CryptoKey,
+  channelSignKey: CryptoKey, // SIGN - think this was wrong but we generate it anyway
+  // our identity if we write anything:
+  privateKey: CryptoKey
 }
 
 /** Encryptedcontents
@@ -1362,7 +1364,7 @@ class SBCrypto {
         try {
           // console.log("signing with:")
           // console.log(secretKey)
-          sign = await crypto.subtle.sign('HMAC', secretKey, encoded);
+          sign = await crypto.subtle.sign('HMAC', secretKey, encoded)
           resolve(ensureSafe(arrayBufferToBase64(sign)));
         } catch (error) {
           reject(error);
@@ -1378,7 +1380,7 @@ class SBCrypto {
    *
    * Verify signature.
    */
-  verify(secretKey: CryptoKey, sign: string, contents: string) {
+  verify(verifyKey: CryptoKey, sign: string, contents: string) {
     return new Promise<boolean>(async (resolve, reject) => {
       try {
         // const _sign = base64ToArrayBuffer(decodeURIComponent(sign));
@@ -1387,8 +1389,7 @@ class SBCrypto {
         // const encoded = encoder.encode(contents);
         const encoded = str2ab(contents)
         try {
-          // const verified = await crypto.subtle.verify('HMAC', secretKey, _sign, encoded)
-          crypto.subtle.verify('HMAC', secretKey, _sign, encoded).then((verified) => {
+          crypto.subtle.verify('HMAC', verifyKey, _sign, encoded).then((verified) => {
             resolve(verified)
           })
         } catch (e) {
@@ -1499,7 +1500,7 @@ class SB384 {
           const pk = sbCrypto.extractPubKey(key)
           _sb_assert(pk, 'unable to extract public key')
           this.#exportable_pubKey = pk!
-          sbCrypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
+          sbCrypto.importKey('jwk', key, 'ECDH', true, []).then((k) => {
             this.#privateKey = k
             this.#generateRoomId(this.#exportable_pubKey!.x!, this.#exportable_pubKey!.y!).then((channelId) => {
               // console.log('******** setting ownerChannelId')
@@ -1607,9 +1608,10 @@ class SBMessage {
         // console.log(this.channel.keys)
         // console.log(this.channel.keys.signKey)
         if (channel.userName) this.contents.sender_username = channel.userName
-        const signKey = this.channel.keys.channelSignKey
+        const signKey = this.channel.keys.channelSignKey // SIGN
+        // const signKey = this.channel.privateKey!        
         // console.log("SBMessage: ... got sign key ... waiting on closure")
-        const sign = sbCrypto.sign(signKey, body)
+        const sign = sbCrypto.sign(signKey, body) // SIGN
         const image_sign = sbCrypto.sign(signKey!, this.contents.image)
         const imageMetadata_sign = sbCrypto.sign(signKey, JSON.stringify(this.contents.imageMetaData))
         Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
@@ -1787,7 +1789,7 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
   return new Promise<ChannelMessage>((resolve, reject) => {
     const z = messageIdRegex.exec(m00)
     const encryptionKey = keys.encryptionKey
-    const channelSignKey = keys.channelSignKey
+    // const channelSignKey = keys.channelSignKey // SIGN
     if (z) {
       let m: ChannelEncryptedMessage = {
         type: 'encrypted',
@@ -1806,16 +1808,21 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
           name: m2.sender_username ? m2.sender_username : 'Unknown',
           _id: m2.sender_pubKey
         }
-        sbCrypto.verify(channelSignKey, m2.sign!, m2.contents!).then((v) => {
-          if (v) {
-            console.log("signature on message is correct:")
-          } else {
-            console.log("***** signature is NOT correct on this message: (TODO)")
-          }
-          console.log(m2)
-          console.log("signature key used was:")
-          console.log(keys.channelSignKey)
-          resolve(m2)
+        // console.log("getting sender pubkey from:")
+        // console.log(m2)
+        // console.log(m2.sender_pubKey)
+        // m2.sender_pubKey!.key_ops = ['deriveKey']
+        // console.log(m2.sender_pubKey)
+        sbCrypto.importKey('jwk', m2.sender_pubKey!, 'ECDH', true, []).then((senderPubKey) => {
+          sbCrypto.deriveKey(keys.signKey, senderPubKey, 'HMAC', false, ['sign', 'verify']).then((verifyKey) => {
+            sbCrypto.verify(verifyKey, m2.sign!, m2.contents!).then((v) => { // SIGN
+              if (!v) {
+                console.log("***** signature is NOT correct on this message:")
+                console.log(m2)
+              }
+              resolve(m2)
+            })
+          })
         })
       })
     } else {
@@ -1995,6 +2002,7 @@ export class ChannelSocket extends Channel {
             const publicSignKey = v[3]
             const privateKey = this.privateKey!
             Promise.all([
+              // we derive the HMAC key we use when *we* sign outgoing messages
               sbCrypto.deriveKey(privateKey, publicSignKey, 'HMAC', false, ['sign', 'verify'])
             ]).then((w) => {
               // console.log("++++++++ readyPromise() second phase of key processing")
@@ -2003,7 +2011,8 @@ export class ChannelSocket extends Channel {
                 ownerKey: ownerKey,
                 encryptionKey: encryptionKey,
                 signKey: signKey,
-                channelSignKey: channelSignKey
+                channelSignKey: channelSignKey,
+                privateKey: this.privateKey!
               }
               // once we have keys we can also query admin info
               const adminData = this.api.getAdminData()
@@ -2688,8 +2697,8 @@ class ChannelApi {
           .filter((v) => messages[v].hasOwnProperty('encrypted_contents'))
           .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, this.#channel.keys)))
           .then((decryptedMessageArray) => {
-            console.log("getOldMessages is returning:")
-            console.log(decryptedMessageArray)
+            // console.log("getOldMessages is returning:")
+            // console.log(decryptedMessageArray)
             resolve(decryptedMessageArray)
           })
       }).catch((e: Error) => {
