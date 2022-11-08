@@ -1110,7 +1110,7 @@ class SB384 {
                     const pk = sbCrypto.extractPubKey(key);
                     _sb_assert(pk, 'unable to extract public key');
                     this.#exportable_pubKey = pk;
-                    sbCrypto.importKey('jwk', key, 'ECDH', true, []).then((k) => {
+                    sbCrypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
                         this.#privateKey = k;
                         this.#generateRoomId(this.#exportable_pubKey.x, this.#exportable_pubKey.y).then((channelId) => {
                             // console.log('******** setting ownerChannelId')
@@ -1220,22 +1220,15 @@ class SBMessage {
         this.channel = channel;
         this.contents = { encrypted: false, contents: body, sign: '', image: '', imageMetaData: {} };
         this.contents.sender_pubKey = this.channel.exportable_pubKey;
-        this.ready = new Promise((resolve, reject) => {
-            // console.log("SBMessage: waiting on channel to be ready... ")
+        this.ready = new Promise((resolve) => {
             channel.ready.then(() => {
-                // console.log("SBMessage: ... got keys .. here are keys and sign key ")
-                // console.log(this.channel.keys)
-                // console.log(this.channel.keys.signKey)
                 if (channel.userName)
                     this.contents.sender_username = channel.userName;
-                const signKey = this.channel.keys.channelSignKey; // SIGN
-                // const signKey = this.channel.privateKey!        
-                // console.log("SBMessage: ... got sign key ... waiting on closure")
-                const sign = sbCrypto.sign(signKey, body); // SIGN
+                const signKey = this.channel.keys.channelSignKey;
+                const sign = sbCrypto.sign(signKey, body);
                 const image_sign = sbCrypto.sign(signKey, this.contents.image);
                 const imageMetadata_sign = sbCrypto.sign(signKey, JSON.stringify(this.contents.imageMetaData));
                 Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
-                    // console.log("SBMessage: ... got everything, about to resolve")
                     this.contents.sign = values[0];
                     this.contents.image_sign = values[1];
                     this.contents.imageMetadata_sign = values[2];
@@ -1391,7 +1384,6 @@ function deCryptChannelMessage(m00, m01, keys) {
     return new Promise((resolve, reject) => {
         const z = messageIdRegex.exec(m00);
         const encryptionKey = keys.encryptionKey;
-        // const channelSignKey = keys.channelSignKey // SIGN
         if (z) {
             let m = {
                 type: 'encrypted',
@@ -1411,17 +1403,14 @@ function deCryptChannelMessage(m00, m01, keys) {
                     name: m2.sender_username ? m2.sender_username : 'Unknown',
                     _id: m2.sender_pubKey
                 };
-                // console.log("getting sender pubkey from:")
-                // console.log(m2)
-                // console.log(m2.sender_pubKey)
-                // m2.sender_pubKey!.key_ops = ['deriveKey']
-                // console.log(m2.sender_pubKey)
+                // TODO: we could speed this up by caching imported keys from known senders
                 sbCrypto.importKey('jwk', m2.sender_pubKey, 'ECDH', true, []).then((senderPubKey) => {
                     sbCrypto.deriveKey(keys.signKey, senderPubKey, 'HMAC', false, ['sign', 'verify']).then((verifyKey) => {
                         sbCrypto.verify(verifyKey, m2.sign, m2.contents).then((v) => {
                             if (!v) {
-                                console.log("***** signature is NOT correct on this message:");
+                                console.log("***** signature is NOT correct on this message: (rejecting)");
                                 console.log(m2);
+                                reject(null);
                             }
                             resolve(m2);
                         });
@@ -1605,6 +1594,7 @@ class ChannelSocket extends Channel {
                         const encryptionKey = v[1];
                         const signKey = v[2];
                         const publicSignKey = v[3];
+                        console.log(this.privateKey);
                         const privateKey = this.privateKey;
                         Promise.all([
                             // we derive the HMAC key we use when *we* sign outgoing messages

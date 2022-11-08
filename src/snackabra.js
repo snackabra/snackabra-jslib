@@ -1131,7 +1131,7 @@ class SB384 {
                     const pk = sbCrypto.extractPubKey(key);
                     _sb_assert(pk, 'unable to extract public key');
                     this.#exportable_pubKey = pk;
-                    sbCrypto.importKey('jwk', key, 'ECDH', true, []).then((k) => {
+                    sbCrypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
                         this.#privateKey = k;
                         this.#generateRoomId(this.#exportable_pubKey.x, this.#exportable_pubKey.y).then((channelId) => {
                             // console.log('******** setting ownerChannelId')
@@ -1616,6 +1616,7 @@ export class ChannelSocket extends Channel {
                         const encryptionKey = v[1];
                         const signKey = v[2];
                         const publicSignKey = v[3];
+                        console.log(this.privateKey);
                         const privateKey = this.privateKey;
                         Promise.all([
                             // we derive the HMAC key we use when *we* sign outgoing messages
