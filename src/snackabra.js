@@ -1604,6 +1604,7 @@ export class ChannelSocket extends Channel {
                     _sb_assert(message.ready, 'got roomKeys but channel reports it is not ready (?)');
                     this.motd = message.motd;
                     this.locked = message.roomLocked;
+                    const exportable_owner_pubKey = JSON.parse(message.keys.ownerKey);
                     Promise.all([
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.ownerKey), 'ECDH', false, []),
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
@@ -1616,7 +1617,6 @@ export class ChannelSocket extends Channel {
                         const encryptionKey = v[1];
                         const signKey = v[2];
                         const publicSignKey = v[3];
-                        console.log(this.privateKey);
                         const privateKey = this.privateKey;
                         Promise.all([
                             // we derive the HMAC key we use when *we* sign outgoing messages
@@ -1633,31 +1633,44 @@ export class ChannelSocket extends Channel {
                             };
                             // once we have keys we can also query admin info
                             const adminData = this.api.getAdminData();
-                            // console.log("++++++++ readyPromise() getting adminData:")
-                            // console.log(adminData)
-                            this.adminData = adminData;
-                            // this causes queued messages to be processed ahead of ones from new callbacks 
-                            if (backlog.length > 0) {
-                                // console.log("++++++++ readyPromise() we are queuing up a microtask for message processing")
-                                queueMicrotask(() => {
-                                    console.log("++++++++ readyPromise() inside micro task");
-                                    for (let d in backlog) {
-                                        // console.log("++++++++ pulling this message from the backlog:")
-                                        // console.log(e)
-                                        this.#processMessage(d);
-                                    }
-                                });
-                            }
-                            else {
-                                // console.log("++++++++ readyPromise() there were NO messages queued up")
-                            }
-                            // once we've gotten our keys, we substitute the message handler
-                            // console.log("++++++++ readyPromise() changing onMessage to processMessage")
-                            this.#ws.websocket.addEventListener('message', (e) => this.#processMessage(e.data));
-                            // and now we are ready!
-                            this.#ChannelSocketReadyFlag = true;
-                            // console.log("++++++++ readyPromise() all done - resolving!")
-                            resolve(this);
+                            const verifiedGuest = this.api.postPubKey(this.exportable_pubKey);
+                            Promise.all([
+                                adminData,
+                                verifiedGuest
+                            ]).then((d) => {
+                                // console.log("++++++++ readyPromise() getting adminData:")
+                                // console.log(adminData)
+                                this.adminData = d[0];
+                                this.owner = sbCrypto.compareKeys(exportable_owner_pubKey, this.exportable_pubKey);
+                                // TODO: until we have better logic here a shim from old code
+                                this.admin = this.owner;
+                                const isVerfied = d[1];
+                                if (!this.owner && isVerfied?.success) {
+                                    this.verifiedGuest = isVerfied?.success;
+                                }
+                                // this causes queued messages to be processed ahead of ones from new callbacks 
+                                if (backlog.length > 0) {
+                                    // console.log("++++++++ readyPromise() we are queuing up a microtask for message processing")
+                                    queueMicrotask(() => {
+                                        console.log("++++++++ readyPromise() inside micro task");
+                                        for (let d in backlog) {
+                                            // console.log("++++++++ pulling this message from the backlog:")
+                                            // console.log(e)
+                                            this.#processMessage(d);
+                                        }
+                                    });
+                                }
+                                else {
+                                    // console.log("++++++++ readyPromise() there were NO messages queued up")
+                                }
+                                // once we've gotten our keys, we substitute the message handler
+                                // console.log("++++++++ readyPromise() changing onMessage to processMessage")
+                                this.#ws.websocket.addEventListener('message', (e) => this.#processMessage(e.data));
+                                // and now we are ready!
+                                this.#ChannelSocketReadyFlag = true;
+                                // console.log("++++++++ readyPromise() all done - resolving!")
+                                resolve(this);
+                            });
                         });
                     });
                 });

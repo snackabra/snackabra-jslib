@@ -625,7 +625,7 @@ declare class ChannelApi {
     downloadData(): Promise<unknown>;
     uploadChannel(channelData: ChannelData): Promise<unknown>;
     authorize(ownerPublicKey: Dictionary, serverSecret: string): Promise<unknown>;
-    postPubKey(_exportable_pubKey: Dictionary): Promise<unknown>;
+    postPubKey(_exportable_pubKey: JsonWebKey): Promise<unknown>;
     storageRequest(byteLength: number): Promise<Dictionary>;
 }
 /******************************************************************************************************/
