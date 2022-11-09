@@ -1110,7 +1110,7 @@ class SB384 {
                     const pk = sbCrypto.extractPubKey(key);
                     _sb_assert(pk, 'unable to extract public key');
                     this.#exportable_pubKey = pk;
-                    sbCrypto.importKey('jwk', key, 'ECDH', true, []).then((k) => {
+                    sbCrypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
                         this.#privateKey = k;
                         this.#generateRoomId(this.#exportable_pubKey.x, this.#exportable_pubKey.y).then((channelId) => {
                             // console.log('******** setting ownerChannelId')
@@ -1218,27 +1218,24 @@ class SBMessage {
         // console.log("creating SBMessage on channel:")
         // console.log(channel)
         this.channel = channel;
-        this.contents = { encrypted: false, contents: body, sign: '', image: '', imageMetaData: {} };
+        this.contents = { encrypted: false, isVerfied: false, contents: body, sign: '', image: '', imageMetaData: {} };
         this.contents.sender_pubKey = this.channel.exportable_pubKey;
-        this.ready = new Promise((resolve, reject) => {
-            // console.log("SBMessage: waiting on channel to be ready... ")
+        this.ready = new Promise((resolve) => {
             channel.ready.then(() => {
-                // console.log("SBMessage: ... got keys .. here are keys and sign key ")
-                // console.log(this.channel.keys)
-                // console.log(this.channel.keys.signKey)
                 if (channel.userName)
                     this.contents.sender_username = channel.userName;
-                const signKey = this.channel.keys.channelSignKey; // SIGN
-                // const signKey = this.channel.privateKey!        
-                // console.log("SBMessage: ... got sign key ... waiting on closure")
-                const sign = sbCrypto.sign(signKey, body); // SIGN
+                const signKey = this.channel.keys.channelSignKey;
+                const sign = sbCrypto.sign(signKey, body);
                 const image_sign = sbCrypto.sign(signKey, this.contents.image);
                 const imageMetadata_sign = sbCrypto.sign(signKey, JSON.stringify(this.contents.imageMetaData));
-                Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
-                    // console.log("SBMessage: ... got everything, about to resolve")
+                Promise.all([sign, image_sign, imageMetadata_sign]).then(async (values) => {
                     this.contents.sign = values[0];
                     this.contents.image_sign = values[1];
                     this.contents.imageMetadata_sign = values[2];
+                    // NOTE: mtg:adding this breaks messages... but I dont understand why
+                    // const isVerfied = await this.channel.api.postPubKey(this.channel.exportable_pubKey!)
+                    // console.log('here',isVerfied)
+                    // this.contents.isVerfied = isVerfied?.success ? true : false
                     resolve(this);
                 });
             });
@@ -1391,7 +1388,6 @@ function deCryptChannelMessage(m00, m01, keys) {
     return new Promise((resolve, reject) => {
         const z = messageIdRegex.exec(m00);
         const encryptionKey = keys.encryptionKey;
-        // const channelSignKey = keys.channelSignKey // SIGN
         if (z) {
             let m = {
                 type: 'encrypted',
@@ -1405,23 +1401,24 @@ function deCryptChannelMessage(m00, m01, keys) {
             };
             sbCrypto.unwrap(encryptionKey, m.encrypted_contents, 'string').then((unwrapped) => {
                 let m2 = { ...m, ...JSON.parse(unwrapped) };
-                if (m2.contents)
+                if (m2.contents) {
                     m2.text = m2.contents;
+                    // if(!m2?.contents?.hasOwnProperty('isVerfied')){
+                    //   m2.contents!.isVerified
+                    // }
+                }
                 m2.user = {
                     name: m2.sender_username ? m2.sender_username : 'Unknown',
                     _id: m2.sender_pubKey
                 };
-                // console.log("getting sender pubkey from:")
-                // console.log(m2)
-                // console.log(m2.sender_pubKey)
-                // m2.sender_pubKey!.key_ops = ['deriveKey']
-                // console.log(m2.sender_pubKey)
+                // TODO: we could speed this up by caching imported keys from known senders
                 sbCrypto.importKey('jwk', m2.sender_pubKey, 'ECDH', true, []).then((senderPubKey) => {
                     sbCrypto.deriveKey(keys.signKey, senderPubKey, 'HMAC', false, ['sign', 'verify']).then((verifyKey) => {
                         sbCrypto.verify(verifyKey, m2.sign, m2.contents).then((v) => {
                             if (!v) {
-                                console.log("***** signature is NOT correct on this message:");
+                                console.log("***** signature is NOT correct on this message: (rejecting)");
                                 console.log(m2);
+                                reject(null);
                             }
                             resolve(m2);
                         });
@@ -1448,6 +1445,7 @@ class ChannelSocket extends Channel {
     // #channelId: string
     #ws;
     #keys;
+    #exportable_owner_pubKey = null;
     #sbServer;
     adminData; // TODO: add getter
     // #queue: Array<SBMessage> = [];
@@ -1593,6 +1591,9 @@ class ChannelSocket extends Channel {
                     _sb_assert(message.ready, 'got roomKeys but channel reports it is not ready (?)');
                     this.motd = message.motd;
                     this.locked = message.roomLocked;
+                    const exportable_owner_pubKey = JSON.parse(message.keys.ownerKey);
+                    this.#exportable_owner_pubKey = exportable_owner_pubKey;
+                    console.log(this.#exportable_owner_pubKey);
                     Promise.all([
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.ownerKey), 'ECDH', false, []),
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
@@ -1621,31 +1622,39 @@ class ChannelSocket extends Channel {
                             };
                             // once we have keys we can also query admin info
                             const adminData = this.api.getAdminData();
-                            // console.log("++++++++ readyPromise() getting adminData:")
-                            // console.log(adminData)
-                            this.adminData = adminData;
-                            // this causes queued messages to be processed ahead of ones from new callbacks 
-                            if (backlog.length > 0) {
-                                // console.log("++++++++ readyPromise() we are queuing up a microtask for message processing")
-                                queueMicrotask(() => {
-                                    console.log("++++++++ readyPromise() inside micro task");
-                                    for (let d in backlog) {
-                                        // console.log("++++++++ pulling this message from the backlog:")
-                                        // console.log(e)
-                                        this.#processMessage(d);
-                                    }
+                            this.owner = sbCrypto.compareKeys(exportable_owner_pubKey, this.exportable_pubKey);
+                            Promise.all([
+                                adminData,
+                            ]).then((d) => {
+                                // console.log("++++++++ readyPromise() getting adminData:")
+                                // console.log(adminData)
+                                this.adminData = d[0];
+                                // TODO: until we have better logic here a shim from old code
+                                this.admin = this.owner;
+                                if (backlog.length > 0) {
+                                    // console.log("++++++++ readyPromise() we are queuing up a microtask for message processing")
+                                    queueMicrotask(() => {
+                                        console.log("++++++++ readyPromise() inside micro task");
+                                        for (let d in backlog) {
+                                            // console.log("++++++++ pulling this message from the backlog:")
+                                            // console.log(e)
+                                            this.#processMessage(d);
+                                        }
+                                    });
+                                }
+                                else {
+                                    // console.log("++++++++ readyPromise() there were NO messages queued up")
+                                }
+                                // once we've gotten our keys, we substitute the message handler
+                                // console.log("++++++++ readyPromise() changing onMessage to processMessage")
+                                this.#ws.websocket.addEventListener('message', (e) => {
+                                    this.#processMessage(e.data);
                                 });
-                            }
-                            else {
-                                // console.log("++++++++ readyPromise() there were NO messages queued up")
-                            }
-                            // once we've gotten our keys, we substitute the message handler
-                            // console.log("++++++++ readyPromise() changing onMessage to processMessage")
-                            this.#ws.websocket.addEventListener('message', (e) => this.#processMessage(e.data));
-                            // and now we are ready!
-                            this.#ChannelSocketReadyFlag = true;
-                            // console.log("++++++++ readyPromise() all done - resolving!")
-                            resolve(this);
+                                // and now we are ready!
+                                this.#ChannelSocketReadyFlag = true;
+                                // console.log("++++++++ readyPromise() all done - resolving!")
+                                resolve(this);
+                            });
                         });
                     });
                 });
@@ -1781,7 +1790,12 @@ class ChannelSocket extends Channel {
             });
         });
     }
+    get exportable_owner_pubKey() { return this.#exportable_owner_pubKey; }
 } /* class ChannelSocket */
+__decorate([
+    Memoize,
+    Ready
+], ChannelSocket.prototype, "exportable_owner_pubKey", null);
 /**
  * Storage API
  * @class

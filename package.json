@@ -8,7 +8,13 @@
     "scripts": {
         "prepare": "tsc -p src/tsconfig.json && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
         "pretest": "tsc -p src/tsconfig.json && rollup -c > index.mjs",
-        "test": "NODE_OPTIONS=--experimental-vm-modules jest"
+        "test": "NODE_OPTIONS=--experimental-vm-modules jest",
+        "start": "npm run build && npm run watch",
+        "build": "tsc -p src/tsconfig.json && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
+        "serve:test": "serve -p 8080 -s test-web-server",
+        "nodemon": "nodemon --watch ./src/snackabra.ts -L -e ts --ignore node_modules/ --exec \"npm run build\"",
+        "watch": "concurrently -k -p \"[{name}]\" -n \"TypeScript, Pack, Test Server\" -c \"green.bold,cyan.bold,magenta.bold,white.bold\"  \"npm run watch-ts\" \"npm run nodemon\" \"npm run serve:test\"",
+        "watch-ts": "tsc -p src/tsconfig.json -w"
     },
     "repository": {
         "type": "git",
@@ -40,6 +46,9 @@
     "devDependencies": {
         "@rollup/plugin-replace": "^5.0.1",
         "@rollup/plugin-terser": "^0.1.0",
-        "rollup": "^3.2.3"
+        "concurrently": "^6.0.0",
+        "nodemon": "^2.0.14",
+        "rollup": "^3.2.3",
+        "serve": "^14.1.1"
     }
 }
