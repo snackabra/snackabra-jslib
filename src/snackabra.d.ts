@@ -409,6 +409,7 @@ interface SBMessageContents {
     sender_pubKey?: JsonWebKey;
     sender_username?: string;
     encrypted: boolean;
+    isVerfied: boolean;
     contents: string;
     sign: string;
     image: string;
@@ -507,6 +508,7 @@ export declare class ChannelSocket extends Channel {
       * or an error message if it fails.
       */
     send(msg: SBMessage | string): Promise<string>;
+    get exportable_owner_pubKey(): JsonWebKey | null;
 }
 export declare type SBObjectType = 'f' | 'p' | 'b';
 export interface SBObjectHandle {
@@ -625,7 +627,9 @@ declare class ChannelApi {
     downloadData(): Promise<unknown>;
     uploadChannel(channelData: ChannelData): Promise<unknown>;
     authorize(ownerPublicKey: Dictionary, serverSecret: string): Promise<unknown>;
-    postPubKey(_exportable_pubKey: JsonWebKey): Promise<unknown>;
+    postPubKey(_exportable_pubKey: JsonWebKey): Promise<{
+        success: boolean;
+    }>;
     storageRequest(byteLength: number): Promise<Dictionary>;
 }
 /******************************************************************************************************/

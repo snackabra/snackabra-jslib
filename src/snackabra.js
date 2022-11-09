@@ -1239,7 +1239,7 @@ class SBMessage {
         // console.log("creating SBMessage on channel:")
         // console.log(channel)
         this.channel = channel;
-        this.contents = { encrypted: false, contents: body, sign: '', image: '', imageMetaData: {} };
+        this.contents = { encrypted: false, isVerfied: false, contents: body, sign: '', image: '', imageMetaData: {} };
         this.contents.sender_pubKey = this.channel.exportable_pubKey;
         this.ready = new Promise((resolve) => {
             channel.ready.then(() => {
@@ -1249,10 +1249,14 @@ class SBMessage {
                 const sign = sbCrypto.sign(signKey, body);
                 const image_sign = sbCrypto.sign(signKey, this.contents.image);
                 const imageMetadata_sign = sbCrypto.sign(signKey, JSON.stringify(this.contents.imageMetaData));
-                Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
+                Promise.all([sign, image_sign, imageMetadata_sign]).then(async (values) => {
                     this.contents.sign = values[0];
                     this.contents.image_sign = values[1];
                     this.contents.imageMetadata_sign = values[2];
+                    // NOTE: mtg:adding this breaks messages... but I dont understand why
+                    // const isVerfied = await this.channel.api.postPubKey(this.channel.exportable_pubKey!)
+                    // console.log('here',isVerfied)
+                    // this.contents.isVerfied = isVerfied?.success ? true : false
                     resolve(this);
                 });
             });
@@ -1419,8 +1423,12 @@ function deCryptChannelMessage(m00, m01, keys) {
             };
             sbCrypto.unwrap(encryptionKey, m.encrypted_contents, 'string').then((unwrapped) => {
                 let m2 = { ...m, ...JSON.parse(unwrapped) };
-                if (m2.contents)
+                if (m2.contents) {
                     m2.text = m2.contents;
+                    // if(!m2?.contents?.hasOwnProperty('isVerfied')){
+                    //   m2.contents!.isVerified
+                    // }
+                }
                 m2.user = {
                     name: m2.sender_username ? m2.sender_username : 'Unknown',
                     _id: m2.sender_pubKey
@@ -1459,6 +1467,7 @@ export class ChannelSocket extends Channel {
     // #channelId: string
     #ws;
     #keys;
+    #exportable_owner_pubKey = null;
     #sbServer;
     adminData; // TODO: add getter
     // #queue: Array<SBMessage> = [];
@@ -1605,6 +1614,8 @@ export class ChannelSocket extends Channel {
                     this.motd = message.motd;
                     this.locked = message.roomLocked;
                     const exportable_owner_pubKey = JSON.parse(message.keys.ownerKey);
+                    this.#exportable_owner_pubKey = exportable_owner_pubKey;
+                    console.log(this.#exportable_owner_pubKey);
                     Promise.all([
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.ownerKey), 'ECDH', false, []),
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
@@ -1633,22 +1644,15 @@ export class ChannelSocket extends Channel {
                             };
                             // once we have keys we can also query admin info
                             const adminData = this.api.getAdminData();
-                            const verifiedGuest = this.api.postPubKey(this.exportable_pubKey);
+                            this.owner = sbCrypto.compareKeys(exportable_owner_pubKey, this.exportable_pubKey);
                             Promise.all([
                                 adminData,
-                                verifiedGuest
                             ]).then((d) => {
                                 // console.log("++++++++ readyPromise() getting adminData:")
                                 // console.log(adminData)
                                 this.adminData = d[0];
-                                this.owner = sbCrypto.compareKeys(exportable_owner_pubKey, this.exportable_pubKey);
                                 // TODO: until we have better logic here a shim from old code
                                 this.admin = this.owner;
-                                const isVerfied = d[1];
-                                if (!this.owner && isVerfied?.success) {
-                                    this.verifiedGuest = isVerfied?.success;
-                                }
-                                // this causes queued messages to be processed ahead of ones from new callbacks 
                                 if (backlog.length > 0) {
                                     // console.log("++++++++ readyPromise() we are queuing up a microtask for message processing")
                                     queueMicrotask(() => {
@@ -1665,7 +1669,9 @@ export class ChannelSocket extends Channel {
                                 }
                                 // once we've gotten our keys, we substitute the message handler
                                 // console.log("++++++++ readyPromise() changing onMessage to processMessage")
-                                this.#ws.websocket.addEventListener('message', (e) => this.#processMessage(e.data));
+                                this.#ws.websocket.addEventListener('message', (e) => {
+                                    this.#processMessage(e.data);
+                                });
                                 // and now we are ready!
                                 this.#ChannelSocketReadyFlag = true;
                                 // console.log("++++++++ readyPromise() all done - resolving!")
@@ -1806,7 +1812,12 @@ export class ChannelSocket extends Channel {
             });
         });
     }
+    get exportable_owner_pubKey() { return this.#exportable_owner_pubKey; }
 } /* class ChannelSocket */
+__decorate([
+    Memoize,
+    Ready
+], ChannelSocket.prototype, "exportable_owner_pubKey", null);
 /**
  * Storage API
  * @class
