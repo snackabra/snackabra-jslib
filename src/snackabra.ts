@@ -559,6 +559,10 @@ export function ab2str(buffer: Uint8Array): string {
   to perform URI encoding, which also avoids issues with composed URI
   strings (such as when copy-pasting). however, that means we break
   code that tries to use 'regular' atob(), because it's not as forgiving.
+  this is also referred to as RFC4648 (section 5). note also that when
+  we generate GUID from public keys, we iterate hashing until '-' is not
+  present in the hash, which does reduct entropy (since it slightly increases
+  collisions), by a bit less than 1.5 bits (out of 384).
 */
 
 // RFC 3986 (updates 1738 and obsoletes 1808, 2396, and 2732)
@@ -585,8 +589,8 @@ for (let i = 0, len = CODE_B64.length; i < len; ++i) {
   urlLookup[i] = CODE_URL[i]
   revLookup[CODE_B64.charCodeAt(i)] = i
 }
-revLookup['-'.charCodeAt(0)] = 62 //
-revLookup['_'.charCodeAt(0)] = 63
+revLookup['-'.charCodeAt(0)] = 62 // minus
+revLookup['_'.charCodeAt(0)] = 63 // underscore
 
 function getLens(b64: string) {
   const len = b64.length
@@ -1542,19 +1546,28 @@ class SB384 {
     this.sb384Ready = this.ready
   }
 
-  #generateRoomId(x: string, y: string): Promise<string> {
+  #generateRoomHash(channelBytes: ArrayBuffer): Promise<string> {
     return new Promise(async (resolve, reject) => {
-      try {
-        const xBytes = base64ToArrayBuffer(decodeB64Url(x))
-        const yBytes = base64ToArrayBuffer(decodeB64Url(y))
-        const channelBytes = _appendBuffer(xBytes, yBytes)
-        crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
-          resolve(encodeB64Url(arrayBufferToBase64(channelBytesHash)));
-        })
-      } catch (e) {
-        reject(e);
-      }
-    });
+      crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
+        const k = encodeB64Url(arrayBufferToBase64(channelBytesHash))
+        if (k.includes('-')) {
+          // see earlier discussion - but we constrain to names that are friendly
+          // to both URL/browser environments, and copy-paste functions
+          resolve(this.#generateRoomHash(channelBytesHash)) // tail recursion
+        } else {
+          resolve(k)
+        }
+      })
+    })
+  }
+
+  #generateRoomId (x: string, y: string): Promise<string> {
+    return new Promise(async (resolve, reject) => {
+      const xBytes = base64ToArrayBuffer(decodeB64Url(x))
+      const yBytes = base64ToArrayBuffer(decodeB64Url(y))
+      const channelBytes = _appendBuffer(xBytes, yBytes)
+      resolve(this.#generateRoomHash(channelBytes))
+    })
   }
 
   @Memoize get readyFlag() { return this.#SB384ReadyFlag }

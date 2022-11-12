@@ -259,8 +259,8 @@ for (let i = 0, len = CODE_B64.length; i < len; ++i) {
     urlLookup[i] = CODE_URL[i];
     revLookup[CODE_B64.charCodeAt(i)] = i;
 }
-revLookup['-'.charCodeAt(0)] = 62; //
-revLookup['_'.charCodeAt(0)] = 63;
+revLookup['-'.charCodeAt(0)] = 62; // minus
+revLookup['_'.charCodeAt(0)] = 63; // underscore
 function getLens(b64) {
     const len = b64.length;
     let validLen = b64.indexOf(PAD);
@@ -1174,19 +1174,27 @@ class SB384 {
         });
         this.sb384Ready = this.ready;
     }
+    #generateRoomHash(channelBytes) {
+        return new Promise(async (resolve, reject) => {
+            crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
+                const k = encodeB64Url(arrayBufferToBase64(channelBytesHash));
+                if (k.includes('-')) {
+                    // see earlier discussion - but we constrain to names that are friendly
+                    // to both URL/browser environments, and copy-paste functions
+                    resolve(this.#generateRoomHash(channelBytesHash)); // tail recursion
+                }
+                else {
+                    resolve(k);
+                }
+            });
+        });
+    }
     #generateRoomId(x, y) {
         return new Promise(async (resolve, reject) => {
-            try {
-                const xBytes = base64ToArrayBuffer(decodeB64Url(x));
-                const yBytes = base64ToArrayBuffer(decodeB64Url(y));
-                const channelBytes = _appendBuffer(xBytes, yBytes);
-                crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
-                    resolve(encodeB64Url(arrayBufferToBase64(channelBytesHash)));
-                });
-            }
-            catch (e) {
-                reject(e);
-            }
+            const xBytes = base64ToArrayBuffer(decodeB64Url(x));
+            const yBytes = base64ToArrayBuffer(decodeB64Url(y));
+            const channelBytes = _appendBuffer(xBytes, yBytes);
+            resolve(this.#generateRoomHash(channelBytes));
         });
     }
     get readyFlag() { return this.#SB384ReadyFlag; }
