@@ -210,7 +210,7 @@ function runTests(test_list) {
             return p.slice(0, i);
         });
     }
-    console.log(LCP(["test LCP", "test LCP this should not be this long"]));
+    // console.log(LCP(["test LCP", "test LCP this should not be this long"]))
     if (test_list.includes('test07a')) {
         let i = 0;
         let j = 2;
@@ -258,6 +258,8 @@ function runTests(test_list) {
         storage_server: 'https://s.somethingstuff.workers.dev/'
     };
     if (test_list.includes('test06a')) {
+        console.log("Test 'test06a");
+        const z = getElement('test06a');
         // create server object (assumes miniflare test setup):
         const sb_config = {
             channel_server: 'http://localhost:4001',
@@ -267,7 +269,12 @@ function runTests(test_list) {
         const SB = new Snackabra(sb_config);
         // create a new channel (room), returns (owner) key and channel name:
         SB.create(sb_config, 'password').then((handle) => {
-            console.log(`you can (probably) connect here: localhost:3000/rooms/${handle.channelId}`);
+            const roomUrl = `http://localhost:3000/rooms/${handle.channelId}`;
+            console.log(`you can (probably) connect here: ${roomUrl}`);
+            z.innerHTML += ' ... received new channel:<br\>';
+            z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br/><br/>`;
+            z.innerHTML += ' channel name itself:<br\>';
+            z.innerHTML += `<tt>${handle.channelId}</tt>`;
             // connect to the websocket with our handle info:
             SB.connect(
             // must have a message handler:
@@ -277,10 +284,20 @@ function runTests(test_list) {
                 c.userName = "TestBot"; // optional
                 // say hello to everybody! upon success it will return "success"
                 (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`test message sent! (${c})`); });
+                // there's a button that sends more messages manually
+                let messageCount = 0;
+                getElement('anotherMessage').onclick = (() => {
+                    messageCount++;
+                    let sbm = new SBMessage(c, `message number ${messageCount} from test06a!`);
+                    console.log(`================ sending message number ${messageCount}:`);
+                    console.log(sbm);
+                    c.send(sbm).then((c) => console.log(`back from sending message ${messageCount} (${c})`));
+                });
             });
         });
     }
     if (test_list.includes('test06b')) {
+        console.log("Test 'test06b");
         Promise.any((someKnownRooms).map((channelId) => (new Snackabra()).connect((m) => { console.log(`got message: ${m}`); }, undefined /* anonymous */, channelId)))
             .then((c) => c.ready).then((c) => {
             console.log(`found a channel here: ${c.sbServer.channel_server}/rooms/${c.channelId}`);

@@ -1623,7 +1623,7 @@ export class ChannelSocket extends Channel {
                     this.locked = message.roomLocked;
                     const exportable_owner_pubKey = JSON.parse(message.keys.ownerKey);
                     this.#exportable_owner_pubKey = exportable_owner_pubKey;
-                    console.log(this.#exportable_owner_pubKey);
+                    // console.log(this.#exportable_owner_pubKey )
                     Promise.all([
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.ownerKey), 'ECDH', false, []),
                         sbCrypto.importKey('jwk', JSON.parse(message.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
