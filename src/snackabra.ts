@@ -5,23 +5,28 @@
 /******************************************************************************************************/
 
 /*
+  NOTE: public additional documentation on Snackabra, including this library,
+  is eventually published here:
+
+  https://snackabra.readthedocs.io/en/latest/
+
+  We are currently working on major overhaul to finalize "0.5.0", you
+  can access current state of it here:
+
+  https://snackabra-050-docs.readthedocs.io/en/latest/jslib.html
+
+*/
+
+/*
+
   current tsc command-line settings:
   tsc -t es2022 --pretty false --strict ./snackabra.ts
 
-  design principles:
-  - no external (library) dependencies
-  - no window/dom dependency
-  - pure asynchronous (eg no 'await')
-  - clean es2022 code
-  - zero errors/warnings on tsc 'strict' setting
-  - minimum forced typecasting
-  - DRY extendable / abstract OOP implementation
   - Use decorators where appropriate
     -https://www.typescriptlang.org/docs/handbook/decorators.html
   
 
   TODO list:
-  * cut code (some still relevant) in
   
   * latest (fast) code for image loading etc is in the JS client:
     384-snackabra-webclient/src/utils/ImageProcessor.js
@@ -128,7 +133,13 @@ interface ImageMetaData {
   previewKey?: string,
 }
 
-/*
+
+
+/**
+@typedef {import("./snackabra.d.ts").ChannelMessage} ChannelMessage
+*/
+
+/**
    for example the incoming message will look like this (after decryption)
 
   { encrypted":false,
@@ -140,9 +151,8 @@ interface ImageMetaData {
    "sender_username":"TestBot",
    "image_sign":"3O0AYKthtWWYUX3AWDmdU4kTR49UyNyaA937CfKtcQw",
    "imageMetadata_sign":"4LmewpsH6TcRhHYQLivd4Ce87SI1AJIaezhJB5sdD7M"
-  } */
-
-
+  } 
+  */
 export interface ChannelMessage {
   type?: ChannelMessageTypes,
   // keys?: {
@@ -184,6 +194,8 @@ interface ChannelAckMessage {
 
 /** sample channelKeys contents
  * 
+ * ::
+ * 
  * { "ready": true,
  *    "keys": {
  *            "ownerKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
@@ -204,7 +216,6 @@ interface ChannelAckMessage {
  * "motd": "",
  * "roomLocked": false}
  */
-
 interface ChannelKeyStrings {
   encryptionKey: string,
   guestKey?: string,
@@ -1474,10 +1485,10 @@ function Ready(target: any, propertyKey: string, descriptor: PropertyDescriptor)
 
 
 /**
- * SB384 - basic (core) capability object in SB
  * @class
  * @constructor
  * @public
+ *
  */
 class SB384 {
   ready: Promise<SB384>
@@ -1491,9 +1502,20 @@ class SB384 {
   #keyPair: CryptoKeyPair | null = null
 
   /**
-   * new SB384()
+   * Basic (core) capability object in SB.
+   * 
+   * Note that all the getters below will throw an exception if the
+   * corresponding information is not ready.
+   *  
+   * Like most SB classes, SB384 follows the "ready template" design
+   * principle: the object is immediately available upon creation,
+   * but isn't "ready" until it says it's ready. See `Channel Class`_
+   * example below.
+   * 
    * @param key a jwk with which to create identity; if not provided, 
-   * it will 'mint' (generate) them randomly
+   * it will 'mint' (generate) them randomly, in other words it will
+   * default to creating a new identity ("384").
+   * 
    */
   constructor(key?: JsonWebKey) {
     // console.log("setting SB384.ready")
@@ -1561,7 +1583,7 @@ class SB384 {
     })
   }
 
-  #generateRoomId (x: string, y: string): Promise<string> {
+  #generateRoomId(x: string, y: string): Promise<string> {
     return new Promise(async (resolve, reject) => {
       const xBytes = base64ToArrayBuffer(decodeB64Url(x))
       const yBytes = base64ToArrayBuffer(decodeB64Url(y))
@@ -1570,14 +1592,14 @@ class SB384 {
     })
   }
 
-  @Memoize get readyFlag() { return this.#SB384ReadyFlag }
+  /** @type {boolean}       */ @Memoize get readyFlag() { return this.#SB384ReadyFlag }
 
-  @Memoize @Ready get exportable_pubKey() { return this.#exportable_pubKey }
-  @Memoize @Ready get exportable_privateKey() { return this.#exportable_privateKey }
-  @Memoize @Ready get privateKey() { return this.#privateKey }
-  @Memoize @Ready get keyPair() { return this.#keyPair }
-  @Memoize @Ready get _id() { return JSON.stringify(this.exportable_pubKey) }
-  @Memoize @Ready get ownerChannelId() { return this.#ownerChannelId }
+  /** @type {JsonWebKey}    */ @Memoize @Ready get exportable_pubKey() { return this.#exportable_pubKey }
+  /** @type {JsonWebKey}    */ @Memoize @Ready get exportable_privateKey() { return this.#exportable_privateKey }
+  /** @type {CryptoKey}     */ @Memoize @Ready get privateKey() { return this.#privateKey }
+  /** @type {CryptoKeyPair} */ @Memoize @Ready get keyPair() { return this.#keyPair }
+  /** @type {JsonWebKey}    */ @Memoize @Ready get _id() { return JSON.stringify(this.exportable_pubKey) }
+  /** @type {string}        */ @Memoize @Ready get ownerChannelId() { return this.#ownerChannelId }
 
 } /* class Identity */
 
@@ -1597,6 +1619,7 @@ interface SBMessageContents {
 
 /**
  * SBMessage
+ * 
  * @class
  * @constructor
  * @public
@@ -1718,13 +1741,7 @@ export class SBFile extends SBMessage {
 } /* class SBFile */
 
 
-/**
- * Channel
- *
- * @class
- * @constructor
- * @public
- */
+/** SB384 */ 
 abstract class Channel extends SB384 {
   ready: Promise<Channel>
   channelReady: Promise<Channel>
@@ -1748,17 +1765,69 @@ abstract class Channel extends SB384 {
   #api!: ChannelApi
   abstract adminData?: Dictionary // TODO: make into getter
 
-  /*
-   * Channel()
+  /**
    * Join a channel, returns channel object.
    * 
    * Currently, you must have an identity when connecting, because every single
    * message is signed by sender. TODO is to look at how to provide a 'listening'
    * mode on channels.
+   * 
+   * Most classes in SB follow the "ready" template: objects can be used
+   * right away, but they decide for themselves if they're ready or not.
+   * 
+   * Below is a (complete) example for reference:
+
+  .. parsed-literal::
+    //
+    // Here we create a new channel; for this we need to be specific
+    // about what servers to use. This example references local dev
+    // (miniflare) servers
+    //
+    const sb_config = {
+      channel_server: \'http\:\/\/localhost\:4001\',
+      channel_ws: \'ws://localhost:4001\',
+      storage_server: \'http://localhost:4000\'
+    }
+    //
+    // Next we create the orchestrator object, for above endpoints
+    //
+    const SB = new `Snackabra`_ (sb_config)
+    //
+    // On these servers, we create a new channel (trivial auth)
+    //
+    SB.create(sb_config, \'<SECRET>\').then((handle) => {
+      //
+      // This will return a 'handle', a type that contains all
+      // the information you need to keep reference a channel.
+      //
+      SB.connect(
+        //
+        // Above we've created a channel, but not connected.
+        // Besides some information in the handle, to connect we
+        // must provide a message handler for all (new) messages
+        //
+        (m: ChannelMessage) => { console.log(\`got message: ${m}\`) },
+        handle.key,
+        handle.channelId
+      ).then((c) => c.ready).then((c) => {
+        //
+        // We are now connected, \'c\' is a `Channel Socket Class`_
+        // and can (optionally) pick a name (alias) for ourselves
+        //
+        c.userName = "TestBot"
+        //
+        // We can now send messages
+        //
+        (new `SBMessage`_ (c, "Hello from TestBot!")).send().then((c) => { 
+          console.log(\`test message sent! (${c})\`) })
+      })
+    })
+  
+
    *
-   * @param {Snackabra} which server to join
-   * @param {string} channelId (the :term:`Channel Name`) to find on that server
-   * @param {Identity} the identity which you want to present (defaults to server default)
+   * @param {Snackabra} sbServer server to join
+   * @param {JsonWebKey} key? key to use to join (optional)
+   * @param {string} channelId (the :term:`Channel Name`) to find on that server (optional)
    */
   constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string) {
     super(key)
@@ -1788,10 +1857,10 @@ abstract class Channel extends SB384 {
     // console.log(this.ready)
   }
 
-  get api() { return this.#api }
-  get sbServer() { return this.#sbServer }
-  @Memoize @Ready get channelId() { return this.#channelId }
-  get readyFlag(): boolean { return this.#ChannelReadyFlag }
+  /** @type {ChannelApi} */ get api() { return this.#api }
+  /** @type {SBServer} */ get sbServer() { return this.#sbServer }
+  /** @type {string} */ @Memoize @Ready get channelId() { return this.#channelId }
+  /** @type {boolean} */ get readyFlag(): boolean { return this.#ChannelReadyFlag }
 
 } /* class Channel */
 
@@ -1864,7 +1933,12 @@ export class ChannelSocket extends Channel {
   #onMessage: (m: ChannelMessage) => void  // CallableFunction // the user message handler
   #ack: Dictionary = []
 
-  /* ChannelSocket */
+  /**
+   * ChannelSocket
+   * 
+   * @param sbServer: {SBServer}
+   * 
+   * */
   constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string) {
     // console.log("----ChannelSocket.constructor() start:")
     // console.log(sbServer)
@@ -2035,14 +2109,14 @@ export class ChannelSocket extends Channel {
               // once we have keys we can also query admin info
               const adminData = this.api.getAdminData()
               this.owner = sbCrypto.compareKeys(exportable_owner_pubKey, this.exportable_pubKey!)
-      
+
               Promise.all([
                 adminData,
               ]).then((d) => {
                 // console.log("++++++++ readyPromise() getting adminData:")
                 // console.log(adminData)
                 this.adminData = d[0] as Dictionary
-                
+
                 // TODO: until we have better logic here a shim from old code
                 this.admin = this.owner
                 if (backlog.length > 0) {
@@ -2204,7 +2278,7 @@ export class ChannelSocket extends Channel {
     })
   }
 
-  @Memoize @Ready get exportable_owner_pubKey() { return this.#exportable_owner_pubKey }
+  /** @type {JsonWebKey} */ @Memoize @Ready get exportable_owner_pubKey() { return this.#exportable_owner_pubKey }
 
 } /* class ChannelSocket */
 
@@ -2248,8 +2322,9 @@ class StorageApi {
    * Hashes and splits into two (h1 and h1) signature of data, h1
    * is used to request (salt, iv) pair and then h2 is used for
    * encryption (h2, salt, iv)
+   *
    * @param buf blob of data to be stored
-   * @returns 
+   *
    */
   #generateIdKey(buf: ArrayBuffer): Promise<{ id: string, key: string }> {
     return new Promise((resolve, reject) => {
@@ -2396,7 +2471,7 @@ class StorageApi {
    * @param buf 
    * @param type
    * @param roomId
-   * @returns
+   *
    */
   storeObject(buf: ArrayBuffer, type: 'f' | 'p' | 'b', roomId: string): Promise<SBObjectHandle> {
     // export async function saveImage(sbImage, roomId, sendSystemMessage)
@@ -3298,6 +3373,7 @@ const _localStorage = new IndexedKV();
 
 //#endregion IndexedKV
 
+
 class Snackabra {
   #storage!: StorageApi
   #channel!: Channel
@@ -3349,15 +3425,12 @@ class Snackabra {
   }
 
   /**
-   * Snackabra.connect()
-   * 
    * Connects to :term:`Channel Name` on this SB config.
    * Returns a (promise to the) channel (socket) object.
    * It will throw an ``AggregateError`` if it fails
    * to find the room anywhere.
-   *
    */
-  connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
+   connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
     // if there's a 'preferred' (only) server then we we can return a promise right away
     // return new Promise<ChannelSocket>((resolve, reject) =>
     //   Promise.any(this.#preferredServer
@@ -3371,15 +3444,10 @@ class Snackabra {
       : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready))
   }
 
-  /**
-   * Snackabra.create()
-   * 
+  /** 
    * Creates a new channel. Currently uses trivial authentication.
    * Returns the :term:`Channel Name`. Note that this does not
    * create a channel object, e.g. does not make a connection.
-   * Therefore you need 
-   * 
-   * (TODO: token-based approval of storage spend)
    */
   create(sbServer: SBServer, serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle> {
     return new Promise<SBChannelHandle>(async (resolve, reject) => {
