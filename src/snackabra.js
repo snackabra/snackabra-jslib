@@ -52,14 +52,21 @@ export function encryptedContentsMakeBinary(o) {
         // console.log("this was turned into array:")
         // console.log(structuredClone(iv))
     }
-    else {
-        // console.log(o.iv)
-        // console.log("got iv as array")
-        // console.log(structuredClone(o.iv))
-        _sb_assert(o.iv.constructor.name === 'Uint8Array', 'undetermined iv (nonce) type in unwrap()');
-        _sb_assert(o.iv.length == 12, `unwrap(): nonce should be 12 bytes but is not (${o.iv.length})`);
+    else if (o.iv.constructor.name === 'Uint8Array') {
         iv = o.iv;
     }
+    else {
+        // probably a dictionary
+        try {
+            iv = new Uint8Array(Object.values(o.iv));
+        }
+        catch (e) {
+            console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:");
+            console.error(o.iv);
+            _sb_assert(false, "undetermined iv (nonce) type, see console");
+        }
+    }
+    _sb_assert(iv.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv.length})`);
     return { content: t, iv: iv };
 }
 // interface ChannelMessage1 {
