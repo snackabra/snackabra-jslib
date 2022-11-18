@@ -1,31 +1,8 @@
 // Copyright (c) 2022 Magnusson Institute, All Rights Reserved.
 
-// to use this, simply add module script import in html:
-//  <script type="module" src="./test01.js"></script>
 
-  /* 'test01a', 'test01b', 'test02', 'test02b', 'test03', */
-
-  /* SB API */
-  /* 'test04c', 'test04a','test04b', */
-
-  // 'test04',
-
-  // 'test04d', // connect and activate button
-
-  // 'test06a', // minimalist connect to SB and send a message (creates new channel)
-  // 'test06b', // connecting to known channel
-  // 'test06c', // test getting old messages (uses only old channels)
-
-  // for now only do one or the other of the following (or they overlap)
-  // 'test05a',
-  // 'test05b',
-
-  // 'test07a', // tests key generation performance
-
-  /* voprf test, not standard
-     plus: need to uncomment the import far below on voprf
-     (we will be removing this since snackabra-jslib is constrained to standardized web API */
-  /* 'test05' */
+// enable this to add (console.log) detailed trace output on ALL channels
+const TRACE_CHANNELS = false
 
 
 //#region - various utilities
@@ -343,7 +320,7 @@ function runTests(test_list: Array<string>) {
           handle.key, // if we omit then we're connecting anonymously (and not as owner)
           handle.channelId // since we're owner this is optional
         ).then((c) => c.ready).then((c) => {
-          // c.enableTrace = true; // optional trace
+          c.enableTrace = TRACE_CHANNELS
           c.userName = "TestBot"; // optional
           // say hello to everybody! upon success it will return "success"
           (new SBMessage(c, "Hello from TestBot!")).send()
@@ -408,7 +385,7 @@ function runTests(test_list: Array<string>) {
       .then((c) => {
         if (c) {
           logTest(`test06c found channel ("${c.channelId}") on server ${c.sbServer.channel_server} (tracing)`)
-          // c.enableTrace = true // optional trace
+          c.enableTrace = TRACE_CHANNELS
           c.userName = "TestBot";
           (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`[test06c] test message sent! (${c})`) })
           logTest("old messages - on console")
@@ -1070,7 +1047,7 @@ getElement('getOldMessages').onclick = (() => {
   console.log("DONE: test06c")
 })
 
-console.log("Set up buttons");
+console.log("Test setup ready: click away at buttons!");
 
 
 if (true) {

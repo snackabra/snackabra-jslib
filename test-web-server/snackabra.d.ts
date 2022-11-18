@@ -132,12 +132,25 @@ interface ChannelKeys {
     SB standard wrapping encrypted messages.
 
     Encryption is done with AES-GCM, 16 bytes of salt (iv), The
-    ``contents`` are url-safe base64, same thing with the nonce (iv).
+    ``contents`` are url-safe base64, same thing with the nonce (iv),
+    depending on if it's internal or over wire.
  */
 export interface EncryptedContents {
     content: string | ArrayBuffer;
+    iv: string | Uint8Array;
+}
+/**
+ * Same as EncryptedContents interface, but binary view enforced
+ */
+export interface EncryptedContentsBin {
+    content: ArrayBuffer;
     iv: Uint8Array;
 }
+/**
+ * Force EncryptedContents object to binary (interface
+ * supports either string or arrays)
+ */
+export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
 /******************************************************************************************************/
 export declare type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
 /******************************************************************************************************/
@@ -332,7 +345,8 @@ export declare function encodeB64Url(input: string): string;
 export declare function decodeB64Url(input: string): string;
 /******************************************************************************************************/
 /**
- * SBCrypto contains all the SB specific crypto functions
+ * SBCrypto contains all the SB specific crypto functions. It should be the only area where
+ * SB code uses subtle crypto directly.
  *
  * @class
  * @constructor

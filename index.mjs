@@ -28,6 +28,40 @@ const SBKnownServers = [
         storage_server: 'https://s.384co.workers.dev/'
     }
 ];
+/**
+ * Force EncryptedContents object to binary (interface
+ * supports either string or arrays)
+ */
+function encryptedContentsMakeBinary(o) {
+    let t;
+    let iv;
+    if (typeof o.content === 'string') {
+        t = base64ToArrayBuffer(decodeURIComponent(o.content));
+    }
+    else {
+        // console.log(structuredClone(o))
+        const ocn = o.content.constructor.name;
+        _sb_assert((ocn === 'ArrayBuffer') || (ocn === 'Uint8Array'), 'undetermined content type in EncryptedContents object');
+        t = o.content;
+    }
+    // console.log("=+=+=+=+ processing nonce")
+    if (typeof o.iv === 'string') {
+        // console.log("got iv as string:")
+        // console.log(structuredClone(o.iv))
+        iv = base64ToArrayBuffer(decodeURIComponent(o.iv));
+        // console.log("this was turned into array:")
+        // console.log(structuredClone(iv))
+    }
+    else {
+        // console.log(o.iv)
+        // console.log("got iv as array")
+        // console.log(structuredClone(o.iv))
+        _sb_assert(o.iv.constructor.name === 'Uint8Array', 'undetermined iv (nonce) type in unwrap()');
+        _sb_assert(o.iv.length == 12, `unwrap(): nonce should be 12 bytes but is not (${o.iv.length})`);
+        iv = o.iv;
+    }
+    return { content: t, iv: iv };
+}
 // interface ChannelMessage1 {
 //   // currently we can't do a regex match here, and i can't figure
 //   // out a more clever way of collapsing this.  TODO maybe we should
@@ -799,7 +833,8 @@ function decodeB64Url(input) {
 //#region - SBCrypto
 /******************************************************************************************************/
 /**
- * SBCrypto contains all the SB specific crypto functions
+ * SBCrypto contains all the SB specific crypto functions. It should be the only area where
+ * SB code uses subtle crypto directly.
  *
  * @class
  * @constructor
@@ -900,7 +935,7 @@ class SBCrypto {
                     if (returnType === 'encryptedContents') {
                         resolve({
                             content: ensureSafe(arrayBufferToBase64(encrypted)),
-                            iv: iv /* ensureSafe(arrayBufferToBase64(iv)) */
+                            iv: ensureSafe(arrayBufferToBase64(iv))
                         });
                     }
                     else {
@@ -936,17 +971,13 @@ class SBCrypto {
         // console.log(o)
         return new Promise(async (resolve, reject) => {
             try {
-                let t;
-                if (typeof o.content === 'string') {
-                    t = base64ToArrayBuffer(decodeURIComponent(o.content));
-                }
-                else {
-                    // console.log('o.content is of type:')
-                    // console.log(typeof o.content)
-                    _sb_assert(o.content.constructor.name === 'ArrayBuffer', 'undetermined content type in unwrap()');
-                    t = o.content;
-                }
-                crypto.subtle.decrypt({ name: 'AES-GCM', iv: o.iv }, k, t).then((d) => {
+                const { content: t, iv: iv } = encryptedContentsMakeBinary(o);
+                // console.log("======== calling subtle.decrypt with iv, k, t (AES-GCM):")
+                // console.log(iv)
+                // console.log(k)
+                // console.log(t)
+                // console.log("======== (end of subtle.decrypt parameters)")
+                crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, k, t).then((d) => {
                     if (returnType === 'string') {
                         resolve(new TextDecoder().decode(d));
                     }
@@ -954,13 +985,13 @@ class SBCrypto {
                         resolve(d);
                     }
                 }).catch((e) => {
-                    console.error(`failed to decrypt - rejecting: ${e}`);
+                    console.error(`unwrap(): failed to decrypt - rejecting: ${e}`);
                     console.trace();
                     reject(e);
                 });
             }
             catch (e) {
-                console.error(`catching problem - rejecting: ${e}`);
+                console.error(`unwrap(): unknown issue - rejecting: ${e}`);
                 console.trace();
                 reject(e);
             }
@@ -1139,6 +1170,7 @@ class SB384 {
                         // console.log("========== Public Key part:")
                         // console.log(keyPair.publicKey)
                         Promise.all([
+                            // TODO: move these two to SBCrypto and add SBCrypto.exportKey()
                             crypto.subtle.exportKey('jwk', keyPair.publicKey),
                             crypto.subtle.exportKey('jwk', keyPair.privateKey)
                         ]).then((v) => {
@@ -1451,6 +1483,8 @@ __decorate([
     Ready
 ], Channel.prototype, "channelId", null);
 function deCryptChannelMessage(m00, m01, keys) {
+    // console.log("#%#%#%#%# m01 passed to deCryptChannelMessage()")
+    // console.log(structuredClone(m01))
     return new Promise((resolve, reject) => {
         const z = messageIdRegex.exec(m00);
         const encryptionKey = keys.encryptionKey;
@@ -1460,10 +1494,7 @@ function deCryptChannelMessage(m00, m01, keys) {
                 channelID: z[1],
                 timestampPrefix: z[2],
                 _id: z[1] + z[2],
-                encrypted_contents: {
-                    content: m01.content,
-                    iv: new Uint8Array(Array.from(Object.values(m01.iv)))
-                }
+                encrypted_contents: encryptedContentsMakeBinary(m01)
             };
             sbCrypto.unwrap(encryptionKey, m.encrypted_contents, 'string').then((unwrapped) => {
                 let m2 = { ...m, ...JSON.parse(unwrapped) };
@@ -1477,27 +1508,38 @@ function deCryptChannelMessage(m00, m01, keys) {
                     name: m2.sender_username ? m2.sender_username : 'Unknown',
                     _id: m2.sender_pubKey
                 };
-                // TODO: we could speed this up by caching imported keys from known senders
-                sbCrypto.importKey('jwk', m2.sender_pubKey, 'ECDH', true, []).then((senderPubKey) => {
-                    sbCrypto.deriveKey(keys.signKey, senderPubKey, 'HMAC', false, ['sign', 'verify']).then((verifyKey) => {
-                        sbCrypto.verify(verifyKey, m2.sign, m2.contents).then((v) => {
-                            if (!v) {
-                                console.log("***** signature is NOT correct message (rejecting)");
-                                console.log("verifyKey:");
-                                console.log(Object.assign({}, verifyKey));
-                                console.log("m2.sign");
-                                console.log(Object.assign({}, m2.sign));
-                                console.log("m2.contents");
-                                console.log(structuredClone(m2.contents));
-                                console.log("Message:");
-                                console.log(Object.assign({}, m2));
-                                console.trace();
-                                reject(null);
-                            }
-                            resolve(m2);
+                // console.log("Unwrapped so far:")
+                // console.log(structuredClone(unwrapped))
+                // console.log("Decrypting message, results after decoding so far:")
+                // console.log(structuredClone(m2))
+                if ((m2.verificationToken) && (!m2.sender_pubKey)) {
+                    // we don't check signature unless we can (obviously)
+                    console.info('WARNING: message with verification token is lacking sender identity.\n' +
+                        '         This may not be allowed in the future.');
+                }
+                else {
+                    // TODO: we could speed this up by caching imported keys from known senders
+                    sbCrypto.importKey('jwk', m2.sender_pubKey, 'ECDH', true, []).then((senderPubKey) => {
+                        sbCrypto.deriveKey(keys.signKey, senderPubKey, 'HMAC', false, ['sign', 'verify']).then((verifyKey) => {
+                            sbCrypto.verify(verifyKey, m2.sign, m2.contents).then((v) => {
+                                if (!v) {
+                                    console.log("***** signature is NOT correct message (rejecting)");
+                                    console.log("verifyKey:");
+                                    console.log(Object.assign({}, verifyKey));
+                                    console.log("m2.sign");
+                                    console.log(Object.assign({}, m2.sign));
+                                    console.log("m2.contents");
+                                    console.log(structuredClone(m2.contents));
+                                    console.log("Message:");
+                                    console.log(Object.assign({}, m2));
+                                    console.trace();
+                                    reject(null);
+                                }
+                                resolve(m2);
+                            });
                         });
                     });
-                });
+                }
             });
         }
         else {
@@ -1563,7 +1605,7 @@ class ChannelSocket extends Channel {
         }
         const data = jsonParseWrapper(m, 'L1489');
         if (this.#traceSocket) {
-            console.log("... json unwrapped:");
+            console.log("... json unwrapped version of raw message:");
             console.log(Object.assign({}, data));
         }
         if (data.ack) {
@@ -1586,8 +1628,23 @@ class ChannelSocket extends Channel {
                 let m01 = Object.entries(message)[0][1];
                 // @ts-ignore
                 if (Object.keys(m01)[0] === 'encrypted_contents') {
-                    // TODO: parse out ID and time stamp, regex:
                     const m00 = Object.entries(data)[0][0];
+                    // the 'iv' field as incoming should be base64 encoded, with 16 b64
+                    // characters translating here to 12 bytes
+                    const iv_b64 = m01.encrypted_contents.iv;
+                    if ((iv_b64) && (_assertBase64(iv_b64)) && (iv_b64.length == 16)) {
+                        m01.encrypted_contents.iv = base64ToArrayBuffer(iv_b64);
+                    }
+                    else {
+                        console.error('processMessage() - iv is malformed, should be 16-char b64 string (ignoring)');
+                    }
+                    if (this.#traceSocket) {
+                        console.log("vvvvvv - calling deCryptChannelMessage() with arg1, arg2, arg3:");
+                        console.log(structuredClone(m00));
+                        console.log(structuredClone(m01.encrypted_contents));
+                        console.log(structuredClone(this.keys));
+                        console.log("^^^^^^ - (end parameter list)");
+                    }
                     deCryptChannelMessage(m00, m01.encrypted_contents, this.keys)
                         .then((m) => {
                         if (this.#traceSocket)
@@ -1609,7 +1666,7 @@ class ChannelSocket extends Channel {
                         r("success"); // resolve
                     }
                     else {
-                        console.log(`++++++++ did NOT find matching ack for id ${ack_id}`);
+                        console.info(`WARNING: did not find matching ack for id ${ack_id}`);
                     }
                 }
                 else {
@@ -2380,10 +2437,12 @@ class ChannelApi {
                 }
                 return response.json();
             }).then((messages) => {
-                // console.log(Object.assign({}, Object.values(messages))
+                // console.log("getOldMessages")
+                // console.log(structuredClone(Object.values(messages)))
                 Promise.all(Object
                     .keys(messages)
                     .filter((v) => messages[v].hasOwnProperty('encrypted_contents'))
+                    // .map((v) => { console.log("#*#*#*#*#*#*#"); console.log(structuredClone(messages[v].encrypted_contents)); return v; })
                     .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, this.#channel.keys)))
                     .then((decryptedMessageArray) => {
                     // console.log("getOldMessages is returning:")
@@ -2959,4 +3018,4 @@ class Snackabra {
     }
 } /* class Snackabra */
 
-export { Channel, ChannelSocket, IndexedKV, MessageBus, SBCrypto, SBFile, SBMessage, Snackabra, _appendBuffer, _assertBase64, _sb_assert, _sb_exception, _sb_resolve, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, compareBuffers, decodeB64Url, encodeB64Url, extractPayload, extractPayloadV1, getRandomValues, importPublicKey, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };
+export { Channel, ChannelSocket, IndexedKV, MessageBus, SBCrypto, SBFile, SBMessage, Snackabra, _appendBuffer, _assertBase64, _sb_assert, _sb_exception, _sb_resolve, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, compareBuffers, decodeB64Url, encodeB64Url, encryptedContentsMakeBinary, extractPayload, extractPayloadV1, getRandomValues, importPublicKey, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };
