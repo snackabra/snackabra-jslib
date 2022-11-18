@@ -583,6 +583,7 @@ export declare class ChannelSocket extends Channel {
      * */
     constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string);
     set onMessage(f: (m: ChannelMessage) => void);
+    set enableTrace(b: boolean);
     get onMessage(): (m: ChannelMessage) => void;
     /**
      * ChannelSocket.keys

@@ -532,8 +532,8 @@ function ensureSafe(base64: string): string {
 function typedArrayToBuffer(array: Uint8Array): ArrayBuffer {
   console.log('typedArrayToBuffer')
   console.log(typeof array)
-  console.log(array)
-  console.log(array.buffer)
+  console.log(Object.assign({}, array))
+  console.log(Object.assign({}, array.buffer))
   try {
     return array.buffer.slice(array.byteOffset, array.byteLength + array.byteOffset)
   } catch (e) {
@@ -1741,7 +1741,7 @@ export class SBFile extends SBMessage {
 } /* class SBFile */
 
 
-/** SB384 */ 
+/** SB384 */
 abstract class Channel extends SB384 {
   ready: Promise<Channel>
   channelReady: Promise<Channel>
@@ -1842,10 +1842,10 @@ abstract class Channel extends SB384 {
       } else {
         this.sb384Ready.then((x) => {
           console.log('using this channelId')
-          console.log(this)
-          console.log(x)
-          console.log(this.ownerChannelId)
-          console.log(x)
+          console.log(Object.assign({}, this))
+          console.log(Object.assign({}, x))
+          console.log(Object.assign({}, this.ownerChannelId))
+          console.log(Object.assign({}, x))
           this.#channelId = this.ownerChannelId!
           this.#ChannelReadyFlag = true
           resolve(this)
@@ -1897,8 +1897,16 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
           sbCrypto.deriveKey(keys.signKey, senderPubKey, 'HMAC', false, ['sign', 'verify']).then((verifyKey) => {
             sbCrypto.verify(verifyKey, m2.sign!, m2.contents!).then((v) => {
               if (!v) {
-                console.log("***** signature is NOT correct on this message: (rejecting)")
-                console.log(m2)
+                console.log("***** signature is NOT correct message (rejecting)")
+                console.log("verifyKey:")
+                console.log(Object.assign({}, verifyKey))
+                console.log("m2.sign")
+                console.log(Object.assign({}, m2.sign))
+                console.log("m2.contents")
+                console.log(structuredClone(m2.contents))
+                console.log("Message:")
+                console.log(Object.assign({}, m2))
+                console.trace()
                 reject(null)
               }
               resolve(m2)
@@ -1908,7 +1916,8 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
       })
     } else {
       console.log("++++++++ #processMessage: ERROR - cannot parse channel ID / timestamp, invalid message")
-      console.log(m00, m01)
+      console.log(Object.assign({}, m00))
+      console.log(Object.assign({}, m01))
       reject(null)
     }
   })
@@ -1932,6 +1941,7 @@ export class ChannelSocket extends Channel {
   // #queue: Array<SBMessage> = [];
   #onMessage: (m: ChannelMessage) => void  // CallableFunction // the user message handler
   #ack: Dictionary = []
+  #traceSocket: boolean = false
 
   /**
    * ChannelSocket
@@ -1961,17 +1971,20 @@ export class ChannelSocket extends Channel {
 
 
   /* ChannelSocket
-     internal to channelsocket: this always gets all messages; certain
+    internal to channelsocket: this always gets all messages; certain
     protocol aspects are low-level (independent of 'app') and those
     are handled here. others are never delivered 'raw', for example
     encrypted messages are always decrypted */
   #processMessage(m: any) {
-    // console.log("got raw message:")
-    // console.log(m)
-
+    if (this.#traceSocket) {
+      console.log("got raw message (string):")
+      console.log(structuredClone(m))
+    }
     const data = jsonParseWrapper(m, 'L1489')
-    // console.log("... json unwrapped:")
-    // console.log(data)
+    if (this.#traceSocket) {
+      console.log("... json unwrapped:")
+      console.log(Object.assign({}, data))
+    }
     if (data.ack) {
       const r = this.#ack[data._id]
       if (r) {
@@ -1993,13 +2006,17 @@ export class ChannelSocket extends Channel {
           // TODO: parse out ID and time stamp, regex:
           const m00 = Object.entries(data)[0][0]
           deCryptChannelMessage(m00, m01.encrypted_contents, this.keys)
-            .then((m) => { this.#onMessage(m) })
+            .then((m) => {
+              if (this.#traceSocket) console.log(Object.assign({}, m))
+              this.#onMessage(m)
+            })
+            .catch(() => { console.log('Error processing message, dropping it') })
         } else if (m01.type === 'ack') {
-          // console.log("++++++++ Received 'ack'")
+          if (this.#traceSocket) console.log("++++++++ Received 'ack'")
           const ack_id = m01._id
           const r = this.#ack[ack_id]
           if (r) {
-            // console.log(`++++++++ found matching ack for id ${ack_id}`)
+            if (this.#traceSocket) console.log(`++++++++ found matching ack for id ${ack_id}`)
             // console.log(r)
             delete this.#ack[ack_id]
             r("success") // resolve
@@ -2011,7 +2028,7 @@ export class ChannelSocket extends Channel {
           // TODO: other message types (low level?) are parsed here ...
           //
           console.log("++++++++ #processMessage: can't decipher message, passing along unchanged:")
-          console.log(message)
+          console.log(Object.assign({}, message))
           this.#onMessage(message) // 'as string' ?
         }
       } catch (e) {
@@ -2175,6 +2192,11 @@ export class ChannelSocket extends Channel {
     this.#onMessage = f
   }
 
+  set enableTrace(b: boolean) {
+    this.#traceSocket = b;
+    console.log(`Tracing ${b ? 'en' : 'dis'}abled`);
+  }
+
   get onMessage() {
     return this.#onMessage
   }
@@ -2216,64 +2238,80 @@ export class ChannelSocket extends Channel {
     let message: SBMessage
     if (typeof msg === 'string') {
       message = new SBMessage(this, msg)
-
     } else if (msg instanceof SBMessage) {
       message = msg
     } else {
+      message = new SBMessage(this, "ERROR")
       // SBFile for example
       _sb_exception("ChannelSocket.send()", "unknown parameter type")
     }
     // for future inspiration here are more thoughts on making this more iron clad:
     // https://stackoverflow.com/questions/29881957/websocket-connection-timeout
-    // console.log("++++++++ ChannelSocket.send() this message: ")
-    // console.log(message)
     if (this.#ws.closed) {
-      // console.info("send() triggered reset of #readyPromise() (normal)")
+      if (this.#traceSocket) console.info("send() triggered reset of #readyPromise() (normal)")
       this.ready = this.#readyPromise() // possible reset of ready 
     }
     return new Promise((resolve, reject) => {
-      this.ready.then(() => {
-        if (!this.#ChannelSocketReadyFlag) reject("ChannelSocket.send() is confused - ready or not?")
-        switch (this.#ws.websocket.readyState) {
-          case 1: // OPEN
-            sbCrypto.wrap(this.keys.encryptionKey, JSON.stringify(message.contents), 'string').then((wrappedMessage) => {
-              // console.log("ChannelSocket.send():")
-              // console.log(wrappedMessage)
-              const m = JSON.stringify({ encrypted_contents: wrappedMessage })
-              // console.log("++++++++ ChannelSocket.send() got this from wrap:")
-              // console.log(m)
-              // console.log("++++++++ ChannelSocket.send() then got this from JSON.stringify:")
-              // console.log(wrappedMessage)
-              crypto.subtle.digest('SHA-256', new TextEncoder().encode(m)).then((hash) => {
-                const _id = arrayBufferToBase64(hash)
-                const ackPayload = { timestamp: Date.now(), type: 'ack', _id: _id }
-                this.#ack[_id] = resolve
-                // console.log(`++++++++ ChannelSocket.send() this message: '${m}' `)
-                this.#ws.websocket.send(m)
-                // TODO: update protocol so server acks on message
-                this.#ws.websocket.send(JSON.stringify(ackPayload));
-                setTimeout(() => {
-                  if (this.#ack[_id]) {
-                    delete this.#ack[_id]
-                    const msg = `Websocket request timed out (no ack) after ${this.#ws.timeout}ms (${_id})`
-                    console.error(msg)
-                    reject(msg)
-                  } else {
-                    // normal behavior
-                    // console.log("++++++++ ChannelSocket.send() completed sending!")
-                    resolve("success")
+      message.ready.then((message) => {
+        this.ready.then(() => {
+          if (this.#traceSocket) {
+            console.log("++++++++ ChannelSocket.send() this message (cloned): ")
+            //console.log(structuredClone(message))
+            console.log(Object.assign({}, message))
+          }      
+          if (!this.#ChannelSocketReadyFlag) reject("ChannelSocket.send() is confused - ready or not?")
+          switch (this.#ws.websocket.readyState) {
+            case 1: // OPEN
+              if (this.#traceSocket) {
+                console.log("Wrapping message contents:")
+                console.log(Object.assign({}, message.contents))
+              }
+              sbCrypto.wrap(this.keys.encryptionKey, JSON.stringify(message.contents), 'string').then((wrappedMessage) => {
+                if (this.#traceSocket) {
+                  console.log("ChannelSocket.send():")
+                  console.log(Object.assign({}, wrappedMessage))
+                }
+                const m = JSON.stringify({ encrypted_contents: wrappedMessage })
+                if (this.#traceSocket) {
+                  console.log("++++++++ ChannelSocket.send() got this from wrap:")
+                  console.log(structuredClone(m))
+                  console.log("++++++++ ChannelSocket.send() then got this from JSON.stringify:")
+                  console.log(Object.assign({}, wrappedMessage))
+                }
+                crypto.subtle.digest('SHA-256', new TextEncoder().encode(m)).then((hash) => {
+                  const _id = arrayBufferToBase64(hash)
+                  const ackPayload = { timestamp: Date.now(), type: 'ack', _id: _id }
+                  this.#ack[_id] = resolve
+                  if (this.#traceSocket) {
+                    console.log('++++++++ ChannelSocket.send() this message:')
+                    console.log(structuredClone(m))
                   }
-                }, this.#ws.timeout)
+                  this.#ws.websocket.send(m)
+                  // TODO: update protocol so server acks on message
+                  this.#ws.websocket.send(JSON.stringify(ackPayload));
+                  setTimeout(() => {
+                    if (this.#ack[_id]) {
+                      delete this.#ack[_id]
+                      const msg = `Websocket request timed out (no ack) after ${this.#ws.timeout}ms (${_id})`
+                      console.error(msg)
+                      reject(msg)
+                    } else {
+                      // normal behavior
+                      if (this.#traceSocket) console.log("++++++++ ChannelSocket.send() completed sending")
+                      resolve("success")
+                    }
+                  }, this.#ws.timeout)
+                })
               })
-            })
-            break
-          case 3: // CLOSED
-          case 0: // CONNECTING
-          case 2: // CLOSING
-            const errMsg = 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING'
-            _sb_exception('ChannelSocket', errMsg)
-            reject(errMsg)
-        }
+              break
+            case 3: // CLOSED
+            case 0: // CONNECTING
+            case 2: // CLOSING
+              const errMsg = 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING'
+              _sb_exception('ChannelSocket', errMsg)
+              reject(errMsg)
+          }
+        })
       })
     })
   }
@@ -2661,9 +2699,9 @@ class StorageApi {
     messages: Array<ChannelMessage>,
     controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
     console.log("... need to code up retrieveData() with new typing ..")
-    console.log(msgId)
-    console.log(messages)
-    console.log(controlMessages)
+    console.log(Object.assign({}, msgId))
+    console.log(Object.assign({}, messages))
+    console.log(Object.assign({}, controlMessages))
     console.error("... need to code up retrieveData() with new typing ..")
 
     const imageMetaData = messages.find((msg: ChannelMessage) => msg!._id === msgId)!.imageMetaData
@@ -2796,7 +2834,7 @@ class ChannelApi {
         if (!response.ok) { reject(new Error('Network response was not OK')); }
         return response.json();
       }).then((messages) => {
-        // console.log(Object.values(messages))
+        // console.log(Object.assign({}, Object.values(messages))
         Promise.all(Object
           .keys(messages)
           .filter((v) => messages[v].hasOwnProperty('encrypted_contents'))
@@ -3430,7 +3468,7 @@ class Snackabra {
    * It will throw an ``AggregateError`` if it fails
    * to find the room anywhere.
    */
-   connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
+  connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
     // if there's a 'preferred' (only) server then we we can return a promise right away
     // return new Promise<ChannelSocket>((resolve, reject) =>
     //   Promise.any(this.#preferredServer

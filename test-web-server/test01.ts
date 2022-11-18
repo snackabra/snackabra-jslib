@@ -3,8 +3,6 @@
 // to use this, simply add module script import in html:
 //  <script type="module" src="./test01.js"></script>
 
-// UNCOMMENT the tests you want to run:
-const test_list = [
   /* 'test01a', 'test01b', 'test02', 'test02b', 'test03', */
 
   /* SB API */
@@ -16,7 +14,7 @@ const test_list = [
 
   // 'test06a', // minimalist connect to SB and send a message (creates new channel)
   // 'test06b', // connecting to known channel
-  'test06c', // test getting old messages (uses only old channels)
+  // 'test06c', // test getting old messages (uses only old channels)
 
   // for now only do one or the other of the following (or they overlap)
   // 'test05a',
@@ -28,7 +26,6 @@ const test_list = [
      plus: need to uncomment the import far below on voprf
      (we will be removing this since snackabra-jslib is constrained to standardized web API */
   /* 'test05' */
-];
 
 
 //#region - various utilities
@@ -73,6 +70,7 @@ import {
 } from './snackabra.js'
 
 
+let defaultChannelId:string = '';
 
 let test_pass = 0, test_fail = 0;
 
@@ -313,46 +311,61 @@ function runTests(test_list: Array<string>) {
     storage_server: 'https://s.somethingstuff.workers.dev/'
   }
 
+  function logTest(msg: string) {
+    const z = getElement('test06a')
+    z.innerHTML += msg + "<br/><br/>"
+  }
+
   if (test_list.includes('test06a')) {
     console.log("Test 'test06a")
-    const z = getElement('test06a');
-    // create server object (assumes miniflare test setup):
-    const sb_config = {
-      channel_server: 'http://localhost:4001',
-      channel_ws: 'ws://localhost:4001',
-      storage_server: 'http://localhost:4000'
-    }
-    const SB = new Snackabra(sb_config)
-    // create a new channel (room), returns (owner) key and channel name:
-    SB.create(sb_config, 'password').then((handle) => {
-      const roomUrl = `http://localhost:3000/rooms/${handle.channelId}`
-      console.log(`you can (probably) connect here: ${roomUrl}`)
-      z.innerHTML += ' ... received new channel:<br\>'
-      z.innerHTML += `<a href="${roomUrl}">${roomUrl}</a><br/><br/>`
-      z.innerHTML += ' channel name itself:<br\>'
-      z.innerHTML += `<tt>${handle.channelId}</tt>`
-      // connect to the websocket with our handle info:
-      SB.connect(
-        // must have a message handler:
-        (m: ChannelMessage) => { console.log(`got message: ${m}`) },
-        handle.key, // if we omit then we're connecting anonymously (and not as owner)
-        handle.channelId // since we're owner this is optional
-      ).then((c) => c.ready).then((c) => {
-        c.userName = "TestBot"; // optional
-        // say hello to everybody! upon success it will return "success"
-        (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`test message sent! (${c})`) })
-
-        // there's a button that sends more messages manually
-        let messageCount = 0
-        getElement('anotherMessage').onclick = (() => {
-          messageCount++
-          let sbm = new SBMessage(c, `message number ${messageCount} from test06a!`)
-          console.log(`================ sending message number ${messageCount}:`)
-          console.log(sbm)
-          c.send(sbm).then((c) => console.log(`back from sending message ${messageCount} (${c})`))
+    try {
+      // create server object (assumes miniflare test setup):
+      const sb_config = {
+        channel_server: 'http://localhost:4001',
+        channel_ws: 'ws://localhost:4001',
+        storage_server: 'http://localhost:4000'
+      }
+      const SB = new Snackabra(sb_config)
+      // create a new channel (room), returns (owner) key and channel name:
+      SB.create(sb_config, 'password').then((handle) => {
+        defaultChannelId = handle.channelId
+        const roomUrl = `http://localhost:3000/rooms/${handle.channelId}`
+        console.log(`you can (probably) connect here: ${roomUrl}`)
+        logTest(' ... received new channel:')
+        logTest(`<a href="${roomUrl}">${roomUrl}</a>`)
+        logTest(' channel name itself:')
+        logTest(`<tt>${handle.channelId}</tt>`)
+        logTest('Above is now default channel.')
+        // connect to the websocket with our handle info:
+        SB.connect(
+          // must have a message handler:
+          (m: ChannelMessage) => { console.log('got message:'); console.log(m); },
+          handle.key, // if we omit then we're connecting anonymously (and not as owner)
+          handle.channelId // since we're owner this is optional
+        ).then((c) => c.ready).then((c) => {
+          // c.enableTrace = true; // optional trace
+          c.userName = "TestBot"; // optional
+          // say hello to everybody! upon success it will return "success"
+          (new SBMessage(c, "Hello from TestBot!")).send()
+            .then((c) => { console.log(`test message sent! (${c})`) })
+          // there's a button that sends more messages manually
+          let messageCount = 0
+          getElement('anotherMessage').onclick = (() => {
+            messageCount++
+            let sbm = new SBMessage(c, `message number ${messageCount} from test06a!`)
+            logTest(`==== sending message number ${messageCount} (on console)`)
+            console.log(`==== sending message number ${messageCount}:`)
+            console.log(sbm)
+            c.send(sbm)
+              .then((c) => console.log(`back from sending message ${messageCount} (${c})`))
+          })
         })
       })
-    })
+    } catch (e: any) {
+      console.log('Got error in test06a:')
+      console.log(e)
+      console.trace()
+    }
   }
 
   if (test_list.includes('test06b')) {
@@ -391,13 +404,14 @@ function runTests(test_list: Array<string>) {
 
 
   if (test_list.includes('test06c')) {
-    getAnyChannel(["jxEDB2VfB2mtk-nNcnX6bVlS5QTCeckgInz2Je8ZKEY7dKxGm-XxwWK3RiB07dLp"], (m: ChannelMessage) => { console.log('test06c got message:'); console.log(m); })
+    getAnyChannel([defaultChannelId], (m: ChannelMessage) => { console.log('test06c got message:'); console.log(m); })
       .then((c) => {
         if (c) {
-          console.log(`test06c found a channel ("${c.channelId}") on server ${c.sbServer.channel_server}`)
+          logTest(`test06c found channel ("${c.channelId}") on server ${c.sbServer.channel_server} (tracing)`)
+          // c.enableTrace = true // optional trace
           c.userName = "TestBot";
           (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`[test06c] test message sent! (${c})`) })
-          console.log("now trying to fetch old messages:")
+          logTest("old messages - on console")
           c.api.getOldMessages(0).then((oldMessages) => {
             console.log("got a reply:")
             console.log(oldMessages)
@@ -1045,10 +1059,18 @@ function runTests(test_list: Array<string>) {
 
 
 getElement('createChannel').onclick = (() => {
-  console.log("RUNNING: test06sa")
+  console.log("RUNNING: test06a")
   runTests(['test06a'])
-  console.log("DONE: test06sa")
+  console.log("DONE: test06a")
 })
+
+getElement('getOldMessages').onclick = (() => {
+  console.log("RUNNING: test06c")
+  runTests(['test06c'])
+  console.log("DONE: test06c")
+})
+
+console.log("Set up buttons");
 
 
 if (true) {

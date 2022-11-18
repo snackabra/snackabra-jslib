@@ -212,8 +212,8 @@ function ensureSafe(base64) {
 function typedArrayToBuffer(array) {
     console.log('typedArrayToBuffer');
     console.log(typeof array);
-    console.log(array);
-    console.log(array.buffer);
+    console.log(Object.assign({}, array));
+    console.log(Object.assign({}, array.buffer));
     try {
         return array.buffer.slice(array.byteOffset, array.byteLength + array.byteOffset);
     }
@@ -1103,10 +1103,10 @@ function Ready(target, propertyKey, descriptor) {
 }
 //# endregion - local decorators
 /**
- * SB384 - basic (core) capability object in SB
  * @class
  * @constructor
  * @public
+ *
  */
 class SB384 {
     ready;
@@ -1118,9 +1118,20 @@ class SB384 {
     #ownerChannelId = null;
     #keyPair = null;
     /**
-     * new SB384()
+     * Basic (core) capability object in SB.
+     *
+     * Note that all the getters below will throw an exception if the
+     * corresponding information is not ready.
+     *
+     * Like most SB classes, SB384 follows the "ready template" design
+     * principle: the object is immediately available upon creation,
+     * but isn't "ready" until it says it's ready. See `Channel Class`_
+     * example below.
+     *
      * @param key a jwk with which to create identity; if not provided,
-     * it will 'mint' (generate) them randomly
+     * it will 'mint' (generate) them randomly, in other words it will
+     * default to creating a new identity ("384").
+     *
      */
     constructor(key) {
         // console.log("setting SB384.ready")
@@ -1197,13 +1208,13 @@ class SB384 {
             resolve(this.#generateRoomHash(channelBytes));
         });
     }
-    get readyFlag() { return this.#SB384ReadyFlag; }
-    get exportable_pubKey() { return this.#exportable_pubKey; }
-    get exportable_privateKey() { return this.#exportable_privateKey; }
-    get privateKey() { return this.#privateKey; }
-    get keyPair() { return this.#keyPair; }
-    get _id() { return JSON.stringify(this.exportable_pubKey); }
-    get ownerChannelId() { return this.#ownerChannelId; }
+    /** @type {boolean}       */ get readyFlag() { return this.#SB384ReadyFlag; }
+    /** @type {JsonWebKey}    */ get exportable_pubKey() { return this.#exportable_pubKey; }
+    /** @type {JsonWebKey}    */ get exportable_privateKey() { return this.#exportable_privateKey; }
+    /** @type {CryptoKey}     */ get privateKey() { return this.#privateKey; }
+    /** @type {CryptoKeyPair} */ get keyPair() { return this.#keyPair; }
+    /** @type {JsonWebKey}    */ get _id() { return JSON.stringify(this.exportable_pubKey); }
+    /** @type {string}        */ get ownerChannelId() { return this.#ownerChannelId; }
 } /* class Identity */
 __decorate([
     Memoize
@@ -1234,6 +1245,7 @@ __decorate([
 ], SB384.prototype, "ownerChannelId", null);
 /**
  * SBMessage
+ *
  * @class
  * @constructor
  * @public
@@ -1345,13 +1357,7 @@ export class SBFile extends SBMessage {
         //   this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
     }
 } /* class SBFile */
-/**
- * Channel
- *
- * @class
- * @constructor
- * @public
- */
+/** SB384 */
 class Channel extends SB384 {
     ready;
     channelReady;
@@ -1365,17 +1371,69 @@ class Channel extends SB384 {
     userName = '';
     #channelId;
     #api;
-    /*
-     * Channel()
+    /**
      * Join a channel, returns channel object.
      *
      * Currently, you must have an identity when connecting, because every single
      * message is signed by sender. TODO is to look at how to provide a 'listening'
      * mode on channels.
      *
-     * @param {Snackabra} which server to join
-     * @param {string} channelId (the :term:`Channel Name`) to find on that server
-     * @param {Identity} the identity which you want to present (defaults to server default)
+     * Most classes in SB follow the "ready" template: objects can be used
+     * right away, but they decide for themselves if they're ready or not.
+     *
+     * Below is a (complete) example for reference:
+  
+    .. parsed-literal::
+      //
+      // Here we create a new channel; for this we need to be specific
+      // about what servers to use. This example references local dev
+      // (miniflare) servers
+      //
+      const sb_config = {
+        channel_server: \'http\:\/\/localhost\:4001\',
+        channel_ws: \'ws://localhost:4001\',
+        storage_server: \'http://localhost:4000\'
+      }
+      //
+      // Next we create the orchestrator object, for above endpoints
+      //
+      const SB = new `Snackabra`_ (sb_config)
+      //
+      // On these servers, we create a new channel (trivial auth)
+      //
+      SB.create(sb_config, \'<SECRET>\').then((handle) => {
+        //
+        // This will return a 'handle', a type that contains all
+        // the information you need to keep reference a channel.
+        //
+        SB.connect(
+          //
+          // Above we've created a channel, but not connected.
+          // Besides some information in the handle, to connect we
+          // must provide a message handler for all (new) messages
+          //
+          (m: ChannelMessage) => { console.log(\`got message: ${m}\`) },
+          handle.key,
+          handle.channelId
+        ).then((c) => c.ready).then((c) => {
+          //
+          // We are now connected, \'c\' is a `Channel Socket Class`_
+          // and can (optionally) pick a name (alias) for ourselves
+          //
+          c.userName = "TestBot"
+          //
+          // We can now send messages
+          //
+          (new `SBMessage`_ (c, "Hello from TestBot!")).send().then((c) => {
+            console.log(\`test message sent! (${c})\`) })
+        })
+      })
+    
+  
+     *
+     * @param {Snackabra} sbServer server to join
+     * @param {JsonWebKey} key? key to use to join (optional)
+     * @param {string} channelId (the :term:`Channel Name`) to find on that server (optional)
      */
     constructor(sbServer, key, channelId) {
         super(key);
@@ -1391,10 +1449,10 @@ class Channel extends SB384 {
             else {
                 this.sb384Ready.then((x) => {
                     console.log('using this channelId');
-                    console.log(this);
-                    console.log(x);
-                    console.log(this.ownerChannelId);
-                    console.log(x);
+                    console.log(Object.assign({}, this));
+                    console.log(Object.assign({}, x));
+                    console.log(Object.assign({}, this.ownerChannelId));
+                    console.log(Object.assign({}, x));
                     this.#channelId = this.ownerChannelId;
                     this.#ChannelReadyFlag = true;
                     resolve(this);
@@ -1405,10 +1463,10 @@ class Channel extends SB384 {
         // console.log("Channel.ready set to:")
         // console.log(this.ready)
     }
-    get api() { return this.#api; }
-    get sbServer() { return this.#sbServer; }
-    get channelId() { return this.#channelId; }
-    get readyFlag() { return this.#ChannelReadyFlag; }
+    /** @type {ChannelApi} */ get api() { return this.#api; }
+    /** @type {SBServer} */ get sbServer() { return this.#sbServer; }
+    /** @type {string} */ get channelId() { return this.#channelId; }
+    /** @type {boolean} */ get readyFlag() { return this.#ChannelReadyFlag; }
 } /* class Channel */
 __decorate([
     Memoize,
@@ -1446,8 +1504,16 @@ function deCryptChannelMessage(m00, m01, keys) {
                     sbCrypto.deriveKey(keys.signKey, senderPubKey, 'HMAC', false, ['sign', 'verify']).then((verifyKey) => {
                         sbCrypto.verify(verifyKey, m2.sign, m2.contents).then((v) => {
                             if (!v) {
-                                console.log("***** signature is NOT correct on this message: (rejecting)");
-                                console.log(m2);
+                                console.log("***** signature is NOT correct message (rejecting)");
+                                console.log("verifyKey:");
+                                console.log(Object.assign({}, verifyKey));
+                                console.log("m2.sign");
+                                console.log(Object.assign({}, m2.sign));
+                                console.log("m2.contents");
+                                console.log(structuredClone(m2.contents));
+                                console.log("Message:");
+                                console.log(Object.assign({}, m2));
+                                console.trace();
                                 reject(null);
                             }
                             resolve(m2);
@@ -1458,7 +1524,8 @@ function deCryptChannelMessage(m00, m01, keys) {
         }
         else {
             console.log("++++++++ #processMessage: ERROR - cannot parse channel ID / timestamp, invalid message");
-            console.log(m00, m01);
+            console.log(Object.assign({}, m00));
+            console.log(Object.assign({}, m01));
             reject(null);
         }
     });
@@ -1481,7 +1548,13 @@ export class ChannelSocket extends Channel {
     // #queue: Array<SBMessage> = [];
     #onMessage; // CallableFunction // the user message handler
     #ack = [];
-    /* ChannelSocket */
+    #traceSocket = false;
+    /**
+     * ChannelSocket
+     *
+     * @param sbServer: {SBServer}
+     *
+     * */
     constructor(sbServer, onMessage, key, channelId) {
         // console.log("----ChannelSocket.constructor() start:")
         // console.log(sbServer)
@@ -1501,16 +1574,20 @@ export class ChannelSocket extends Channel {
         this.ready = this.#readyPromise();
     }
     /* ChannelSocket
-       internal to channelsocket: this always gets all messages; certain
+      internal to channelsocket: this always gets all messages; certain
       protocol aspects are low-level (independent of 'app') and those
       are handled here. others are never delivered 'raw', for example
       encrypted messages are always decrypted */
     #processMessage(m) {
-        // console.log("got raw message:")
-        // console.log(m)
+        if (this.#traceSocket) {
+            console.log("got raw message (string):");
+            console.log(structuredClone(m));
+        }
         const data = jsonParseWrapper(m, 'L1489');
-        // console.log("... json unwrapped:")
-        // console.log(data)
+        if (this.#traceSocket) {
+            console.log("... json unwrapped:");
+            console.log(Object.assign({}, data));
+        }
         if (data.ack) {
             const r = this.#ack[data._id];
             if (r) {
@@ -1534,14 +1611,21 @@ export class ChannelSocket extends Channel {
                     // TODO: parse out ID and time stamp, regex:
                     const m00 = Object.entries(data)[0][0];
                     deCryptChannelMessage(m00, m01.encrypted_contents, this.keys)
-                        .then((m) => { this.#onMessage(m); });
+                        .then((m) => {
+                        if (this.#traceSocket)
+                            console.log(Object.assign({}, m));
+                        this.#onMessage(m);
+                    })
+                        .catch(() => { console.log('Error processing message, dropping it'); });
                 }
                 else if (m01.type === 'ack') {
-                    // console.log("++++++++ Received 'ack'")
+                    if (this.#traceSocket)
+                        console.log("++++++++ Received 'ack'");
                     const ack_id = m01._id;
                     const r = this.#ack[ack_id];
                     if (r) {
-                        // console.log(`++++++++ found matching ack for id ${ack_id}`)
+                        if (this.#traceSocket)
+                            console.log(`++++++++ found matching ack for id ${ack_id}`);
                         // console.log(r)
                         delete this.#ack[ack_id];
                         r("success"); // resolve
@@ -1555,7 +1639,7 @@ export class ChannelSocket extends Channel {
                     // TODO: other message types (low level?) are parsed here ...
                     //
                     console.log("++++++++ #processMessage: can't decipher message, passing along unchanged:");
-                    console.log(message);
+                    console.log(Object.assign({}, message));
                     this.#onMessage(message); // 'as string' ?
                 }
             }
@@ -1718,6 +1802,10 @@ export class ChannelSocket extends Channel {
     set onMessage(f) {
         this.#onMessage = f;
     }
+    set enableTrace(b) {
+        this.#traceSocket = b;
+        console.log(`Tracing ${b ? 'en' : 'dis'}abled`);
+    }
     get onMessage() {
         return this.#onMessage;
     }
@@ -1761,66 +1849,85 @@ export class ChannelSocket extends Channel {
             message = msg;
         }
         else {
+            message = new SBMessage(this, "ERROR");
             // SBFile for example
             _sb_exception("ChannelSocket.send()", "unknown parameter type");
         }
         // for future inspiration here are more thoughts on making this more iron clad:
         // https://stackoverflow.com/questions/29881957/websocket-connection-timeout
-        // console.log("++++++++ ChannelSocket.send() this message: ")
-        // console.log(message)
         if (this.#ws.closed) {
-            // console.info("send() triggered reset of #readyPromise() (normal)")
+            if (this.#traceSocket)
+                console.info("send() triggered reset of #readyPromise() (normal)");
             this.ready = this.#readyPromise(); // possible reset of ready 
         }
         return new Promise((resolve, reject) => {
-            this.ready.then(() => {
-                if (!this.#ChannelSocketReadyFlag)
-                    reject("ChannelSocket.send() is confused - ready or not?");
-                switch (this.#ws.websocket.readyState) {
-                    case 1: // OPEN
-                        sbCrypto.wrap(this.keys.encryptionKey, JSON.stringify(message.contents), 'string').then((wrappedMessage) => {
-                            // console.log("ChannelSocket.send():")
-                            // console.log(wrappedMessage)
-                            const m = JSON.stringify({ encrypted_contents: wrappedMessage });
-                            // console.log("++++++++ ChannelSocket.send() got this from wrap:")
-                            // console.log(m)
-                            // console.log("++++++++ ChannelSocket.send() then got this from JSON.stringify:")
-                            // console.log(wrappedMessage)
-                            crypto.subtle.digest('SHA-256', new TextEncoder().encode(m)).then((hash) => {
-                                const _id = arrayBufferToBase64(hash);
-                                const ackPayload = { timestamp: Date.now(), type: 'ack', _id: _id };
-                                this.#ack[_id] = resolve;
-                                // console.log(`++++++++ ChannelSocket.send() this message: '${m}' `)
-                                this.#ws.websocket.send(m);
-                                // TODO: update protocol so server acks on message
-                                this.#ws.websocket.send(JSON.stringify(ackPayload));
-                                setTimeout(() => {
-                                    if (this.#ack[_id]) {
-                                        delete this.#ack[_id];
-                                        const msg = `Websocket request timed out (no ack) after ${this.#ws.timeout}ms (${_id})`;
-                                        console.error(msg);
-                                        reject(msg);
+            message.ready.then((message) => {
+                this.ready.then(() => {
+                    if (this.#traceSocket) {
+                        console.log("++++++++ ChannelSocket.send() this message (cloned): ");
+                        //console.log(structuredClone(message))
+                        console.log(Object.assign({}, message));
+                    }
+                    if (!this.#ChannelSocketReadyFlag)
+                        reject("ChannelSocket.send() is confused - ready or not?");
+                    switch (this.#ws.websocket.readyState) {
+                        case 1: // OPEN
+                            if (this.#traceSocket) {
+                                console.log("Wrapping message contents:");
+                                console.log(Object.assign({}, message.contents));
+                            }
+                            sbCrypto.wrap(this.keys.encryptionKey, JSON.stringify(message.contents), 'string').then((wrappedMessage) => {
+                                if (this.#traceSocket) {
+                                    console.log("ChannelSocket.send():");
+                                    console.log(Object.assign({}, wrappedMessage));
+                                }
+                                const m = JSON.stringify({ encrypted_contents: wrappedMessage });
+                                if (this.#traceSocket) {
+                                    console.log("++++++++ ChannelSocket.send() got this from wrap:");
+                                    console.log(structuredClone(m));
+                                    console.log("++++++++ ChannelSocket.send() then got this from JSON.stringify:");
+                                    console.log(Object.assign({}, wrappedMessage));
+                                }
+                                crypto.subtle.digest('SHA-256', new TextEncoder().encode(m)).then((hash) => {
+                                    const _id = arrayBufferToBase64(hash);
+                                    const ackPayload = { timestamp: Date.now(), type: 'ack', _id: _id };
+                                    this.#ack[_id] = resolve;
+                                    if (this.#traceSocket) {
+                                        console.log('++++++++ ChannelSocket.send() this message:');
+                                        console.log(structuredClone(m));
                                     }
-                                    else {
-                                        // normal behavior
-                                        // console.log("++++++++ ChannelSocket.send() completed sending!")
-                                        resolve("success");
-                                    }
-                                }, this.#ws.timeout);
+                                    this.#ws.websocket.send(m);
+                                    // TODO: update protocol so server acks on message
+                                    this.#ws.websocket.send(JSON.stringify(ackPayload));
+                                    setTimeout(() => {
+                                        if (this.#ack[_id]) {
+                                            delete this.#ack[_id];
+                                            const msg = `Websocket request timed out (no ack) after ${this.#ws.timeout}ms (${_id})`;
+                                            console.error(msg);
+                                            reject(msg);
+                                        }
+                                        else {
+                                            // normal behavior
+                                            if (this.#traceSocket)
+                                                console.log("++++++++ ChannelSocket.send() completed sending");
+                                            resolve("success");
+                                        }
+                                    }, this.#ws.timeout);
+                                });
                             });
-                        });
-                        break;
-                    case 3: // CLOSED
-                    case 0: // CONNECTING
-                    case 2: // CLOSING
-                        const errMsg = 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING';
-                        _sb_exception('ChannelSocket', errMsg);
-                        reject(errMsg);
-                }
+                            break;
+                        case 3: // CLOSED
+                        case 0: // CONNECTING
+                        case 2: // CLOSING
+                            const errMsg = 'socket not OPEN - either CLOSED or in the state of CONNECTING/CLOSING';
+                            _sb_exception('ChannelSocket', errMsg);
+                            reject(errMsg);
+                    }
+                });
             });
         });
     }
-    get exportable_owner_pubKey() { return this.#exportable_owner_pubKey; }
+    /** @type {JsonWebKey} */ get exportable_owner_pubKey() { return this.#exportable_owner_pubKey; }
 } /* class ChannelSocket */
 __decorate([
     Memoize,
@@ -1843,8 +1950,9 @@ class StorageApi {
      * Hashes and splits into two (h1 and h1) signature of data, h1
      * is used to request (salt, iv) pair and then h2 is used for
      * encryption (h2, salt, iv)
+     *
      * @param buf blob of data to be stored
-     * @returns
+     *
      */
     #generateIdKey(buf) {
         return new Promise((resolve, reject) => {
@@ -1985,7 +2093,7 @@ class StorageApi {
      * @param buf
      * @param type
      * @param roomId
-     * @returns
+     *
      */
     storeObject(buf, type, roomId) {
         // export async function saveImage(sbImage, roomId, sendSystemMessage)
@@ -2176,9 +2284,9 @@ class StorageApi {
      */
     async retrieveData(msgId, messages, controlMessages) {
         console.log("... need to code up retrieveData() with new typing ..");
-        console.log(msgId);
-        console.log(messages);
-        console.log(controlMessages);
+        console.log(Object.assign({}, msgId));
+        console.log(Object.assign({}, messages));
+        console.log(Object.assign({}, controlMessages));
         console.error("... need to code up retrieveData() with new typing ..");
         const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
         const image_id = imageMetaData.previewId;
@@ -2294,7 +2402,7 @@ class ChannelApi {
                 }
                 return response.json();
             }).then((messages) => {
-                // console.log(Object.values(messages))
+                // console.log(Object.assign({}, Object.values(messages))
                 Promise.all(Object
                     .keys(messages)
                     .filter((v) => messages[v].hasOwnProperty('encrypted_contents'))
@@ -2777,13 +2885,10 @@ class Snackabra {
         }
     }
     /**
-     * Snackabra.connect()
-     *
      * Connects to :term:`Channel Name` on this SB config.
      * Returns a (promise to the) channel (socket) object.
      * It will throw an ``AggregateError`` if it fails
      * to find the room anywhere.
-     *
      */
     connect(onMessage, key, channelId /*, identity?: SB384 */) {
         // if there's a 'preferred' (only) server then we we can return a promise right away
@@ -2798,14 +2903,9 @@ class Snackabra {
             : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready));
     }
     /**
-     * Snackabra.create()
-     *
      * Creates a new channel. Currently uses trivial authentication.
      * Returns the :term:`Channel Name`. Note that this does not
      * create a channel object, e.g. does not make a connection.
-     * Therefore you need
-     *
-     * (TODO: token-based approval of storage spend)
      */
     create(sbServer, serverSecret, keys) {
         return new Promise(async (resolve, reject) => {
