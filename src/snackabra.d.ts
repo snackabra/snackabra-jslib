@@ -23,7 +23,7 @@ interface IndexedKVOptions {
     table: string;
     onReady: CallableFunction;
 }
-declare type StorableDataType = string | number | bigint | boolean | symbol | object;
+type StorableDataType = string | number | bigint | boolean | symbol | object;
 interface Dictionary {
     [index: string]: any;
 }
@@ -152,7 +152,7 @@ export interface EncryptedContentsBin {
  */
 export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
 /******************************************************************************************************/
-export declare type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
+export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
 /******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
@@ -620,7 +620,7 @@ export declare class ChannelSocket extends Channel {
     send(msg: SBMessage | string): Promise<string>;
     /** @type {JsonWebKey} */ get exportable_owner_pubKey(): JsonWebKey | null;
 }
-export declare type SBObjectType = 'f' | 'p' | 'b';
+export type SBObjectType = 'f' | 'p' | 'b';
 export interface SBObjectHandle {
     version: '1';
     type: SBObjectType;
@@ -648,7 +648,7 @@ declare class StorageApi {
      * @param roomId
      *
      */
-    storeObject(buf: ArrayBuffer, type: 'f' | 'p' | 'b', roomId: string): Promise<SBObjectHandle>;
+    storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: string): Promise<SBObjectHandle>;
     /**
      * StorageApi.saveFile()
      */
@@ -804,3 +804,9 @@ declare class Snackabra {
     sendFile(file: SBFile): void;
 }
 export { Channel, SBMessage, Snackabra, SBCrypto, };
+export declare var SB: {
+    Snackabra: typeof Snackabra;
+    SBMessage: typeof SBMessage;
+    Channel: typeof Channel;
+    SBCrypto: typeof SBCrypto;
+};

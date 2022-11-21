@@ -273,6 +273,19 @@ export interface EncryptedContentsBin {
  * supports either string or arrays)
  */
 export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin {
+  // TODO:
+  // i think i'll write a generic helper eg 'toUint8Array' that can handle lots
+  // of different messy JS objects, figure out what they are, and convert to a 
+  // clean Uint8Array object. so far what i come across is: (a) base64 string (and
+  // there are some variations of encoding), (b) a 'binary string', (c) a dictionary
+  // of entries (e.g. '{0: 42, 1: 178, 2:130' etc). conceivably there are other
+  // messy ones (e.g. just an array [42, 178, 130, ...]). such a helper would
+  // replace base64ToArrayBuffer(), decodeURIComponent(), str2ab(), and of course
+  // this function here.
+
+  // console.log("encryptedContentsMakeBinary():")
+  // console.log(o)
+
   let t: ArrayBuffer
   let iv: Uint8Array
   if (typeof o.content === 'string') {
@@ -290,18 +303,21 @@ export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedCont
     iv = base64ToArrayBuffer(decodeURIComponent(o.iv))
     // console.log("this was turned into array:")
     // console.log(structuredClone(iv))
-  } else if (o.iv.constructor.name === 'Uint8Array') {
-    iv = o.iv
+  } else if ((o.iv.constructor.name === 'Uint8Array') || (o.iv.constructor.name === 'ArrayBuffer')) {
+    // console.log("it's an array already")
+    iv = new Uint8Array(o.iv)
   } else {
     // probably a dictionary
     try {
       iv = new Uint8Array(Object.values(o.iv))
     } catch(e: any) {
-      console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:")
-      console.error(o.iv)
+      // console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:")
+      // console.error(o.iv)
       _sb_assert(false, "undetermined iv (nonce) type, see console")
     }
   }
+  // console.log("decided on nonce as:")
+  // console.log(iv!)
   _sb_assert(iv!.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv!.length})`)
   return {content: t, iv: iv!}
 }
@@ -2519,15 +2535,19 @@ class StorageApi {
     });
   }
 
-  #_allocateObject(image_id: string): Promise<{ salt: Uint8Array, iv: Uint8Array }> {
+  #_allocateObject(image_id: string, type: SBObjectType): Promise<{ salt: Uint8Array, iv: Uint8Array }> {
     return new Promise((resolve, reject) => {
       try {
-        fetch(this.server + "/storeRequest?name=" + image_id)
+        fetch(this.server + "/storeRequest?name=" + image_id + "&type=" + type)
           .then((r) => { /* console.log('got storage reply:'); console.log(r); */ return r.arrayBuffer(); })
           .then((b) => {
             // console.log('got b back:')
             // console.log(b)
             const par = extractPayload(b)
+            // console.log("_allocateObject() returned salt/iv::")
+            // console.log(`object ID: ${image_id}`)
+            // console.log(`     salt: ${arrayBufferToBase64(par.salt)}`)
+            // console.log(`       iv:  ${arrayBufferToBase64(par.iv)}`)
             resolve({ salt: par.salt, iv: par.iv })
           })
       } catch (e) {
@@ -2581,13 +2601,13 @@ class StorageApi {
    * @param roomId
    *
    */
-  storeObject(buf: ArrayBuffer, type: 'f' | 'p' | 'b', roomId: string): Promise<SBObjectHandle> {
+  storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: string): Promise<SBObjectHandle> {
     // export async function saveImage(sbImage, roomId, sendSystemMessage)
     return new Promise((resolve, reject) => {
       const paddedBuf = this.#padBuf(buf)
       this.#generateIdKey(paddedBuf).then((fullHash: { id: string, key: string }) => {
         // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
-        this.#_allocateObject(fullHash.id).then((p) => {
+        this.#_allocateObject(fullHash.id, type).then((p) => {
           // console.log('got these instructions from the storage server:')
           // storage server returns the salt and nonce it wants us to use
           // console.log(p)
@@ -2712,7 +2732,7 @@ class StorageApi {
                 let j = JSON.parse(ab2str(new Uint8Array(payload)))
                 if (j.error) reject(`fetchData() error: ${j.error}`)
               } catch (e) {
-                console.info('fetchData() received payload')
+                // console.info('fetchData() received payload')
                 // console.log(`did NOT see an error (error: ${e})`)
                 // console.log(payload)
               } finally {
@@ -2722,13 +2742,15 @@ class StorageApi {
                 // resolve(extractedData)
                 const data = extractPayload(payload)
                 const iv: Uint8Array = data.iv
-                if (h.iv) _sb_assert(compareBuffers(iv, h.iv), 'nonce (iv) differs')
-                // console.log('h.iv:')
-                // console.log(h.iv)
-                // console.log('data.iv:')
-                // console.log(data.iv)
+                // if (h.iv) _sb_assert(compareBuffers(iv, h.iv), 'nonce (iv) differs')
+                if ((h.iv) && (!compareBuffers(iv, h.iv))) {
+                  console.error("WARNING: nonce from server differs from local copy")
+                  console.log(`object ID: ${h.id}`)
+                  console.log(` local iv: ${arrayBufferToBase64(h.iv)}`)
+                  console.log(`server iv: ${arrayBufferToBase64(data.iv)}`)
+                }
                 const salt: Uint8Array = data.salt
-                if (h.salt) _sb_assert(compareBuffers(salt, h.salt), 'nonce (iv) differs')
+                if (h.salt) _sb_assert(compareBuffers(salt, h.salt), 'salt differs')
                 // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
                 this.#getObjectKey(h.key, salt).then((image_key) => {
                   const encrypted_image: string = data.image;
@@ -3644,4 +3666,11 @@ export {
   SBMessage,
   Snackabra,
   SBCrypto,
+};
+
+export var SB = {
+  Snackabra: Snackabra,
+  SBMessage: SBMessage,
+  Channel: Channel,
+  SBCrypto: SBCrypto,
 };

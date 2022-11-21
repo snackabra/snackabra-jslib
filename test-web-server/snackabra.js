@@ -33,6 +33,15 @@ const SBKnownServers = [
  * supports either string or arrays)
  */
 export function encryptedContentsMakeBinary(o) {
+    // TODO:
+    // i think i'll write a generic helper eg 'toUint8Array' that can handle lots
+    // of different messy JS objects, figure out what they are, and convert to a 
+    // clean Uint8Array object. so far what i come across is: (a) base64 string (and
+    // there are some variations of encoding), (b) a 'binary string', (c) a dictionary
+    // of entries (e.g. '{0: 42, 1: 178, 2:130' etc). conceivably there are other
+    // messy ones (e.g. just an array [42, 178, 130, ...]). such a helper would
+    // replace base64ToArrayBuffer(), decodeURIComponent(), str2ab(), and of course
+    // this function here.
     let t;
     let iv;
     if (typeof o.content === 'string') {
