@@ -2333,13 +2333,15 @@ export class ChannelSocket extends Channel {
     * Returns a promise that resolves to "success" when sent,
     * or an error message if it fails.
     */
-  send(msg: SBMessage | string): Promise<string> {
+  send(msg: SBMessage | string | object): Promise<string> {
     let message: SBMessage
     if (typeof msg === 'string') {
       message = new SBMessage(this, msg)
-    } else if (msg instanceof SBMessage) {
-      message = msg
+    } else if (msg instanceof SBMessage || msg.constructor.name === 'SBMessage') {
+      message = msg as SBMessage
     } else {
+      // @ts-ignore
+      console.log(msg)
       message = new SBMessage(this, "ERROR")
       // SBFile for example
       _sb_exception("ChannelSocket.send()", "unknown parameter type")

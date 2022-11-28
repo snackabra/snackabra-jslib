@@ -1935,10 +1935,12 @@ export class ChannelSocket extends Channel {
         if (typeof msg === 'string') {
             message = new SBMessage(this, msg);
         }
-        else if (msg instanceof SBMessage) {
+        else if (msg instanceof SBMessage || msg.constructor.name === 'SBMessage') {
             message = msg;
         }
         else {
+            // @ts-ignore
+            console.log(msg);
             message = new SBMessage(this, "ERROR");
             // SBFile for example
             _sb_exception("ChannelSocket.send()", "unknown parameter type");

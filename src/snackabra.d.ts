@@ -618,7 +618,7 @@ export declare class ChannelSocket extends Channel {
       * Returns a promise that resolves to "success" when sent,
       * or an error message if it fails.
       */
-    send(msg: SBMessage | string): Promise<string>;
+    send(msg: SBMessage | string | object): Promise<string>;
     /** @type {JsonWebKey} */ get exportable_owner_pubKey(): JsonWebKey | null;
 }
 export declare type SBObjectType = 'f' | 'p' | 'b';
