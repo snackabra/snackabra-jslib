@@ -23,7 +23,7 @@ interface IndexedKVOptions {
     table: string;
     onReady: CallableFunction;
 }
-type StorableDataType = string | number | bigint | boolean | symbol | object;
+declare type StorableDataType = string | number | bigint | boolean | symbol | object;
 interface Dictionary {
     [index: string]: any;
 }
@@ -152,7 +152,7 @@ export interface EncryptedContentsBin {
  */
 export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
 /******************************************************************************************************/
-export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
+export declare type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
 /******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
@@ -596,6 +596,7 @@ export declare class ChannelSocket extends Channel {
      *
      * */
     constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string);
+    get status(): "CONNECTING" | "OPEN" | "CLOSING" | "CLOSED";
     set onMessage(f: (m: ChannelMessage) => void);
     set enableTrace(b: boolean);
     get onMessage(): (m: ChannelMessage) => void;
@@ -620,7 +621,7 @@ export declare class ChannelSocket extends Channel {
     send(msg: SBMessage | string): Promise<string>;
     /** @type {JsonWebKey} */ get exportable_owner_pubKey(): JsonWebKey | null;
 }
-export type SBObjectType = 'f' | 'p' | 'b';
+export declare type SBObjectType = 'f' | 'p' | 'b';
 export interface SBObjectHandle {
     version: '1';
     type: SBObjectType;

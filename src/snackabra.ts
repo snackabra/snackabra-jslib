@@ -310,7 +310,7 @@ export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedCont
     // probably a dictionary
     try {
       iv = new Uint8Array(Object.values(o.iv))
-    } catch(e: any) {
+    } catch (e: any) {
       // console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:")
       // console.error(o.iv)
       _sb_assert(false, "undetermined iv (nonce) type, see console")
@@ -319,7 +319,7 @@ export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedCont
   // console.log("decided on nonce as:")
   // console.log(iv!)
   _sb_assert(iv!.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv!.length})`)
-  return {content: t, iv: iv!}
+  return { content: t, iv: iv! }
 }
 
 interface ChannelEncryptedMessage {
@@ -1402,7 +1402,7 @@ class SBCrypto {
     // console.log(o)
     return new Promise(async (resolve, reject) => {
       try {
-        const { content:t, iv:iv } = encryptedContentsMakeBinary(o)
+        const { content: t, iv: iv } = encryptedContentsMakeBinary(o)
         // console.log("======== calling subtle.decrypt with iv, k, t (AES-GCM):")
         // console.log(iv)
         // console.log(k)
@@ -1961,7 +1961,7 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
         if ((m2.verificationToken) && (!m2.sender_pubKey)) {
           // we don't check signature unless we can (obviously)
           console.info('WARNING: message with verification token is lacking sender identity.\n' +
-                       '         This may not be allowed in the future.')
+            '         This may not be allowed in the future.')
         } else {
           // TODO: we could speed this up by caching imported keys from known senders
           sbCrypto.importKey('jwk', m2.sender_pubKey!, 'ECDH', true, []).then((senderPubKey) => {
@@ -2272,6 +2272,19 @@ export class ChannelSocket extends Channel {
     })
   }
 
+  get status() {
+    switch (this.#ws.websocket.readyState) {
+      case 0:
+        return 'CONNECTING'
+      case 1:
+        return 'OPEN'
+      case 2:
+        return 'CLOSING'
+      default:
+        return 'CLOSED'
+    }
+  }
+
   // @Memoize @Ready get channelId(): string { return this.#channelId }
 
   set onMessage(f: (m: ChannelMessage) => void) {
@@ -2344,7 +2357,7 @@ export class ChannelSocket extends Channel {
             console.log("++++++++ ChannelSocket.send() this message (cloned): ")
             //console.log(structuredClone(message))
             console.log(Object.assign({}, message))
-          }      
+          }
           if (!this.#ChannelSocketReadyFlag) reject("ChannelSocket.send() is confused - ready or not?")
           switch (this.#ws.websocket.readyState) {
             case 1: // OPEN

@@ -1854,6 +1854,18 @@ class ChannelSocket extends Channel {
             }
         });
     }
+    get status() {
+        switch (this.#ws.websocket.readyState) {
+            case 0:
+                return 'CONNECTING';
+            case 1:
+                return 'OPEN';
+            case 2:
+                return 'CLOSING';
+            default:
+                return 'CLOSED';
+        }
+    }
     // @Memoize @Ready get channelId(): string { return this.#channelId }
     set onMessage(f) {
         this.#onMessage = f;
