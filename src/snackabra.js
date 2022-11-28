@@ -1876,6 +1876,18 @@ export class ChannelSocket extends Channel {
             }
         });
     }
+    get status() {
+        switch (this.#ws.websocket.readyState) {
+            case 0:
+                return 'CONNECTING';
+            case 1:
+                return 'OPEN';
+            case 2:
+                return 'CLOSING';
+            default:
+                return 'CLOSED';
+        }
+    }
     // @Memoize @Ready get channelId(): string { return this.#channelId }
     set onMessage(f) {
         this.#onMessage = f;
@@ -1923,10 +1935,12 @@ export class ChannelSocket extends Channel {
         if (typeof msg === 'string') {
             message = new SBMessage(this, msg);
         }
-        else if (msg instanceof SBMessage) {
+        else if (msg instanceof SBMessage || msg.constructor.name === 'SBMessage') {
             message = msg;
         }
         else {
+            // @ts-ignore
+            console.log(msg);
             message = new SBMessage(this, "ERROR");
             // SBFile for example
             _sb_exception("ChannelSocket.send()", "unknown parameter type");
