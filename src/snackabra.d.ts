@@ -463,8 +463,6 @@ interface SBMessageContents {
 }
 declare const SB_MESSAGE_SYMBOL: unique symbol;
 declare const SB_OBJECT_HANDLE_SYMBOL: unique symbol;
-export declare function SBValidateObject(obj: SBObjectHandle, type: 'SBObjectHandle'): boolean;
-export declare function SBValidateObject(obj: SBMessage, type: 'SBMessage'): boolean;
 /**
  * SBMessage
  *

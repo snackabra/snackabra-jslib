@@ -1296,12 +1296,12 @@ __decorate([
     Memoize,
     Ready
 ], SB384.prototype, "ownerChannelId", null);
-const SB_MESSAGE_SYMBOL = Symbol('SBMessage');
-const SB_OBJECT_HANDLE_SYMBOL = Symbol('SBObjectHandle');
-export function SBValidateObject(obj, type) {
+const SB_MESSAGE_SYMBOL = Symbol.for('SBMessage');
+const SB_OBJECT_HANDLE_SYMBOL = Symbol.for('SBObjectHandle');
+function SBValidateObject(obj, type) {
     switch (type) {
         case 'SBMessage': return SB_MESSAGE_SYMBOL in obj;
-        case 'SBObjectHandle': return SB_MESSAGE_SYMBOL in obj;
+        case 'SBObjectHandle': return SB_OBJECT_HANDLE_SYMBOL in obj;
     }
 }
 /**

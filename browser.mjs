@@ -1275,12 +1275,12 @@ __decorate([
     Memoize,
     Ready
 ], SB384.prototype, "ownerChannelId", null);
-const SB_MESSAGE_SYMBOL = Symbol('SBMessage');
-const SB_OBJECT_HANDLE_SYMBOL = Symbol('SBObjectHandle');
+const SB_MESSAGE_SYMBOL = Symbol.for('SBMessage');
+const SB_OBJECT_HANDLE_SYMBOL = Symbol.for('SBObjectHandle');
 function SBValidateObject(obj, type) {
     switch (type) {
         case 'SBMessage': return SB_MESSAGE_SYMBOL in obj;
-        case 'SBObjectHandle': return SB_MESSAGE_SYMBOL in obj;
+        case 'SBObjectHandle': return SB_OBJECT_HANDLE_SYMBOL in obj;
     }
 }
 /**
@@ -3074,4 +3074,4 @@ var SB = {
     SBCrypto: SBCrypto,
 };
 
-export { Channel, ChannelSocket, IndexedKV, MessageBus, SB, SBCrypto, SBFile, SBMessage, SBValidateObject, Snackabra, _appendBuffer, _assertBase64, _sb_assert, _sb_exception, _sb_resolve, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, compareBuffers, decodeB64Url, encodeB64Url, encryptedContentsMakeBinary, extractPayload, extractPayloadV1, getRandomValues, importPublicKey, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };
+export { Channel, ChannelSocket, IndexedKV, MessageBus, SB, SBCrypto, SBFile, SBMessage, Snackabra, _appendBuffer, _assertBase64, _sb_assert, _sb_exception, _sb_resolve, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, compareBuffers, decodeB64Url, encodeB64Url, encryptedContentsMakeBinary, extractPayload, extractPayloadV1, getRandomValues, importPublicKey, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };

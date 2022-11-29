@@ -1680,15 +1680,15 @@ interface SBMessageContents {
   imageMetaData?: ImageMetaData,
 }
 
-const SB_MESSAGE_SYMBOL = Symbol('SBMessage')
-const SB_OBJECT_HANDLE_SYMBOL = Symbol('SBObjectHandle')
+const SB_MESSAGE_SYMBOL = Symbol.for('SBMessage')
+const SB_OBJECT_HANDLE_SYMBOL = Symbol.for('SBObjectHandle')
 
-export function SBValidateObject(obj: SBObjectHandle, type: 'SBObjectHandle'): boolean;
-export function SBValidateObject(obj: SBMessage, type: 'SBMessage'): boolean;
-export function SBValidateObject(obj: SBMessage | SBObjectHandle, type: 'SBMessage' | 'SBObjectHandle'): boolean {
+function SBValidateObject(obj: SBObjectHandle, type: 'SBObjectHandle'): boolean
+function SBValidateObject(obj: SBMessage, type: 'SBMessage'): boolean
+function SBValidateObject(obj: SBMessage | SBObjectHandle, type: 'SBMessage' | 'SBObjectHandle'): boolean {
   switch(type) {
-    case 'SBMessage': return SB_MESSAGE_SYMBOL in obj;
-    case 'SBObjectHandle': return SB_MESSAGE_SYMBOL in obj;
+    case 'SBMessage': return SB_MESSAGE_SYMBOL in obj
+    case 'SBObjectHandle': return SB_OBJECT_HANDLE_SYMBOL in obj
   }
 }
 
@@ -2442,7 +2442,7 @@ export type SBObjectType = 'f' | 'p' | 'b'
 
 export interface SBObjectHandle {
   [SB_OBJECT_HANDLE_SYMBOL]: boolean,
-  version: '1', type: SBObjectType;
+  version: '1', type: SBObjectType,
   // for long-term storage you only need these:
   id: string, key: string,
   // and currently you also need to keep track of this,
