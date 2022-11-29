@@ -1504,7 +1504,7 @@ function Memoize(target: any, propertyKey: string, descriptor: PropertyDescripto
     descriptor.get = function () {
       const prop = `__${target.constructor.name}__${propertyKey}__`
       if (this.hasOwnProperty(prop)) {
-        const returnValue = this[prop as keyof typeof this]
+        const returnValue = this[prop as keyof PropertyDescriptor]
         // console.log("Memoize found value in cache")
         // console.log(returnValue)
         return (returnValue)
@@ -1532,7 +1532,7 @@ function Ready(target: any, propertyKey: string, descriptor: PropertyDescriptor)
       const prop = `${obj}ReadyFlag`
       if (prop in this) {
         // console.log(`============= Ready() - checking readyFlag for ${propertyKey}`)
-        const rf = "readyFlag" as keyof typeof this
+        const rf = "readyFlag" as keyof PropertyDescriptor
         // console.log(this[rf])
         _sb_assert(this[rf], `${propertyKey} getter accessed but object ${obj} not ready (fatal)`)
       }
@@ -1542,6 +1542,18 @@ function Ready(target: any, propertyKey: string, descriptor: PropertyDescriptor)
     }
   }
 }
+
+function VerifyParameters(_target: any, _propertyKey: string, descriptor: PropertyDescriptor) {
+  const operation = descriptor.value
+  descriptor.value = function (...args: any[]) {
+    for (let x of args) {
+      const m = x.constructor.name
+      if (isSBClass(m)) _sb_assert(SBValidateObject(x, m), `invalid parameter: ${x} (expecting ${m})`)
+    }
+    return operation.call(this, ...args)
+  }
+}
+
 
 //# endregion - local decorators
 
@@ -1680,12 +1692,21 @@ interface SBMessageContents {
   imageMetaData?: ImageMetaData,
 }
 
+
+const SB_CLASS_ARRAY = ['SBMessage', 'SBObjectHandle'] as const
+type SB_CLASS_TYPES = typeof SB_CLASS_ARRAY[number]
+type SB_CLASSES = SBMessage | SBObjectHandle
+
 const SB_MESSAGE_SYMBOL = Symbol.for('SBMessage')
 const SB_OBJECT_HANDLE_SYMBOL = Symbol.for('SBObjectHandle')
 
+function isSBClass(s: any): boolean {
+  return typeof s === 'string' && SB_CLASS_ARRAY.includes(s as SB_CLASS_TYPES)
+}
+
 function SBValidateObject(obj: SBObjectHandle, type: 'SBObjectHandle'): boolean
 function SBValidateObject(obj: SBMessage, type: 'SBMessage'): boolean
-function SBValidateObject(obj: SBMessage | SBObjectHandle, type: 'SBMessage' | 'SBObjectHandle'): boolean {
+function SBValidateObject(obj: SB_CLASSES | any, type: SB_CLASS_TYPES): boolean {
   switch(type) {
     case 'SBMessage': return SB_MESSAGE_SYMBOL in obj
     case 'SBObjectHandle': return SB_OBJECT_HANDLE_SYMBOL in obj
@@ -1935,6 +1956,7 @@ abstract class Channel extends SB384 {
   }
 
   /** @type {ChannelApi} */ get api() { return this.#api }
+  
   /** @type {SBServer} */ get sbServer() { return this.#sbServer }
   /** @type {string} */ @Memoize @Ready get channelId() { return this.#channelId }
   /** @type {boolean} */ get readyFlag(): boolean { return this.#ChannelReadyFlag }
@@ -2341,25 +2363,17 @@ export class ChannelSocket extends Channel {
     // }
   }
 
+
   /**
     * ChannelSocket.send()
     * 
     * Returns a promise that resolves to "success" when sent,
     * or an error message if it fails.
     */
+  @VerifyParameters
   send(msg: SBMessage | string): Promise<string> {
-    let message: SBMessage
-    if (typeof msg === 'string') {
-      message = new SBMessage(this, msg)
-    } else if (SBValidateObject(msg, 'SBMessage')) {
-      message = msg
-    } else {
-      message = new SBMessage(this, "ERROR")
-      // SBFile for example, not supported yet
-      _sb_exception("ChannelSocket.send()", "unknown parameter type")
-    }
-    // for future inspiration here are more thoughts on making this more iron clad:
-    // https://stackoverflow.com/questions/29881957/websocket-connection-timeout
+    let message: SBMessage = typeof msg === 'string' ? new SBMessage(this, msg) : msg
+    
     if (this.#ws.closed) {
       if (this.#traceSocket) console.info("send() triggered reset of #readyPromise() (normal)")
       this.ready = this.#readyPromise() // possible reset of ready 
@@ -2371,7 +2385,7 @@ export class ChannelSocket extends Channel {
             console.log("++++++++ ChannelSocket.send() this message (cloned): ")
             //console.log(structuredClone(message))
             console.log(Object.assign({}, message))
-          }      
+          }
           if (!this.#ChannelSocketReadyFlag) reject("ChannelSocket.send() is confused - ready or not?")
           switch (this.#ws.websocket.readyState) {
             case 1: // OPEN
@@ -2740,6 +2754,8 @@ class StorageApi {
     throw new Error('StorageApi.storeImate() needs TS version')
   }
 
+
+  
   /**
    * StorageApi().fetchData()
    * 
@@ -2748,9 +2764,9 @@ class StorageApi {
    * can reconstruct / request the rest. The current interface
    * will return both nonce, salt, and encrypted data.
    */
+  @VerifyParameters
   fetchData(h: SBObjectHandle): Promise<ArrayBuffer> {
-    // console.log('fetchData() for:')
-    // console.log(h)
+    _sb_assert(SBValidateObject(h,'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
     return new Promise((resolve, reject) => {
       try {
         if (!h) reject('invalid')

@@ -1153,6 +1153,17 @@ function Ready(target, propertyKey, descriptor) {
         };
     }
 }
+function VerifyParameters(_target, _propertyKey, descriptor) {
+    const operation = descriptor.value;
+    descriptor.value = function (...args) {
+        for (let x of args) {
+            const m = x.constructor.name;
+            if (isSBClass(m))
+                _sb_assert(SBValidateObject(x, m), `invalid parameter: ${x} (expecting ${m})`);
+        }
+        return operation.call(this, ...args);
+    };
+}
 //# endregion - local decorators
 /**
  * @class
@@ -1296,8 +1307,12 @@ __decorate([
     Memoize,
     Ready
 ], SB384.prototype, "ownerChannelId", null);
+const SB_CLASS_ARRAY = ['SBMessage', 'SBObjectHandle'];
 const SB_MESSAGE_SYMBOL = Symbol.for('SBMessage');
 const SB_OBJECT_HANDLE_SYMBOL = Symbol.for('SBObjectHandle');
+function isSBClass(s) {
+    return typeof s === 'string' && SB_CLASS_ARRAY.includes(s);
+}
 function SBValidateObject(obj, type) {
     switch (type) {
         case 'SBMessage': return SB_MESSAGE_SYMBOL in obj;
@@ -1940,20 +1955,7 @@ export class ChannelSocket extends Channel {
       * or an error message if it fails.
       */
     send(msg) {
-        let message;
-        if (typeof msg === 'string') {
-            message = new SBMessage(this, msg);
-        }
-        else if (SBValidateObject(msg, 'SBMessage')) {
-            message = msg;
-        }
-        else {
-            message = new SBMessage(this, "ERROR");
-            // SBFile for example, not supported yet
-            _sb_exception("ChannelSocket.send()", "unknown parameter type");
-        }
-        // for future inspiration here are more thoughts on making this more iron clad:
-        // https://stackoverflow.com/questions/29881957/websocket-connection-timeout
+        let message = typeof msg === 'string' ? new SBMessage(this, msg) : msg;
         if (this.#ws.closed) {
             if (this.#traceSocket)
                 console.info("send() triggered reset of #readyPromise() (normal)");
@@ -2028,6 +2030,9 @@ export class ChannelSocket extends Channel {
     }
     /** @type {JsonWebKey} */ get exportable_owner_pubKey() { return this.#exportable_owner_pubKey; }
 } /* class ChannelSocket */
+__decorate([
+    VerifyParameters
+], ChannelSocket.prototype, "send", null);
 __decorate([
     Memoize,
     Ready
@@ -2310,8 +2315,7 @@ class StorageApi {
      * will return both nonce, salt, and encrypted data.
      */
     fetchData(h) {
-        // console.log('fetchData() for:')
-        // console.log(h)
+        _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle");
         return new Promise((resolve, reject) => {
             try {
                 if (!h)
@@ -2454,6 +2458,9 @@ class StorageApi {
         return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
     }
 } /* class StorageApi */
+__decorate([
+    VerifyParameters
+], StorageApi.prototype, "fetchData", null);
 /**
  * Channel API
  * @class
