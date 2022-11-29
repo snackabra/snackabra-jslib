@@ -310,7 +310,7 @@ export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedCont
     // probably a dictionary
     try {
       iv = new Uint8Array(Object.values(o.iv))
-    } catch (e: any) {
+    } catch(e: any) {
       // console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:")
       // console.error(o.iv)
       _sb_assert(false, "undetermined iv (nonce) type, see console")
@@ -319,7 +319,7 @@ export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedCont
   // console.log("decided on nonce as:")
   // console.log(iv!)
   _sb_assert(iv!.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv!.length})`)
-  return { content: t, iv: iv! }
+  return {content: t, iv: iv!}
 }
 
 interface ChannelEncryptedMessage {
@@ -1402,7 +1402,7 @@ class SBCrypto {
     // console.log(o)
     return new Promise(async (resolve, reject) => {
       try {
-        const { content: t, iv: iv } = encryptedContentsMakeBinary(o)
+        const { content:t, iv:iv } = encryptedContentsMakeBinary(o)
         // console.log("======== calling subtle.decrypt with iv, k, t (AES-GCM):")
         // console.log(iv)
         // console.log(k)
@@ -1680,6 +1680,19 @@ interface SBMessageContents {
   imageMetaData?: ImageMetaData,
 }
 
+const SB_MESSAGE_SYMBOL = Symbol('SBMessage')
+const SB_OBJECT_HANDLE_SYMBOL = Symbol('SBObjectHandle')
+
+export function SBValidateObject(obj: SBObjectHandle, type: 'SBObjectHandle'): boolean;
+export function SBValidateObject(obj: SBMessage, type: 'SBMessage'): boolean;
+export function SBValidateObject(obj: SBMessage | SBObjectHandle, type: 'SBMessage' | 'SBObjectHandle'): boolean {
+  switch(type) {
+    case 'SBMessage': return SB_MESSAGE_SYMBOL in obj;
+    case 'SBObjectHandle': return SB_MESSAGE_SYMBOL in obj;
+  }
+}
+
+
 /**
  * SBMessage
  * 
@@ -1691,6 +1704,7 @@ class SBMessage {
   ready
   channel: Channel
   contents: SBMessageContents
+  [SB_MESSAGE_SYMBOL] = true
 
   /* SBMessage */
   constructor(channel: Channel, body: string = '') {
@@ -1961,7 +1975,7 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
         if ((m2.verificationToken) && (!m2.sender_pubKey)) {
           // we don't check signature unless we can (obviously)
           console.info('WARNING: message with verification token is lacking sender identity.\n' +
-            '         This may not be allowed in the future.')
+                       '         This may not be allowed in the future.')
         } else {
           // TODO: we could speed this up by caching imported keys from known senders
           sbCrypto.importKey('jwk', m2.sender_pubKey!, 'ECDH', true, []).then((senderPubKey) => {
@@ -2333,17 +2347,15 @@ export class ChannelSocket extends Channel {
     * Returns a promise that resolves to "success" when sent,
     * or an error message if it fails.
     */
-  send(msg: SBMessage | string | object): Promise<string> {
+  send(msg: SBMessage | string): Promise<string> {
     let message: SBMessage
     if (typeof msg === 'string') {
       message = new SBMessage(this, msg)
-    } else if (msg instanceof SBMessage || msg.constructor.name === 'SBMessage') {
-      message = msg as SBMessage
+    } else if (SBValidateObject(msg, 'SBMessage')) {
+      message = msg
     } else {
-      // @ts-ignore
-      console.log(msg)
       message = new SBMessage(this, "ERROR")
-      // SBFile for example
+      // SBFile for example, not supported yet
       _sb_exception("ChannelSocket.send()", "unknown parameter type")
     }
     // for future inspiration here are more thoughts on making this more iron clad:
@@ -2359,7 +2371,7 @@ export class ChannelSocket extends Channel {
             console.log("++++++++ ChannelSocket.send() this message (cloned): ")
             //console.log(structuredClone(message))
             console.log(Object.assign({}, message))
-          }
+          }      
           if (!this.#ChannelSocketReadyFlag) reject("ChannelSocket.send() is confused - ready or not?")
           switch (this.#ws.websocket.readyState) {
             case 1: // OPEN
@@ -2427,8 +2439,10 @@ export class ChannelSocket extends Channel {
 // bug in current servers that they don't like reads unless
 // it's of type 'p', but we'll fix that soon ...
 export type SBObjectType = 'f' | 'p' | 'b'
+
 export interface SBObjectHandle {
-  version: '1', type: SBObjectType,
+  [SB_OBJECT_HANDLE_SYMBOL]: boolean,
+  version: '1', type: SBObjectType;
   // for long-term storage you only need these:
   id: string, key: string,
   // and currently you also need to keep track of this,
@@ -2552,24 +2566,25 @@ class StorageApi {
 
   #_allocateObject(image_id: string, type: SBObjectType): Promise<{ salt: Uint8Array, iv: Uint8Array }> {
     return new Promise((resolve, reject) => {
-      try {
-        fetch(this.server + "/storeRequest?name=" + image_id + "&type=" + type)
-          .then((r) => { /* console.log('got storage reply:'); console.log(r); */ return r.arrayBuffer(); })
-          .then((b) => {
-            // console.log('got b back:')
-            // console.log(b)
-            const par = extractPayload(b)
-            // console.log("_allocateObject() returned salt/iv::")
-            // console.log(`object ID: ${image_id}`)
-            // console.log(`     salt: ${arrayBufferToBase64(par.salt)}`)
-            // console.log(`       iv:  ${arrayBufferToBase64(par.iv)}`)
-            resolve({ salt: par.salt, iv: par.iv })
-          })
-      } catch (e) {
-        reject(`storeObject() failed: ${e}`)
-      }
+      fetch(this.server + "/storeRequest?name=" + image_id + "&type=" + type)
+        .then((r) => { /* console.log('got storage reply:'); console.log(r); */ return r.arrayBuffer(); })
+        .then((b) => {
+          // console.log('got b back:')
+          // console.log(b)
+          const par = extractPayload(b)
+          // console.log("_allocateObject() returned salt/iv::")
+          // console.log(`object ID: ${image_id}`)
+          // console.log(`     salt: ${arrayBufferToBase64(par.salt)}`)
+          // console.log(`       iv:  ${arrayBufferToBase64(par.iv)}`)
+          resolve({ salt: par.salt, iv: par.iv })
+        })
+        .catch((e) => {
+          console.log(`ERROR: ${e}`)
+          reject(e)
+        })
     })
   }
+
 
   #_storeObject(
     image: ArrayBuffer,
@@ -2582,32 +2597,33 @@ class StorageApi {
   ): Promise<string> {
     // export async function storeImage(image, image_id, keyData, type, roomId)
     return new Promise((resolve, reject) => {
-      try {
-        this.#getObjectKey(keyData, salt).then((key) => {
-          sbCrypto.encrypt(image, key, iv, 'arrayBuffer').then((data) => {
-            // const storageTokenReq = await(await 
-            fetch(this.channelServer + roomId + '/storageRequest?size=' + data.byteLength)
-              .then((r) => r.json())
-              .then((storageTokenReq) => {
-                if (storageTokenReq.hasOwnProperty('error')) reject('storage token request error')
-                let storageToken = JSON.stringify(storageTokenReq)
-                // console.log("storeObject() data:")
-                // console.log(data)
-                // console.log(image_id)
-                this.storeData(type, image_id, iv, salt, storageToken, data)
-                  .then((resp_json) => {
-                    if (resp_json.error) reject(`storeObject() failed: ${resp_json.error}`)
-                    if (resp_json.image_id != image_id) reject(`received imageId ${resp_json.image_id} but expected ${image_id}`)
-                    resolve(resp_json.verification_token)
-                  })
-              })
-          })
+      this.#getObjectKey(keyData, salt).then((key) => {
+        sbCrypto.encrypt(image, key, iv, 'arrayBuffer').then((data) => {
+          // const storageTokenReq = await(await 
+          fetch(this.channelServer + roomId + '/storageRequest?size=' + data.byteLength)
+            .then((r) => r.json())
+            .then((storageTokenReq) => {
+              if (storageTokenReq.hasOwnProperty('error')) reject('storage token request error')
+              let storageToken = JSON.stringify(storageTokenReq)
+              // console.log("storeObject() data:")
+              // console.log(data)
+              // console.log(image_id)
+              this.storeData(type, image_id, iv, salt, storageToken, data)
+                .then((resp_json) => {
+                  if (resp_json.error) reject(`storeObject() failed: ${resp_json.error}`)
+                  if (resp_json.image_id != image_id) reject(`received imageId ${resp_json.image_id} but expected ${image_id}`)
+                  resolve(resp_json.verification_token)
+                })
+                .catch((e: any) => {
+                  console.log("ERROR in _storeObject(): ${e}")
+                  reject(e)
+                })
+            })
         })
-      } catch (e) {
-        reject(`storeObject() failed: ${e}`)
-      }
+      })
     })
   }
+
 
   /**
    * 
@@ -2622,23 +2638,26 @@ class StorageApi {
       const paddedBuf = this.#padBuf(buf)
       this.#generateIdKey(paddedBuf).then((fullHash: { id: string, key: string }) => {
         // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
-        this.#_allocateObject(fullHash.id, type).then((p) => {
-          // console.log('got these instructions from the storage server:')
-          // storage server returns the salt and nonce it wants us to use
-          // console.log(p)
-          const r: SBObjectHandle = {
-            version: '1',
-            type: type,
-            id: fullHash.id,
-            key: fullHash.key,
-            iv: p.iv,
-            salt: p.salt,
-            verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId, p.iv, p.salt)
-          }
-          // console.log("SBObj is:")
-          // console.log(r)
-          resolve(r)
-        })
+        this.#_allocateObject(fullHash.id, type)
+          .then((p) => {
+            // console.log('got these instructions from the storage server:')
+            // storage server returns the salt and nonce it wants us to use
+            // console.log(p)
+            const r: SBObjectHandle = {
+              [SB_OBJECT_HANDLE_SYMBOL]: true,
+              version: '1',
+              type: type,
+              id: fullHash.id,
+              key: fullHash.key,
+              iv: p.iv,
+              salt: p.salt,
+              verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId, p.iv, p.salt)
+            }
+            // console.log("SBObj is:")
+            // console.log(r)
+            resolve(r)
+          })
+          .catch((e) => reject(e))
       })
     })
   }
@@ -2820,6 +2839,7 @@ class StorageApi {
     }
     // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
     const obj: SBObjectHandle = {
+      [SB_OBJECT_HANDLE_SYMBOL]: true,
       version: '1', type: 'p', id: control_msg.id!, key: imageMetaData!.previewKey!,
       verification: new Promise((resolve) => resolve(control_msg.verificationToken!))
     }
@@ -2864,6 +2884,7 @@ class StorageApi {
     // }
 
     const obj: SBObjectHandle = {
+      [SB_OBJECT_HANDLE_SYMBOL]: true,
       version: '1', type: 'p',
       id: control_msg.id!, key: imageMetaData!.previewKey,
       verification: new Promise((resolve) => resolve(control_msg.verificationToken!))

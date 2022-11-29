@@ -23,7 +23,7 @@ interface IndexedKVOptions {
     table: string;
     onReady: CallableFunction;
 }
-declare type StorableDataType = string | number | bigint | boolean | symbol | object;
+type StorableDataType = string | number | bigint | boolean | symbol | object;
 interface Dictionary {
     [index: string]: any;
 }
@@ -152,7 +152,7 @@ export interface EncryptedContentsBin {
  */
 export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
 /******************************************************************************************************/
-export declare type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
+export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
 /******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
@@ -461,6 +461,10 @@ interface SBMessageContents {
     imageMetadata_sign?: string;
     imageMetaData?: ImageMetaData;
 }
+declare const SB_MESSAGE_SYMBOL: unique symbol;
+declare const SB_OBJECT_HANDLE_SYMBOL: unique symbol;
+export declare function SBValidateObject(obj: SBObjectHandle, type: 'SBObjectHandle'): boolean;
+export declare function SBValidateObject(obj: SBMessage, type: 'SBMessage'): boolean;
 /**
  * SBMessage
  *
@@ -472,6 +476,7 @@ declare class SBMessage {
     ready: Promise<SBMessage>;
     channel: Channel;
     contents: SBMessageContents;
+    [SB_MESSAGE_SYMBOL]: boolean;
     constructor(channel: Channel, body?: string);
     /**
      * SBMessage.send()
@@ -618,11 +623,12 @@ export declare class ChannelSocket extends Channel {
       * Returns a promise that resolves to "success" when sent,
       * or an error message if it fails.
       */
-    send(msg: SBMessage | string | object): Promise<string>;
+    send(msg: SBMessage | string): Promise<string>;
     /** @type {JsonWebKey} */ get exportable_owner_pubKey(): JsonWebKey | null;
 }
-export declare type SBObjectType = 'f' | 'p' | 'b';
+export type SBObjectType = 'f' | 'p' | 'b';
 export interface SBObjectHandle {
+    [SB_OBJECT_HANDLE_SYMBOL]: boolean;
     version: '1';
     type: SBObjectType;
     id: string;

@@ -1296,6 +1296,14 @@ __decorate([
     Memoize,
     Ready
 ], SB384.prototype, "ownerChannelId", null);
+const SB_MESSAGE_SYMBOL = Symbol('SBMessage');
+const SB_OBJECT_HANDLE_SYMBOL = Symbol('SBObjectHandle');
+export function SBValidateObject(obj, type) {
+    switch (type) {
+        case 'SBMessage': return SB_MESSAGE_SYMBOL in obj;
+        case 'SBObjectHandle': return SB_MESSAGE_SYMBOL in obj;
+    }
+}
 /**
  * SBMessage
  *
@@ -1307,6 +1315,7 @@ class SBMessage {
     ready;
     channel;
     contents;
+    [SB_MESSAGE_SYMBOL] = true;
     /* SBMessage */
     constructor(channel, body = '') {
         // console.log("creating SBMessage on channel:")
@@ -1935,14 +1944,12 @@ export class ChannelSocket extends Channel {
         if (typeof msg === 'string') {
             message = new SBMessage(this, msg);
         }
-        else if (msg instanceof SBMessage || msg.constructor.name === 'SBMessage') {
+        else if (SBValidateObject(msg, 'SBMessage')) {
             message = msg;
         }
         else {
-            // @ts-ignore
-            console.log(msg);
             message = new SBMessage(this, "ERROR");
-            // SBFile for example
+            // SBFile for example, not supported yet
             _sb_exception("ChannelSocket.send()", "unknown parameter type");
         }
         // for future inspiration here are more thoughts on making this more iron clad:
@@ -2132,56 +2139,54 @@ class StorageApi {
     }
     #_allocateObject(image_id, type) {
         return new Promise((resolve, reject) => {
-            try {
-                fetch(this.server + "/storeRequest?name=" + image_id + "&type=" + type)
-                    .then((r) => { /* console.log('got storage reply:'); console.log(r); */ return r.arrayBuffer(); })
-                    .then((b) => {
-                    // console.log('got b back:')
-                    // console.log(b)
-                    const par = extractPayload(b);
-                    // console.log("_allocateObject() returned salt/iv::")
-                    // console.log(`object ID: ${image_id}`)
-                    // console.log(`     salt: ${arrayBufferToBase64(par.salt)}`)
-                    // console.log(`       iv:  ${arrayBufferToBase64(par.iv)}`)
-                    resolve({ salt: par.salt, iv: par.iv });
-                });
-            }
-            catch (e) {
-                reject(`storeObject() failed: ${e}`);
-            }
+            fetch(this.server + "/storeRequest?name=" + image_id + "&type=" + type)
+                .then((r) => { /* console.log('got storage reply:'); console.log(r); */ return r.arrayBuffer(); })
+                .then((b) => {
+                // console.log('got b back:')
+                // console.log(b)
+                const par = extractPayload(b);
+                // console.log("_allocateObject() returned salt/iv::")
+                // console.log(`object ID: ${image_id}`)
+                // console.log(`     salt: ${arrayBufferToBase64(par.salt)}`)
+                // console.log(`       iv:  ${arrayBufferToBase64(par.iv)}`)
+                resolve({ salt: par.salt, iv: par.iv });
+            })
+                .catch((e) => {
+                console.log(`ERROR: ${e}`);
+                reject(e);
+            });
         });
     }
     #_storeObject(image, image_id, keyData, type, roomId, iv, salt) {
         // export async function storeImage(image, image_id, keyData, type, roomId)
         return new Promise((resolve, reject) => {
-            try {
-                this.#getObjectKey(keyData, salt).then((key) => {
-                    sbCrypto.encrypt(image, key, iv, 'arrayBuffer').then((data) => {
-                        // const storageTokenReq = await(await 
-                        fetch(this.channelServer + roomId + '/storageRequest?size=' + data.byteLength)
-                            .then((r) => r.json())
-                            .then((storageTokenReq) => {
-                            if (storageTokenReq.hasOwnProperty('error'))
-                                reject('storage token request error');
-                            let storageToken = JSON.stringify(storageTokenReq);
-                            // console.log("storeObject() data:")
-                            // console.log(data)
-                            // console.log(image_id)
-                            this.storeData(type, image_id, iv, salt, storageToken, data)
-                                .then((resp_json) => {
-                                if (resp_json.error)
-                                    reject(`storeObject() failed: ${resp_json.error}`);
-                                if (resp_json.image_id != image_id)
-                                    reject(`received imageId ${resp_json.image_id} but expected ${image_id}`);
-                                resolve(resp_json.verification_token);
-                            });
+            this.#getObjectKey(keyData, salt).then((key) => {
+                sbCrypto.encrypt(image, key, iv, 'arrayBuffer').then((data) => {
+                    // const storageTokenReq = await(await 
+                    fetch(this.channelServer + roomId + '/storageRequest?size=' + data.byteLength)
+                        .then((r) => r.json())
+                        .then((storageTokenReq) => {
+                        if (storageTokenReq.hasOwnProperty('error'))
+                            reject('storage token request error');
+                        let storageToken = JSON.stringify(storageTokenReq);
+                        // console.log("storeObject() data:")
+                        // console.log(data)
+                        // console.log(image_id)
+                        this.storeData(type, image_id, iv, salt, storageToken, data)
+                            .then((resp_json) => {
+                            if (resp_json.error)
+                                reject(`storeObject() failed: ${resp_json.error}`);
+                            if (resp_json.image_id != image_id)
+                                reject(`received imageId ${resp_json.image_id} but expected ${image_id}`);
+                            resolve(resp_json.verification_token);
+                        })
+                            .catch((e) => {
+                            console.log("ERROR in _storeObject(): ${e}");
+                            reject(e);
                         });
                     });
                 });
-            }
-            catch (e) {
-                reject(`storeObject() failed: ${e}`);
-            }
+            });
         });
     }
     /**
@@ -2197,11 +2202,13 @@ class StorageApi {
             const paddedBuf = this.#padBuf(buf);
             this.#generateIdKey(paddedBuf).then((fullHash) => {
                 // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
-                this.#_allocateObject(fullHash.id, type).then((p) => {
+                this.#_allocateObject(fullHash.id, type)
+                    .then((p) => {
                     // console.log('got these instructions from the storage server:')
                     // storage server returns the salt and nonce it wants us to use
                     // console.log(p)
                     const r = {
+                        [SB_OBJECT_HANDLE_SYMBOL]: true,
                         version: '1',
                         type: type,
                         id: fullHash.id,
@@ -2213,7 +2220,8 @@ class StorageApi {
                     // console.log("SBObj is:")
                     // console.log(r)
                     resolve(r);
-                });
+                })
+                    .catch((e) => reject(e));
             });
         });
     }
@@ -2394,6 +2402,7 @@ class StorageApi {
         }
         // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
         const obj = {
+            [SB_OBJECT_HANDLE_SYMBOL]: true,
             version: '1', type: 'p', id: control_msg.id, key: imageMetaData.previewKey,
             verification: new Promise((resolve) => resolve(control_msg.verificationToken))
         };
@@ -2436,6 +2445,7 @@ class StorageApi {
         //   throw new Error('Failed to fetch data - authentication or formatting error');
         // }
         const obj = {
+            [SB_OBJECT_HANDLE_SYMBOL]: true,
             version: '1', type: 'p',
             id: control_msg.id, key: imageMetaData.previewKey,
             verification: new Promise((resolve) => resolve(control_msg.verificationToken))
