@@ -23,7 +23,7 @@ interface IndexedKVOptions {
     table: string;
     onReady: CallableFunction;
 }
-type StorableDataType = string | number | bigint | boolean | symbol | object;
+declare type StorableDataType = string | number | bigint | boolean | symbol | object;
 interface Dictionary {
     [index: string]: any;
 }
@@ -152,7 +152,7 @@ export interface EncryptedContentsBin {
  */
 export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
 /******************************************************************************************************/
-export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
+export declare type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
 /******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
@@ -624,7 +624,7 @@ export declare class ChannelSocket extends Channel {
     send(msg: SBMessage | string): Promise<string>;
     /** @type {JsonWebKey} */ get exportable_owner_pubKey(): JsonWebKey | null;
 }
-export type SBObjectType = 'f' | 'p' | 'b';
+export declare type SBObjectType = 'f' | 'p' | 'b';
 export interface SBObjectHandle {
     [SB_OBJECT_HANDLE_SYMBOL]: boolean;
     version: '1';
@@ -687,13 +687,7 @@ declare class StorageApi {
     /**
      * StorageApi().retrieveDataFromMessage()
      */
-    retrieveDataFromMessage(message: Dictionary, controlMessages: Array<Dictionary>): Promise<{
-        error: string;
-        url?: undefined;
-    } | {
-        url: string;
-        error?: undefined;
-    }>;
+    retrieveDataFromMessage(sign: string, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
 }
 /**
  * Channel API

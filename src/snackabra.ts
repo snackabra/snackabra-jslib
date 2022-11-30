@@ -310,7 +310,7 @@ export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedCont
     // probably a dictionary
     try {
       iv = new Uint8Array(Object.values(o.iv))
-    } catch(e: any) {
+    } catch (e: any) {
       // console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:")
       // console.error(o.iv)
       _sb_assert(false, "undetermined iv (nonce) type, see console")
@@ -319,7 +319,7 @@ export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedCont
   // console.log("decided on nonce as:")
   // console.log(iv!)
   _sb_assert(iv!.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv!.length})`)
-  return {content: t, iv: iv!}
+  return { content: t, iv: iv! }
 }
 
 interface ChannelEncryptedMessage {
@@ -1402,7 +1402,7 @@ class SBCrypto {
     // console.log(o)
     return new Promise(async (resolve, reject) => {
       try {
-        const { content:t, iv:iv } = encryptedContentsMakeBinary(o)
+        const { content: t, iv: iv } = encryptedContentsMakeBinary(o)
         // console.log("======== calling subtle.decrypt with iv, k, t (AES-GCM):")
         // console.log(iv)
         // console.log(k)
@@ -1707,7 +1707,7 @@ function isSBClass(s: any): boolean {
 function SBValidateObject(obj: SBObjectHandle, type: 'SBObjectHandle'): boolean
 function SBValidateObject(obj: SBMessage, type: 'SBMessage'): boolean
 function SBValidateObject(obj: SB_CLASSES | any, type: SB_CLASS_TYPES): boolean {
-  switch(type) {
+  switch (type) {
     case 'SBMessage': return SB_MESSAGE_SYMBOL in obj
     case 'SBObjectHandle': return SB_OBJECT_HANDLE_SYMBOL in obj
   }
@@ -1956,7 +1956,7 @@ abstract class Channel extends SB384 {
   }
 
   /** @type {ChannelApi} */ get api() { return this.#api }
-  
+
   /** @type {SBServer} */ get sbServer() { return this.#sbServer }
   /** @type {string} */ @Memoize @Ready get channelId() { return this.#channelId }
   /** @type {boolean} */ get readyFlag(): boolean { return this.#ChannelReadyFlag }
@@ -1997,7 +1997,7 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
         if ((m2.verificationToken) && (!m2.sender_pubKey)) {
           // we don't check signature unless we can (obviously)
           console.info('WARNING: message with verification token is lacking sender identity.\n' +
-                       '         This may not be allowed in the future.')
+            '         This may not be allowed in the future.')
         } else {
           // TODO: we could speed this up by caching imported keys from known senders
           sbCrypto.importKey('jwk', m2.sender_pubKey!, 'ECDH', true, []).then((senderPubKey) => {
@@ -2373,7 +2373,7 @@ export class ChannelSocket extends Channel {
   @VerifyParameters
   send(msg: SBMessage | string): Promise<string> {
     let message: SBMessage = typeof msg === 'string' ? new SBMessage(this, msg) : msg
-    
+
     if (this.#ws.closed) {
       if (this.#traceSocket) console.info("send() triggered reset of #readyPromise() (normal)")
       this.ready = this.#readyPromise() // possible reset of ready 
@@ -2755,7 +2755,7 @@ class StorageApi {
   }
 
 
-  
+
   /**
    * StorageApi().fetchData()
    * 
@@ -2766,7 +2766,7 @@ class StorageApi {
    */
   @VerifyParameters
   fetchData(h: SBObjectHandle): Promise<ArrayBuffer> {
-    _sb_assert(SBValidateObject(h,'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
+    _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
     return new Promise((resolve, reject) => {
       try {
         if (!h) reject('invalid')
@@ -2829,7 +2829,7 @@ class StorageApi {
    */
   #unpadData(data_buffer: ArrayBuffer): ArrayBuffer {
     const _size = new Uint32Array(data_buffer.slice(-4))[0]
-    // console.log(`#unpadData - size of object is ${_size}`)
+    console.log(`#unpadData - size of object is ${_size}`)
     return data_buffer.slice(0, _size);
   }
 
@@ -2840,12 +2840,7 @@ class StorageApi {
   async retrieveData(msgId: string,
     messages: Array<ChannelMessage>,
     controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
-    console.log("... need to code up retrieveData() with new typing ..")
-    console.log(Object.assign({}, msgId))
-    console.log(Object.assign({}, messages))
-    console.log(Object.assign({}, controlMessages))
-    console.error("... need to code up retrieveData() with new typing ..")
-
+    console.log(msgId, messages, controlMessages)
     const imageMetaData = messages.find((msg: ChannelMessage) => msg!._id === msgId)!.imageMetaData
     const image_id = imageMetaData!.previewId;
     // const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id.startsWith(image_id));
@@ -2879,34 +2874,22 @@ class StorageApi {
   /**
    * StorageApi().retrieveDataFromMessage()
    */
-  async retrieveDataFromMessage(message: Dictionary, controlMessages: Array<Dictionary>) {
-    const imageMetaData = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData
-    const image_id = imageMetaData.previewId
-    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id === image_id)
-    if (!control_msg) return { 'error': 'Failed to fetch data - missing control message for that image' }
-
-    // const obj: 
-    // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
-    // const data = extractPayload(imageFetch);
-    // const iv = data.iv;
-    // const salt = data.salt;
-    // const image_key = await this.#getObjectKey(imageMetaData.previewKey, salt);
-    // const encrypted_image = data.image;
-    // const padded_img = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
-    // const img = this.#unpadData(padded_img);
-    // if (img.error) {
-    //   console.error('(Image error: ' + img.error + ')');
-    //   throw new Error('Failed to fetch data - authentication or formatting error');
-    // }
-
+  async retrieveDataFromMessage(sign: string,
+    controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
+    const imageMetaData = controlMessages.find((msg: ChannelMessage) => msg!.sign === sign)!.imageMetaData
+    console.log(imageMetaData)
+    const image_id = imageMetaData!.previewId;
+    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id)!
+    if (!control_msg) {
+      return { 'error': 'Failed to fetch data - missing control message for that image' };
+    }
     const obj: SBObjectHandle = {
       [SB_OBJECT_HANDLE_SYMBOL]: true,
-      version: '1', type: 'p',
-      id: control_msg.id!, key: imageMetaData!.previewKey,
+      version: '1', type: 'p', id: control_msg.id!, key: imageMetaData!.previewKey!,
       verification: new Promise((resolve) => resolve(control_msg.verificationToken!))
     }
     const img = await this.fetchData(obj)
-
+    console.log(img)
     return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
   }
 

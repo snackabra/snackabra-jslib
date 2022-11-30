@@ -2384,7 +2384,7 @@ class StorageApi {
      */
     #unpadData(data_buffer) {
         const _size = new Uint32Array(data_buffer.slice(-4))[0];
-        // console.log(`#unpadData - size of object is ${_size}`)
+        console.log(`#unpadData - size of object is ${_size}`);
         return data_buffer.slice(0, _size);
     }
     /**
@@ -2392,11 +2392,7 @@ class StorageApi {
      * retrieves an object from storage
      */
     async retrieveData(msgId, messages, controlMessages) {
-        console.log("... need to code up retrieveData() with new typing ..");
-        console.log(Object.assign({}, msgId));
-        console.log(Object.assign({}, messages));
-        console.log(Object.assign({}, controlMessages));
-        console.error("... need to code up retrieveData() with new typing ..");
+        console.log(msgId, messages, controlMessages);
         const imageMetaData = messages.find((msg) => msg._id === msgId).imageMetaData;
         const image_id = imageMetaData.previewId;
         // const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id.startsWith(image_id));
@@ -2429,32 +2425,21 @@ class StorageApi {
     /**
      * StorageApi().retrieveDataFromMessage()
      */
-    async retrieveDataFromMessage(message, controlMessages) {
-        const imageMetaData = typeof message.imageMetaData === 'string' ? jsonParseWrapper(message.imageMetaData, 'L1893') : message.imageMetaData;
+    async retrieveDataFromMessage(sign, controlMessages) {
+        const imageMetaData = controlMessages.find((msg) => msg.sign === sign).imageMetaData;
+        console.log(imageMetaData);
         const image_id = imageMetaData.previewId;
-        const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id === image_id);
-        if (!control_msg)
+        const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id);
+        if (!control_msg) {
             return { 'error': 'Failed to fetch data - missing control message for that image' };
-        // const obj: 
-        // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
-        // const data = extractPayload(imageFetch);
-        // const iv = data.iv;
-        // const salt = data.salt;
-        // const image_key = await this.#getObjectKey(imageMetaData.previewKey, salt);
-        // const encrypted_image = data.image;
-        // const padded_img = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
-        // const img = this.#unpadData(padded_img);
-        // if (img.error) {
-        //   console.error('(Image error: ' + img.error + ')');
-        //   throw new Error('Failed to fetch data - authentication or formatting error');
-        // }
+        }
         const obj = {
             [SB_OBJECT_HANDLE_SYMBOL]: true,
-            version: '1', type: 'p',
-            id: control_msg.id, key: imageMetaData.previewKey,
+            version: '1', type: 'p', id: control_msg.id, key: imageMetaData.previewKey,
             verification: new Promise((resolve) => resolve(control_msg.verificationToken))
         };
         const img = await this.fetchData(obj);
+        console.log(img);
         return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
     }
 } /* class StorageApi */
