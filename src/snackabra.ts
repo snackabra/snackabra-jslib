@@ -1717,6 +1717,8 @@ function SBValidateObject(obj: SB_CLASSES | any, type: SB_CLASS_TYPES): boolean 
 /**
  * SBMessage
  * 
+ * Body should be below 32KiB, though it tolerates up to 64KiB
+ * 
  * @class
  * @constructor
  * @public
@@ -1726,11 +1728,15 @@ class SBMessage {
   channel: Channel
   contents: SBMessageContents
   [SB_MESSAGE_SYMBOL] = true
+  MAX_SB_BODY_SIZE = 64 * 1024
 
   /* SBMessage */
   constructor(channel: Channel, body: string = '') {
     // console.log("creating SBMessage on channel:")
     // console.log(channel)
+
+    _sb_assert(body.length < this.MAX_SB_BODY_SIZE, 'SBMessage(): body must be smaller than 64 KiB')
+
     this.channel = channel
     this.contents = { encrypted: false, isVerfied: false, contents: body, sign: '', image: '', imageMetaData: {} }
     this.contents.sender_pubKey = this.channel.exportable_pubKey!
@@ -2766,7 +2772,7 @@ class StorageApi {
    */
   @VerifyParameters
   fetchData(h: SBObjectHandle): Promise<ArrayBuffer> {
-    _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
+    // _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
     return new Promise((resolve, reject) => {
       try {
         if (!h) reject('invalid')

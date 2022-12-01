@@ -23,7 +23,7 @@ interface IndexedKVOptions {
     table: string;
     onReady: CallableFunction;
 }
-declare type StorableDataType = string | number | bigint | boolean | symbol | object;
+type StorableDataType = string | number | bigint | boolean | symbol | object;
 interface Dictionary {
     [index: string]: any;
 }
@@ -152,7 +152,7 @@ export interface EncryptedContentsBin {
  */
 export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
 /******************************************************************************************************/
-export declare type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
+export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
 /******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
@@ -466,6 +466,8 @@ declare const SB_OBJECT_HANDLE_SYMBOL: unique symbol;
 /**
  * SBMessage
  *
+ * Body should be below 32KiB, though it tolerates up to 64KiB
+ *
  * @class
  * @constructor
  * @public
@@ -475,6 +477,7 @@ declare class SBMessage {
     channel: Channel;
     contents: SBMessageContents;
     [SB_MESSAGE_SYMBOL]: boolean;
+    MAX_SB_BODY_SIZE: number;
     constructor(channel: Channel, body?: string);
     /**
      * SBMessage.send()
@@ -624,7 +627,7 @@ export declare class ChannelSocket extends Channel {
     send(msg: SBMessage | string): Promise<string>;
     /** @type {JsonWebKey} */ get exportable_owner_pubKey(): JsonWebKey | null;
 }
-export declare type SBObjectType = 'f' | 'p' | 'b';
+export type SBObjectType = 'f' | 'p' | 'b';
 export interface SBObjectHandle {
     [SB_OBJECT_HANDLE_SYMBOL]: boolean;
     version: '1';
