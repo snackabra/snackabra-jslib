@@ -40,6 +40,8 @@ interface ImageMetaData {
     previewId?: string;
     imageKey?: string;
     previewKey?: string;
+    previewNonce?: string;
+    previewSalt?: string;
 }
 /**
 @typedef {import("./snackabra.d.ts").ChannelMessage} ChannelMessage
@@ -686,11 +688,7 @@ declare class StorageApi {
      * StorageApi().retrieveData()
      * retrieves an object from storage
      */
-    retrieveData(msgId: string, messages: Array<ChannelMessage>, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
-    /**
-     * StorageApi().retrieveDataFromMessage()
-     */
-    retrieveDataFromMessage(sign: string, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
+    retrieveImage(imageMetaData: ImageMetaData, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
 }
 /**
  * Channel API

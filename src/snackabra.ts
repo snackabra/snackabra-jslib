@@ -131,6 +131,9 @@ interface ImageMetaData {
   previewId?: string,
   imageKey?: string,
   previewKey?: string,
+  // nonce and salt not needed, but if it's there, we do extra checks
+  previewNonce?: string,
+  previewSalt?: string
 }
 
 
@@ -2686,6 +2689,7 @@ class StorageApi {
    * StorageApi.saveFile()
    */
   async saveFile(channel: Channel, sbFile: SBFile) {
+    console.log("saveFile()")
     // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
     const metaData: ImageMetaData = sbFile.imageMetaData
     const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId!, metaData.imageKey!, 'f');
@@ -2807,6 +2811,9 @@ class StorageApi {
                 }
                 const salt: Uint8Array = data.salt
                 if (h.salt) _sb_assert(compareBuffers(salt, h.salt), 'salt differs')
+                console.log("will use nonce and salt of:")
+                console.log(`iv: ${arrayBufferToBase64(iv)}`)
+                console.log(`salt : ${arrayBufferToBase64(salt)}`)
                 // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
                 this.#getObjectKey(h.key, salt).then((image_key) => {
                   const encrypted_image: string = data.image;
@@ -2843,61 +2850,66 @@ class StorageApi {
    * StorageApi().retrieveData()
    * retrieves an object from storage
    */
-  async retrieveData(msgId: string,
-    messages: Array<ChannelMessage>,
+  async retrieveImage(imageMetaData: ImageMetaData,
     controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
-    console.log(msgId, messages, controlMessages)
-    const imageMetaData = messages.find((msg: ChannelMessage) => msg!._id === msgId)!.imageMetaData
-    const image_id = imageMetaData!.previewId;
-    // const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id.startsWith(image_id));
-    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id)!
-    if (!control_msg) {
+    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == imageMetaData.previewId)
+    if (control_msg) {
+      const obj: SBObjectHandle = {
+        [SB_OBJECT_HANDLE_SYMBOL]: true,
+        version: '1',
+        type: 'p',
+        id: control_msg.id!,
+        key: imageMetaData.previewKey!,
+        verification: new Promise((resolve) => resolve(control_msg.verificationToken!))
+      }
+      const img = await this.fetchData(obj)
+      return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
+    } else {
       return { 'error': 'Failed to fetch data - missing control message for that image' };
     }
-    // const imageFetch = await this.fetchData(control_msg.id, control_msg.verificationToken);
-    const obj: SBObjectHandle = {
-      [SB_OBJECT_HANDLE_SYMBOL]: true,
-      version: '1', type: 'p', id: control_msg.id!, key: imageMetaData!.previewKey!,
-      verification: new Promise((resolve) => resolve(control_msg.verificationToken!))
-    }
-    // // const imageFetch = await this.fetchData(control_msg.id!, control_msg.verificationToken);
-    // const imageFetch = await this.fetchData(obj);
-    // const data = extractPayload(imageFetch);
-    // const iv: string = data.iv;
-    // const salt: Uint8Array = data.salt;
-    // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
-    // const encrypted_image: string = data.image;
-    // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
-    // const img: ArrayBuffer = this.#unpadData(padded_img);
-    // // if (img.error) {
-    //   console.error('(Image error: ' + img.error + ')');
-    //   throw new Error('Failed to fetch data - authentication or formatting error');
-    // }
-    const img = await this.fetchData(obj)
-    return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
   }
 
-  /**
-   * StorageApi().retrieveDataFromMessage()
-   */
-  async retrieveDataFromMessage(sign: string,
-    controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
-    const imageMetaData = controlMessages.find((msg: ChannelMessage) => msg!.sign === sign)!.imageMetaData
-    console.log(imageMetaData)
-    const image_id = imageMetaData!.previewId;
-    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id)!
-    if (!control_msg) {
-      return { 'error': 'Failed to fetch data - missing control message for that image' };
-    }
-    const obj: SBObjectHandle = {
-      [SB_OBJECT_HANDLE_SYMBOL]: true,
-      version: '1', type: 'p', id: control_msg.id!, key: imageMetaData!.previewKey!,
-      verification: new Promise((resolve) => resolve(control_msg.verificationToken!))
-    }
-    const img = await this.fetchData(obj)
-    console.log(img)
-    return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
-  }
+      // // const imageFetch = await this.fetchData(control_msg.id!, control_msg.verificationToken);
+      // const imageFetch = await this.fetchData(obj);
+      // const data = extractPayload(imageFetch);
+      // const iv: string = data.iv;
+      // const salt: Uint8Array = data.salt;
+      // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
+      // const encrypted_image: string = data.image;
+      // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
+      // const img: ArrayBuffer = this.#unpadData(padded_img);
+      // // if (img.error) {
+      //   console.error('(Image error: ' + img.error + ')');
+      //   throw new Error('Failed to fetch data - authentication or formatting error');
+      // }
+
+
+  // /*
+  //  * StorageApi().retrieveDataFromMessage()
+  //  */
+  // async retrieveDataFromMessage(sign: string,
+  //   controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
+  //   console.log(sign)
+  //   console.log(controlMessages)
+  //   const imageMetaData = controlMessages.find((msg: ChannelMessage) => msg!.sign === sign)!.imageMetaData
+  //   // const imageMetaData = controlMessages.find((msg: ChannelMessage) => msg!._id === msgId)!.imageMetaData
+  //   console.log(imageMetaData)
+  //   const image_id = imageMetaData!.previewId;
+  //   const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id)!
+  //   if (!control_msg) {
+  //     return { 'error': 'Failed to fetch data - missing control message for that image' };
+  //   }
+  //   const obj: SBObjectHandle = {
+  //     [SB_OBJECT_HANDLE_SYMBOL]: true,
+  //     version: '1', type: 'p', id: control_msg.id!, key: imageMetaData!.previewKey!,
+  //     verification: new Promise((resolve) => resolve(control_msg.verificationToken!))
+  //   }
+  //   console.log("retrieveDataFromMessage: handle is")
+  //   console.log(obj)
+  //   const img = await this.fetchData(obj)
+  //   console.log(img)
+  //   return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
+  // }
 
   /* Unused Currently
   migrateStorage() {
