@@ -232,7 +232,7 @@ export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Ui
  * @param {bufferSource} ArrayBuffer buffer
  * @return {string} base64 string
  */
-export declare function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null): string;
+export declare function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant?: 'b64' | 'url'): string;
 export declare function _appendBuffer(buffer1: Uint8Array | ArrayBuffer, buffer2: Uint8Array | ArrayBuffer): ArrayBuffer;
 /**
  * Import a PEM encoded RSA public key, to use for RSA-OAEP
@@ -679,7 +679,7 @@ declare class StorageApi {
      * StorageApi().fetchData()
      *
      * This assumes you have a complete SBObjectHandle. Note that
-     * if you only have the 'id' and 'verification fields, you
+     * if you only have the 'id' and 'verification' fields, you
      * can reconstruct / request the rest. The current interface
      * will return both nonce, salt, and encrypted data.
      */
@@ -741,6 +741,9 @@ declare class ChannelApi {
         success: boolean;
     }>;
     storageRequest(byteLength: number): Promise<Dictionary>;
+    lock(): Promise<unknown>;
+    acceptVisitor(pubKey: string): Promise<unknown>;
+    ownerKeyRotation(): Promise<unknown>;
 }
 /******************************************************************************************************/
 /**

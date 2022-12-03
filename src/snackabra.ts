@@ -806,7 +806,7 @@ export function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Uint8Array
  * @param {bufferSource} ArrayBuffer buffer
  * @return {string} base64 string
  */
-export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null): string {
+export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant: 'b64' | 'url' = 'url'): string {
   if (buffer == null) {
     _sb_exception('L509', 'arrayBufferToBase64() -> null paramater')
     return ''
@@ -822,7 +822,7 @@ export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null): st
     const parts = new Array(
       Math.floor(len2 / MAX_CHUNK_LENGTH) + Math.sign(extraBytes)
     )
-    const lookup = urlLookup // Note: yes this will break regular atob()
+    const lookup = variant == 'url' ? urlLookup : b64lookup // defaults to url-safe except when overriden
     const pad = ''
     let j = 0
     for (let i = 0; i < len2; i += MAX_CHUNK_LENGTH) {
@@ -2562,6 +2562,7 @@ class StorageApi {
 
   #getObjectKey(fileHash: string, _salt: ArrayBuffer): Promise<CryptoKey> {
     // was: getFileKey(fileHash: string, _salt: ArrayBuffer) 
+    // also (?): getImageKey(imageHash, _salt) {
     // console.log('getObjectKey with hash and salt:')
     // console.log(fileHash)
     // console.log(_salt)
@@ -2764,13 +2765,57 @@ class StorageApi {
     throw new Error('StorageApi.storeImate() needs TS version')
   }
 
-
+  #processData(payload: ArrayBuffer, h: SBObjectHandle): Promise<ArrayBuffer> {
+    return new Promise((resolve, reject) => {
+      try {
+        let j = JSON.parse(ab2str(new Uint8Array(payload)))
+        if (j.error) reject(`fetchData() error: ${j.error}`)
+      } catch (e) {
+        // console.info('fetchData() received payload')
+        // console.log(`did NOT see an error (error: ${e})`)
+        // console.log(payload)
+      } finally {
+        // const extractedData = extractPayload(payload)
+        // console.log('fetchData() returning:')
+        // console.log(extractedData)
+        // resolve(extractedData)
+        const data = extractPayload(payload)
+        const iv: Uint8Array = data.iv
+        // if (h.iv) _sb_assert(compareBuffers(iv, h.iv), 'nonce (iv) differs')
+        if ((h.iv) && (!compareBuffers(iv, h.iv))) {
+          console.error("WARNING: nonce from server differs from local copy")
+          console.log(`object ID: ${h.id}`)
+          console.log(` local iv: ${arrayBufferToBase64(h.iv)}`)
+          console.log(`server iv: ${arrayBufferToBase64(data.iv)}`)
+        }
+        const salt: Uint8Array = data.salt
+        if (h.salt) _sb_assert(compareBuffers(salt, h.salt), 'salt differs')
+        console.log("will use nonce and salt of:")
+        console.log(`iv: ${arrayBufferToBase64(iv)}`)
+        console.log(`salt : ${arrayBufferToBase64(salt)}`)
+        // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
+        this.#getObjectKey(h.key, salt).then((image_key) => {
+          const encrypted_image: string = data.image;
+          // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
+          sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer').then((padded_img: ArrayBuffer) => {
+            const img: ArrayBuffer = this.#unpadData(padded_img)
+            // psm: issues should throw i think
+            // if (img.error) {
+            //   console.error('(Image error: ' + img.error + ')');
+            //   throw new Error('Failed to fetch data - authentication or formatting error');
+            // }
+            resolve(img)
+          })
+        })
+      }
+    })
+  }
 
   /**
    * StorageApi().fetchData()
    * 
    * This assumes you have a complete SBObjectHandle. Note that
-   * if you only have the 'id' and 'verification fields, you
+   * if you only have the 'id' and 'verification' fields, you
    * can reconstruct / request the rest. The current interface
    * will return both nonce, salt, and encrypted data.
    */
@@ -2780,56 +2825,23 @@ class StorageApi {
     return new Promise((resolve, reject) => {
       try {
         if (!h) reject('invalid')
-        h.verification.then((verificationToken) => {
-          fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
-            .then((response: Response) => {
-              if (!response.ok) reject(new Error('Network response was not OK'))
-              // console.log(response)
-              return response.arrayBuffer()
-            })
-            .then((payload: ArrayBuffer) => {
-              try {
-                let j = JSON.parse(ab2str(new Uint8Array(payload)))
-                if (j.error) reject(`fetchData() error: ${j.error}`)
-              } catch (e) {
-                // console.info('fetchData() received payload')
-                // console.log(`did NOT see an error (error: ${e})`)
-                // console.log(payload)
-              } finally {
-                // const extractedData = extractPayload(payload)
-                // console.log('fetchData() returning:')
-                // console.log(extractedData)
-                // resolve(extractedData)
-                const data = extractPayload(payload)
-                const iv: Uint8Array = data.iv
-                // if (h.iv) _sb_assert(compareBuffers(iv, h.iv), 'nonce (iv) differs')
-                if ((h.iv) && (!compareBuffers(iv, h.iv))) {
-                  console.error("WARNING: nonce from server differs from local copy")
-                  console.log(`object ID: ${h.id}`)
-                  console.log(` local iv: ${arrayBufferToBase64(h.iv)}`)
-                  console.log(`server iv: ${arrayBufferToBase64(data.iv)}`)
-                }
-                const salt: Uint8Array = data.salt
-                if (h.salt) _sb_assert(compareBuffers(salt, h.salt), 'salt differs')
-                console.log("will use nonce and salt of:")
-                console.log(`iv: ${arrayBufferToBase64(iv)}`)
-                console.log(`salt : ${arrayBufferToBase64(salt)}`)
-                // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
-                this.#getObjectKey(h.key, salt).then((image_key) => {
-                  const encrypted_image: string = data.image;
-                  // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
-                  sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer').then((padded_img: ArrayBuffer) => {
-                    const img: ArrayBuffer = this.#unpadData(padded_img)
-                    // psm: issues should throw i think
-                    // if (img.error) {
-                    //   console.error('(Image error: ' + img.error + ')');
-                    //   throw new Error('Failed to fetch data - authentication or formatting error');
-                    // }
-                    resolve(img)
-                  })
+        // TODO: haven't tested this caching stuff .. moving from the refactored web client
+        _localStorage.getItem(`${h.id}_cache`).then((payload) => {
+          if (payload) {
+            return this.#processData(base64ToArrayBuffer(payload), h)
+          } else {
+            h.verification.then((verificationToken) => {
+              fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
+                .then((response: Response) => {
+                  if (!response.ok) reject(new Error('Network response was not OK'))
+                  // console.log(response)
+                  return response.arrayBuffer()
                 })
-              }
+                .then((payload: ArrayBuffer) => {
+                  return this.#processData(payload, h)
+                })
             })
+          }
         })
       } catch (error) {
         reject(error)
@@ -2852,6 +2864,9 @@ class StorageApi {
    */
   async retrieveImage(imageMetaData: ImageMetaData,
     controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
+    console.log("retrieveImage()")
+    console.log(imageMetaData)
+    console.log(controlMessages)
     const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == imageMetaData.previewId)
     if (control_msg) {
       const obj: SBObjectHandle = {
@@ -2863,7 +2878,7 @@ class StorageApi {
         verification: new Promise((resolve) => resolve(control_msg.verificationToken!))
       }
       const img = await this.fetchData(obj)
-      return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
+      return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img, 'b64') };
     } else {
       return { 'error': 'Failed to fetch data - missing control message for that image' };
     }
@@ -3258,91 +3273,88 @@ class ChannelApi {
 
   //#region - class ChannelAPI - TODO implement these methods
 
-  // lock(identity?: Identity) {
-  //   const _identity: Identity | undefined = identity ? identity : this.#identity
-  //   if (_identity === undefined) {
-  //     _sb_exception('Snackabra.lock(identity?)', 'No identity is set');
-  //     return;
-  //   }
-  //   return new Promise(async (resolve, reject) => {
-  //     if ((await this.#channel.keys.then()).lockedKey == null && this.#channel.admin) {
-  //       const _locked_key: CryptoKey = await crypto.subtle.generateKey({
-  //         name: 'AES-GCM', length: 256
-  //       }, true, ['encrypt', 'decrypt']);
-  //       const _exportable_locked_key: Dictionary = await crypto.subtle.exportKey('jwk', _locked_key);
-  //       fetch(this.#channelServer + this.#channel.channelId + '/lockRoom', {
-  //         method: 'GET', credentials: 'include'
-  //       })
-  //         .then((response: Response) => {
-  //           if (!response.ok) {
-  //             reject(new Error('Network response was not OK'));
-  //           }
-  //           return response.json();
-  //         })
-  //         .then(async (data: Dictionary) => {
-  //           if (data.locked) {
-  //             await this.acceptVisitor(JSON.stringify(_identity.exportable_pubKey));
-  //           }
-  //           resolve({ locked: data.locked, lockedKey: _exportable_locked_key });
-  //         }).catch((error: Error) => {
-  //           reject(error);
-  //         });
-  //     }
-  //   });
-  // }
+  // TODO: test this guy, i doubt if it's working post-re-factor
+  lock() {
+    console.trace("WARNING: lock() on channel api has not been tested/debugged fully ..")
+    return new Promise(async (resolve, reject) => {
+      if (this.#channel.keys.lockedKey == null && this.#channel.admin) {
+        const _locked_key: CryptoKey = await crypto.subtle.generateKey({
+          name: 'AES-GCM', length: 256
+        }, true, ['encrypt', 'decrypt']);
+        const _exportable_locked_key: Dictionary = await crypto.subtle.exportKey('jwk', _locked_key);
+        fetch(this.#channelServer + this.#channel.channelId + '/lockRoom', {
+          method: 'GET', credentials: 'include'
+        })
+          .then((response: Response) => {
+            if (!response.ok) {
+              reject(new Error('Network response was not OK'));
+            }
+            return response.json();
+          })
+          .then(async (data: Dictionary) => {
+            if (data.locked) {
+              await this.acceptVisitor(JSON.stringify(this.#channel.exportable_pubKey));
+            }
+            resolve({ locked: data.locked, lockedKey: _exportable_locked_key });
+          }).catch((error: Error) => {
+            reject(error);
+          });
+      }
+    });
+  }
 
-  // acceptVisitor(pubKey: string, identity?: Identity) {
-  //   const _identity: Identity | undefined = identity ? identity : this.#identity
-  //   if (_identity === undefined) {
-  //     _sb_exception('Snackabra.lock(identity?)', 'No identity is set');
-  //     return;
-  //   }
-  //   return new Promise(async (resolve, reject) => {
-  //     // psm: need some "!"
-  //     const shared_key = await sbCrypto.deriveKey(await _identity.privateKey, await sbCrypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
-  //     const _encrypted_locked_key = await sbCrypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.exportable_locked_key)), shared_key, 'string')
-  //     fetch(this.#channelServer + this.#channel.channelId + '/acceptVisitor', {
-  //       method: 'POST',
-  //       body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
-  //       headers: {
-  //         'Content-Type': 'application/json'
-  //       },
-  //       credentials: 'include'
-  //     })
-  //       .then((response: Response) => {
-  //         if (!response.ok) {
-  //           reject(new Error('Network response was not OK'));
-  //         }
-  //         return response.json();
-  //       })
-  //       .then((data: Dictionary) => {
-  //         resolve(data);
-  //       }).catch((error: Error) => {
-  //         reject(error);
-  //       });
-  //   });
-  // }
+  // TODO: test this guy, i doubt if it's working post-re-factor
+  acceptVisitor(pubKey: string) {
+    console.trace("WARNING: acceptVisitor() on channel api has not been tested/debugged fully ..")
+    return new Promise(async (resolve, reject) => {
+      // psm: need some "!"
+      const shared_key = await sbCrypto.deriveKey(this.#channel.keys.privateKey,
+        await sbCrypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
+      const _encrypted_locked_key = await sbCrypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.lockedKey!)), shared_key)
+      fetch(this.#channelServer + this.#channel.channelId + '/acceptVisitor', {
+        method: 'POST',
+        body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        credentials: 'include'
+      })
+        .then((response: Response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data: Dictionary) => {
+          resolve(data);
+        }).catch((error: Error) => {
+          reject(error);
+        });
+    });
+  }
 
-  // ownerKeyRotation() {
-  //   return new Promise((resolve, reject) => {
-  //     fetch(this.#channelServer + this.#channel.channelId + '/ownerKeyRotation', {
-  //       method: 'GET', credentials: 'include', headers: {
-  //         'Content-Type': 'application/json'
-  //       }
-  //     })
-  //       .then((response: Response) => {
-  //         if (!response.ok) {
-  //           reject(new Error('Network response was not OK'));
-  //         }
-  //         return response.json();
-  //       })
-  //       .then((data: Dictionary) => {
-  //         resolve(data);
-  //       }).catch((error: Error) => {
-  //         reject(error);
-  //       });
-  //   });
-  // }
+  // TODO: test this guy, i doubt if it's working post-re-factor
+  ownerKeyRotation() {
+    console.trace("WARNING: ownerKeyRotation() on channel api has not been tested/debugged fully ..")
+    return new Promise((resolve, reject) => {
+      fetch(this.#channelServer + this.#channel.channelId + '/ownerKeyRotation', {
+        method: 'GET', credentials: 'include', headers: {
+          'Content-Type': 'application/json'
+        }
+      })
+        .then((response: Response) => {
+          if (!response.ok) {
+            reject(new Error('Network response was not OK'));
+          }
+          return response.json();
+        })
+        .then((data: Dictionary) => {
+          resolve(data);
+        }).catch((error: Error) => {
+          reject(error);
+        });
+    });
+  }
 
   /*
   mtg: These methods have no implementation in the current webclient so I have skipped them for the time being
@@ -3587,6 +3599,7 @@ class Snackabra {
    */
   constructor(args?: SBServer) {
     // _sb_assert(args, 'Snackabra(args) - missing args');
+    console.trace("INFO: creating SB object here ... ")
     try {
       if (args) {
         this.#preferredServer = Object.assign({}, args)
