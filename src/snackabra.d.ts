@@ -636,9 +636,19 @@ export interface SBObjectHandle {
     type: SBObjectType;
     id: string;
     key: string;
-    verification: Promise<string>;
+    verification: Promise<string> | string;
     iv?: Uint8Array;
     salt?: Uint8Array;
+}
+export interface SBObjectMetadata {
+    [SB_OBJECT_HANDLE_SYMBOL]: boolean;
+    version: '1';
+    type: SBObjectType;
+    id: string;
+    key: string;
+    paddedBuffer: ArrayBuffer;
+    iv: Uint8Array;
+    salt: Uint8Array;
 }
 /**
  * Storage API
@@ -652,13 +662,21 @@ declare class StorageApi {
     channelServer: string;
     constructor(server: string, channelServer: string);
     /**
+   *
+   * @param buf
+   * @param type
+   * @param roomId
+   *
+   */
+    getObjectMetadata(buf: ArrayBuffer, type: SBObjectType): Promise<SBObjectMetadata>;
+    /**
      *
      * @param buf
      * @param type
      * @param roomId
      *
      */
-    storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: string): Promise<SBObjectHandle>;
+    storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: string, metadata?: SBObjectMetadata): Promise<SBObjectHandle>;
     /**
      * StorageApi.saveFile()
      */

@@ -2083,16 +2083,49 @@ class StorageApi {
     }
     // TODO: his function needs to be cleaned up
     #padBuf(buf) {
-        // design change: 12 sizes
-        const pad21 = 21; // need 21 bytes margin ... forget why?  ... not good
+        // // design change: 12 sizes
+        // const pad21 = 21 // need 21 bytes margin ... forget why?  ... not good
+        // let _sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192] // in KB
+        // _sizes = _sizes.map((size) => size * 1024)
+        // const image_size = buf.byteLength
+        // // console.log('BEFORE PADDING: ', image_size)
+        // let _target = 0
+        // if (image_size < _sizes[_sizes.length - 1]) {
+        //   for (let i = 0; i < _sizes.length; i++) {
+        //     if (image_size + pad21 < _sizes[i]) {
+        //       _target = _sizes[i];
+        //       break;
+        //     }
+        //   }
+        // } else {
+        //   _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
+        //   if (image_size + pad21 >= _target) {
+        //     _target += 1024;
+        //   }
+        // }
+        // let _padding_array = [128];
+        // _target = _target - image_size - pad21;
+        // // We will finally convert to Uint32Array where each element is 4 bytes
+        // // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
+        // // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
+        // for (let i = 0; i < _target; i++) {
+        //   _padding_array.push(0);
+        // }
+        // // _padding_array.push(image_size)
+        // const _padding = new Uint8Array(_padding_array).buffer
+        // console.log('Padding size: ', _padding.byteLength)
+        // let final_data = _appendBuffer(buf, _padding)
+        // final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
+        // // console.log('AFTER PADDING: ', final_data.byteLength)
+        // return final_data
         let _sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192]; // in KB
         _sizes = _sizes.map((size) => size * 1024);
         const image_size = buf.byteLength;
         // console.log('BEFORE PADDING: ', image_size)
-        let _target = 0;
+        let _target;
         if (image_size < _sizes[_sizes.length - 1]) {
             for (let i = 0; i < _sizes.length; i++) {
-                if (image_size + pad21 < _sizes[i]) {
+                if (image_size + 21 < _sizes[i]) {
                     _target = _sizes[i];
                     break;
                 }
@@ -2100,21 +2133,21 @@ class StorageApi {
         }
         else {
             _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
-            if (image_size + pad21 >= _target) {
+            if (image_size + 21 >= _target) {
                 _target += 1024;
             }
         }
         let _padding_array = [128];
-        _target = _target - image_size - pad21;
+        _target = _target - image_size - 21;
         // We will finally convert to Uint32Array where each element is 4 bytes
         // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
         // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
         for (let i = 0; i < _target; i++) {
             _padding_array.push(0);
         }
-        // _padding_array.push(image_size)
+        // _padding_array.push(image_size);
         const _padding = new Uint8Array(_padding_array).buffer;
-        // console.log('Padding size: ', _padding.byteLength)
+        console.log('Padding size: ', _padding.byteLength);
         let final_data = _appendBuffer(buf, _padding);
         final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
         // console.log('AFTER PADDING: ', final_data.byteLength)
@@ -2200,13 +2233,13 @@ class StorageApi {
         });
     }
     /**
-     *
-     * @param buf
-     * @param type
-     * @param roomId
-     *
-     */
-    storeObject(buf, type, roomId) {
+   *
+   * @param buf
+   * @param type
+   * @param roomId
+   *
+   */
+    getObjectMetadata(buf, type) {
         // export async function saveImage(sbImage, roomId, sendSystemMessage)
         return new Promise((resolve, reject) => {
             const paddedBuf = this.#padBuf(buf);
@@ -2225,7 +2258,7 @@ class StorageApi {
                         key: fullHash.key,
                         iv: p.iv,
                         salt: p.salt,
-                        verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId, p.iv, p.salt)
+                        paddedBuffer: paddedBuf
                     };
                     // console.log("SBObj is:")
                     // console.log(r)
@@ -2233,6 +2266,59 @@ class StorageApi {
                 })
                     .catch((e) => reject(e));
             });
+        });
+    }
+    /**
+     *
+     * @param buf
+     * @param type
+     * @param roomId
+     *
+     */
+    storeObject(buf, type, roomId, metadata) {
+        // export async function saveImage(sbImage, roomId, sendSystemMessage)
+        return new Promise((resolve, reject) => {
+            if (!metadata) {
+                const paddedBuf = this.#padBuf(buf);
+                this.#generateIdKey(paddedBuf).then((fullHash) => {
+                    // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
+                    this.#_allocateObject(fullHash.id, type)
+                        .then((p) => {
+                        // console.log('got these instructions from the storage server:')
+                        // storage server returns the salt and nonce it wants us to use
+                        // console.log(p)
+                        const r = {
+                            [SB_OBJECT_HANDLE_SYMBOL]: true,
+                            version: '1',
+                            type: type,
+                            id: fullHash.id,
+                            key: fullHash.key,
+                            iv: p.iv,
+                            salt: p.salt,
+                            verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId, p.iv, p.salt)
+                        };
+                        // console.log("SBObj is:")
+                        // console.log(r)
+                        resolve(r);
+                    })
+                        .catch((e) => reject(e));
+                });
+            }
+            else {
+                const r = {
+                    [SB_OBJECT_HANDLE_SYMBOL]: true,
+                    version: '1',
+                    type: type,
+                    id: metadata.id,
+                    key: metadata.key,
+                    iv: metadata.iv,
+                    salt: metadata.salt,
+                    verification: this.#_storeObject(metadata.paddedBuffer, metadata.id, metadata.key, type, roomId, metadata.iv, metadata.salt)
+                };
+                // console.log("SBObj is:")
+                // console.log(r)
+                resolve(r);
+            }
         });
     }
     /**
@@ -2381,17 +2467,15 @@ class StorageApi {
                         return this.#processData(base64ToArrayBuffer(payload), h);
                     }
                     else {
-                        h.verification.then((verificationToken) => {
-                            fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
-                                .then((response) => {
-                                if (!response.ok)
-                                    reject(new Error('Network response was not OK'));
-                                // console.log(response)
-                                return response.arrayBuffer();
-                            })
-                                .then((payload) => {
-                                return this.#processData(payload, h);
-                            });
+                        fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
+                            .then((response) => {
+                            if (!response.ok)
+                                reject(new Error('Network response was not OK'));
+                            // console.log(response)
+                            return response.arrayBuffer();
+                        })
+                            .then((payload) => {
+                            resolve(this.#processData(payload, h));
                         });
                     }
                 });
@@ -2416,8 +2500,8 @@ class StorageApi {
     async retrieveImage(imageMetaData, controlMessages) {
         console.log("retrieveImage()");
         console.log(imageMetaData);
-        console.log(controlMessages);
         const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == imageMetaData.previewId);
+        console.log(control_msg);
         if (control_msg) {
             const obj = {
                 [SB_OBJECT_HANDLE_SYMBOL]: true,
@@ -2425,9 +2509,10 @@ class StorageApi {
                 type: 'p',
                 id: control_msg.id,
                 key: imageMetaData.previewKey,
-                verification: new Promise((resolve) => resolve(control_msg.verificationToken))
+                verification: control_msg.verificationToken
             };
             const img = await this.fetchData(obj);
+            console.log(img);
             return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img, 'b64') };
         }
         else {
