@@ -1353,8 +1353,8 @@ class SBMessage {
      * @param {SBMessage} message - the message object to send
      */
     send() {
-        // console.log("SBMessage.send()")
-        // console.log(this)
+        console.log("SBMessage.send():");
+        console.log(this);
         return new Promise((resolve, reject) => {
             this.ready.then(() => {
                 // message ready
@@ -2200,6 +2200,8 @@ class StorageApi {
                         // console.log(image_id)
                         this.storeData(type, image_id, iv, salt, storageToken, data)
                             .then((resp_json) => {
+                            console.log("storeData() returned:");
+                            console.log(resp_json);
                             if (resp_json.error)
                                 reject(`storeObject() failed: ${resp_json.error}`);
                             if (resp_json.image_id != image_id)
@@ -2383,22 +2385,18 @@ class StorageApi {
     }
     #processData(payload, h) {
         return new Promise((resolve, reject) => {
+            console.log('#processData()');
+            console.log(payload);
+            console.log(h);
             try {
                 let j = JSON.parse(ab2str(new Uint8Array(payload)));
+                // normal operation is to break on the JSON.parse() and continue to finally clause
                 if (j.error)
-                    reject(`fetchData() error: ${j.error}`);
-            }
-            catch (e) {
-                // console.info('fetchData() received payload')
-                // console.log(`did NOT see an error (error: ${e})`)
-                // console.log(payload)
+                    reject(`#processData() error: ${j.error}`);
             }
             finally {
-                // const extractedData = extractPayload(payload)
-                // console.log('fetchData() returning:')
-                // console.log(extractedData)
-                // resolve(extractedData)
                 const data = extractPayload(payload);
+                console.log(data);
                 const iv = data.iv;
                 // if (h.iv) _sb_assert(compareBuffers(iv, h.iv), 'nonce (iv) differs')
                 if ((h.iv) && (!compareBuffers(iv, h.iv))) {
@@ -2439,6 +2437,7 @@ class StorageApi {
      * will return both nonce, salt, and encrypted data.
      */
     fetchData(h) {
+        // TODO: change SBObjectHandle from being an interface to being a class
         // _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
         return new Promise((resolve, reject) => {
             try {
@@ -2447,19 +2446,38 @@ class StorageApi {
                 // TODO: haven't tested this caching stuff .. moving from the refactored web client
                 _localStorage.getItem(`${h.id}_cache`).then((payload) => {
                     if (payload) {
+                        console.log("Found object in _localStorage");
                         return this.#processData(base64ToArrayBuffer(payload), h);
                     }
                     else {
-                        fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
-                            .then((response) => {
-                            if (!response.ok)
-                                reject(new Error('Network response was not OK'));
-                            // console.log(response)
-                            return response.arrayBuffer();
-                        })
-                            .then((payload) => {
-                            resolve(this.#processData(payload, h));
+                        console.log("Object not cached, fetching from server. SBObjectHandle is:");
+                        console.log(h);
+                        if (typeof h.verification === 'string')
+                            h.verification = new Promise((resolve) => { resolve(h.verification); });
+                        h.verification.then((verificationToken) => {
+                            console.log("verification token:");
+                            console.log(verificationToken);
+                            _sb_assert(verificationToken, "fetchData(): missing verification token (?)");
+                            fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
+                                .then((response) => {
+                                if (!response.ok)
+                                    reject(new Error('Network response was not OK'));
+                                // console.log(response)
+                                return response.arrayBuffer();
+                            })
+                                .then((payload) => {
+                                return this.#processData(payload, h);
+                            });
                         });
+                        // fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
+                        //   .then((response: Response) => {
+                        //     if (!response.ok) reject(new Error('Network response was not OK'))
+                        //     // console.log(response)
+                        //     return response.arrayBuffer()
+                        //   })
+                        //   .then((payload: ArrayBuffer) => {
+                        //     resolve(this.#processData(payload, h))
+                        //   })
                     }
                 });
             }
@@ -2481,11 +2499,13 @@ class StorageApi {
      * retrieves an object from storage
      */
     async retrieveImage(imageMetaData, controlMessages) {
-        console.log("retrieveImage()");
+        console.trace("retrieveImage()");
         console.log(imageMetaData);
         const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == imageMetaData.previewId);
         console.log(control_msg);
         if (control_msg) {
+            _sb_assert(control_msg.verificationToken, "retrieveImage(): verificationToken missing (?)");
+            _sb_assert(control_msg.id, "retrieveImage(): id missing (?)");
             const obj = {
                 [SB_OBJECT_HANDLE_SYMBOL]: true,
                 version: '1',
@@ -3104,7 +3124,7 @@ class Snackabra {
      */
     constructor(args) {
         // _sb_assert(args, 'Snackabra(args) - missing args');
-        console.trace("INFO: creating SB object here ... ");
+        // console.trace("INFO: creating SB object here ... ")
         try {
             if (args) {
                 this.#preferredServer = Object.assign({}, args);

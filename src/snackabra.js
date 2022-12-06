@@ -2454,6 +2454,7 @@ class StorageApi {
      * will return both nonce, salt, and encrypted data.
      */
     fetchData(h) {
+        // TODO: change SBObjectHandle from being an interface to being a class
         // _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
         return new Promise((resolve, reject) => {
             try {
@@ -2468,6 +2469,8 @@ class StorageApi {
                     else {
                         console.log("Object not cached, fetching from server. SBObjectHandle is:");
                         console.log(h);
+                        if (typeof h.verification === 'string')
+                            h.verification = new Promise((resolve) => { resolve(h.verification); });
                         h.verification.then((verificationToken) => {
                             console.log("verification token:");
                             console.log(verificationToken);
@@ -2516,7 +2519,6 @@ class StorageApi {
         console.trace("retrieveImage()");
         console.log(imageMetaData);
         const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == imageMetaData.previewId);
-        // const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.sign && ctrl_msg.sign == imageMetaData.previewId)
         console.log(control_msg);
         if (control_msg) {
             _sb_assert(control_msg.verificationToken, "retrieveImage(): verificationToken missing (?)");
