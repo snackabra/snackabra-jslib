@@ -464,11 +464,6 @@ export class SBImage {
 
     var resolveAspectRatio;
 
-    this.aspectRatio = new Promise((resolve) => {
-      // block on getting width and height...
-      resolveAspectRatio = resolve;
-    });
-
     // Fetch the original image
     console.log("Fetching file:");
     console.log(image);
@@ -583,6 +578,7 @@ export class SBImage {
       worker.postMessage(image);
     });
 
+
     // this requests some worker to load the file into a sharedarraybuffer
     this.imageSAB = doImageTask(['loadSB', image], false);
 
@@ -669,10 +665,16 @@ export class SBImage {
 //       // latest and greatest JS version is in:
 //       // 384-snackabra-webclient/src/utils/ImageProcessor.js
 //       throw new Error('restrictPhoto() needs TS version')
-//       return null;
-//     }
+  //       return null;
+  //     }
 
-
+  /** @return {Promise<number>} */
+  aspectRatio = () => {
+    return new Promise((resolve) => {
+      // block on getting width and height...
+      resolveAspectRatio = resolve;
+    });
+  }
 
   loadToCanvas(canvas) {
     return new Promise((resolve) => {
