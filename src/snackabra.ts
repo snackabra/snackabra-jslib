@@ -2472,11 +2472,24 @@ export interface SBObjectHandle {
   // but you can start sharing / communicating the 
   // object before it's resolved: among other things it
   // serves as a 'write-through' verification
-  verification: Promise<string>,
+  verification: Promise<string> | string,
   // you'll need these in case you want to track an object
   // across future (storage) servers, but as long as you
   // are within the same SB servers you can request them.
   iv?: Uint8Array, salt?: Uint8Array
+}
+
+export interface SBObjectMetadata {
+  [SB_OBJECT_HANDLE_SYMBOL]: boolean,
+  version: '1', type: SBObjectType,
+  // for long-term storage you only need these:
+  id: string, key: string,
+  paddedBuffer: ArrayBuffer
+  // you'll need these in case you want to track an object
+  // across future (storage) servers, but as long as you
+  // are within the same SB servers you can request them.
+  iv: Uint8Array,
+  salt: Uint8Array
 }
 
 /**
@@ -2523,41 +2536,74 @@ class StorageApi {
 
   // TODO: his function needs to be cleaned up
   #padBuf(buf: ArrayBuffer) {
-    // design change: 12 sizes
-    const pad21 = 21 // need 21 bytes margin ... forget why?  ... not good
+    // // design change: 12 sizes
+    // const pad21 = 21 // need 21 bytes margin ... forget why?  ... not good
+    // let _sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192] // in KB
+    // _sizes = _sizes.map((size) => size * 1024)
+    // const image_size = buf.byteLength
+    // // console.log('BEFORE PADDING: ', image_size)
+    // let _target = 0
+    // if (image_size < _sizes[_sizes.length - 1]) {
+    //   for (let i = 0; i < _sizes.length; i++) {
+    //     if (image_size + pad21 < _sizes[i]) {
+    //       _target = _sizes[i];
+    //       break;
+    //     }
+    //   }
+    // } else {
+    //   _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
+    //   if (image_size + pad21 >= _target) {
+    //     _target += 1024;
+    //   }
+    // }
+    // let _padding_array = [128];
+    // _target = _target - image_size - pad21;
+    // // We will finally convert to Uint32Array where each element is 4 bytes
+    // // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
+    // // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
+    // for (let i = 0; i < _target; i++) {
+    //   _padding_array.push(0);
+    // }
+    // // _padding_array.push(image_size)
+    // const _padding = new Uint8Array(_padding_array).buffer
+    // console.log('Padding size: ', _padding.byteLength)
+    // let final_data = _appendBuffer(buf, _padding)
+    // final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
+    // // console.log('AFTER PADDING: ', final_data.byteLength)
+    // return final_data
     let _sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192] // in KB
-    _sizes = _sizes.map((size) => size * 1024)
-    const image_size = buf.byteLength
+    _sizes = _sizes.map((size) => size * 1024);
+    const image_size = buf.byteLength;
     // console.log('BEFORE PADDING: ', image_size)
-    let _target = 0
+    let _target: number;
     if (image_size < _sizes[_sizes.length - 1]) {
       for (let i = 0; i < _sizes.length; i++) {
-        if (image_size + pad21 < _sizes[i]) {
+        if (image_size + 21 < _sizes[i]) {
           _target = _sizes[i];
           break;
         }
       }
     } else {
       _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
-      if (image_size + pad21 >= _target) {
+      if (image_size + 21 >= _target) {
         _target += 1024;
       }
     }
     let _padding_array = [128];
-    _target = _target - image_size - pad21;
+    _target = _target! - image_size - 21;
     // We will finally convert to Uint32Array where each element is 4 bytes
     // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
     // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
     for (let i = 0; i < _target; i++) {
       _padding_array.push(0);
     }
-    // _padding_array.push(image_size)
-    const _padding = new Uint8Array(_padding_array).buffer
-    // console.log('Padding size: ', _padding.byteLength)
-    let final_data = _appendBuffer(buf, _padding)
+    // _padding_array.push(image_size);
+    const _padding = new Uint8Array(_padding_array).buffer;
+    console.log('Padding size: ', _padding.byteLength)
+    let final_data = _appendBuffer(buf, _padding);
     final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
     // console.log('AFTER PADDING: ', final_data.byteLength)
-    return final_data
+    return final_data;
   }
 
   #getObjectKey(fileHash: string, _salt: ArrayBuffer): Promise<CryptoKey> {
@@ -2650,15 +2696,14 @@ class StorageApi {
     })
   }
 
-
   /**
-   * 
-   * @param buf 
-   * @param type
-   * @param roomId
-   *
-   */
-  storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: string): Promise<SBObjectHandle> {
+ * 
+ * @param buf 
+ * @param type
+ * @param roomId
+ *
+ */
+  getObjectMetadata(buf: ArrayBuffer, type: SBObjectType): Promise<SBObjectMetadata> {
     // export async function saveImage(sbImage, roomId, sendSystemMessage)
     return new Promise((resolve, reject) => {
       const paddedBuf = this.#padBuf(buf)
@@ -2669,7 +2714,7 @@ class StorageApi {
             // console.log('got these instructions from the storage server:')
             // storage server returns the salt and nonce it wants us to use
             // console.log(p)
-            const r: SBObjectHandle = {
+            const r: SBObjectMetadata = {
               [SB_OBJECT_HANDLE_SYMBOL]: true,
               version: '1',
               type: type,
@@ -2677,7 +2722,7 @@ class StorageApi {
               key: fullHash.key,
               iv: p.iv,
               salt: p.salt,
-              verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId, p.iv, p.salt)
+              paddedBuffer: paddedBuf
             }
             // console.log("SBObj is:")
             // console.log(r)
@@ -2685,6 +2730,61 @@ class StorageApi {
           })
           .catch((e) => reject(e))
       })
+    })
+  }
+
+
+  /**
+   * 
+   * @param buf 
+   * @param type
+   * @param roomId
+   *
+   */
+  storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: string, metadata?: SBObjectMetadata): Promise<SBObjectHandle> {
+    // export async function saveImage(sbImage, roomId, sendSystemMessage)
+    return new Promise((resolve, reject) => {
+      if (!metadata) {
+        const paddedBuf = this.#padBuf(buf)
+        this.#generateIdKey(paddedBuf).then((fullHash: { id: string, key: string }) => {
+          // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
+          this.#_allocateObject(fullHash.id, type)
+            .then((p) => {
+              // console.log('got these instructions from the storage server:')
+              // storage server returns the salt and nonce it wants us to use
+              // console.log(p)
+              const r: SBObjectHandle = {
+                [SB_OBJECT_HANDLE_SYMBOL]: true,
+                version: '1',
+                type: type,
+                id: fullHash.id,
+                key: fullHash.key,
+                iv: p.iv,
+                salt: p.salt,
+                verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId, p.iv, p.salt)
+              }
+              // console.log("SBObj is:")
+              // console.log(r)
+              resolve(r)
+            })
+            .catch((e) => reject(e))
+        })
+      } else {
+        const r: SBObjectHandle = {
+          [SB_OBJECT_HANDLE_SYMBOL]: true,
+          version: '1',
+          type: type,
+          id: metadata.id,
+          key: metadata.key,
+          iv: metadata.iv,
+          salt: metadata.salt,
+          verification: this.#_storeObject(metadata.paddedBuffer, metadata.id, metadata.key, type, roomId, metadata.iv, metadata.salt)
+        }
+        // console.log("SBObj is:")
+        // console.log(r)
+        resolve(r)
+      }
+
     })
   }
 
@@ -2820,6 +2920,7 @@ class StorageApi {
    */
   @VerifyParameters
   fetchData(h: SBObjectHandle): Promise<ArrayBuffer> {
+    // TODO: change SBObjectHandle from being an interface to being a class
     // _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
     return new Promise((resolve, reject) => {
       try {
@@ -2832,6 +2933,7 @@ class StorageApi {
           } else {
             console.log("Object not cached, fetching from server. SBObjectHandle is:")
             console.log(h)
+            if (typeof h.verification === 'string') h.verification = new Promise<string>((resolve) => { resolve(h.verification); })
             h.verification.then((verificationToken) => {
               console.log("verification token:")
               console.log(verificationToken)
@@ -2846,6 +2948,15 @@ class StorageApi {
                   return this.#processData(payload, h)
                 })
             })
+            // fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
+            //   .then((response: Response) => {
+            //     if (!response.ok) reject(new Error('Network response was not OK'))
+            //     // console.log(response)
+            //     return response.arrayBuffer()
+            //   })
+            //   .then((payload: ArrayBuffer) => {
+            //     resolve(this.#processData(payload, h))
+            //   })
           }
         })
       } catch (error) {
@@ -2871,9 +2982,8 @@ class StorageApi {
     controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
     console.trace("retrieveImage()")
     console.log(imageMetaData)
-    console.log(controlMessages)
     const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == imageMetaData.previewId)
-    // const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.sign && ctrl_msg.sign == imageMetaData.previewId)
+    console.log(control_msg)
     if (control_msg) {
       _sb_assert(control_msg.verificationToken, "retrieveImage(): verificationToken missing (?)")
       _sb_assert(control_msg.id, "retrieveImage(): id missing (?)")
@@ -2883,28 +2993,29 @@ class StorageApi {
         type: 'p',
         id: control_msg.id!,
         key: imageMetaData.previewKey!,
-        verification: new Promise((resolve) => resolve(control_msg.verificationToken!))
+        verification: control_msg.verificationToken!
       }
       const img = await this.fetchData(obj)
+      console.log(img)
       return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img, 'b64') };
     } else {
       return { 'error': 'Failed to fetch data - missing control message for that image' };
     }
   }
 
-      // // const imageFetch = await this.fetchData(control_msg.id!, control_msg.verificationToken);
-      // const imageFetch = await this.fetchData(obj);
-      // const data = extractPayload(imageFetch);
-      // const iv: string = data.iv;
-      // const salt: Uint8Array = data.salt;
-      // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
-      // const encrypted_image: string = data.image;
-      // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
-      // const img: ArrayBuffer = this.#unpadData(padded_img);
-      // // if (img.error) {
-      //   console.error('(Image error: ' + img.error + ')');
-      //   throw new Error('Failed to fetch data - authentication or formatting error');
-      // }
+  // // const imageFetch = await this.fetchData(control_msg.id!, control_msg.verificationToken);
+  // const imageFetch = await this.fetchData(obj);
+  // const data = extractPayload(imageFetch);
+  // const iv: string = data.iv;
+  // const salt: Uint8Array = data.salt;
+  // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
+  // const encrypted_image: string = data.image;
+  // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
+  // const img: ArrayBuffer = this.#unpadData(padded_img);
+  // // if (img.error) {
+  //   console.error('(Image error: ' + img.error + ')');
+  //   throw new Error('Failed to fetch data - authentication or formatting error');
+  // }
 
 
   // /*
