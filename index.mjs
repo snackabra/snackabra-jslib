@@ -2720,13 +2720,41 @@ class ChannelApi {
             //}
         });
     }
+    //  const getImageIds = async (messages, decKey, lockedKey) => {
+    //   let unwrapped_messages = {}
+    //   for (let id in messages) {
+    //     try {
+    //       let message = JSON.parse(messages[id]);
+    //       if (message.hasOwnProperty("encrypted_contents")) {
+    //   let _contents = message.encrypted_contents;
+    //   // let _contents = JSON.parse(message.encrypted_contents);
+    //         let msg = await decrypt(decKey, _contents)
+    //         if (msg.error && lockedKey !== null) {
+    //           msg = await decrypt(lockedKey, _contents)
+    //         }
+    //         // console.log(msg)
+    //         const _json_msg = JSON.parse(msg.plaintext);
+    //         // console.log(_json_msg)
+    //         if (_json_msg.hasOwnProperty('control')) {
+    //           console.log(_json_msg)
+    //           unwrapped_messages[_json_msg["id"] + "."  + (_json_msg.hasOwnProperty("type") ? _json_msg["type"] : "")] = _json_msg['verificationToken'];
+    //         }
+    //       }
+    //     } catch (e) {
+    //       // console.log(e);
+    //       // Skip the message if decryption fails - its probably due to the user not having <roomId>_lockedKey. 
+    //     }
+    //   }
+    //   return unwrapped_messages;
+    // }
     /**
      * downloadData
      */
     downloadData() {
         return new Promise((resolve, reject) => {
             fetch(this.#channelServer + this.#channel.channelId + '/downloadData', {
-                method: 'GET', credentials: 'include', headers: {
+                method: 'GET',
+                headers: {
                     'Content-Type': 'application/json'
                 }
             })
@@ -2737,7 +2765,35 @@ class ChannelApi {
                 return response.json();
             })
                 .then((data) => {
-                resolve(data);
+                Promise.all(Object
+                    .keys(data)
+                    .filter((v) => {
+                    const regex = new RegExp(this.#channel.channelId);
+                    if (v.match(regex)) {
+                        const message = jsonParseWrapper(data[v], "L3318");
+                        if (message.hasOwnProperty('encrypted_contents')) {
+                            console.log(message);
+                            return message;
+                        }
+                    }
+                })
+                    .map((v) => {
+                    const message = jsonParseWrapper(data[v], "L3327");
+                    console.log(v, message.encrypted_contents, this.#channel.keys);
+                    return deCryptChannelMessage(v, message.encrypted_contents, this.#channel.keys);
+                }))
+                    .then((decryptedMessageArray) => {
+                    let storage = {};
+                    decryptedMessageArray.forEach((message) => {
+                        if (!message.control && message.imageMetaData.imageId) {
+                            const f_control_msg = decryptedMessageArray.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == message.imageMetaData.imageId);
+                            const p_control_msg = decryptedMessageArray.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == message.imageMetaData.previewId);
+                            storage[`${message.imageMetaData.imageId}.f`] = f_control_msg?.verificationToken;
+                            storage[`${message.imageMetaData.previewId}.p`] = p_control_msg?.verificationToken;
+                        }
+                    });
+                    resolve({ storage: storage, channel: data });
+                });
             }).catch((error) => {
                 reject(error);
             });
