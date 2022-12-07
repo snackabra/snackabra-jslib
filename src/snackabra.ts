@@ -2599,7 +2599,7 @@ class StorageApi {
     }
     // _padding_array.push(image_size);
     const _padding = new Uint8Array(_padding_array).buffer;
-    console.log('Padding size: ', _padding.byteLength)
+    // console.log('Padding size: ', _padding.byteLength)
     let final_data = _appendBuffer(buf, _padding);
     final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
     // console.log('AFTER PADDING: ', final_data.byteLength)
@@ -2876,6 +2876,8 @@ class StorageApi {
         let j = JSON.parse(ab2str(new Uint8Array(payload)))
         // normal operation is to break on the JSON.parse() and continue to finally clause
         if (j.error) reject(`#processData() error: ${j.error}`)
+      } catch (e) {
+        // do nothing - this is expected
       } finally {
         const data = extractPayload(payload)
         console.log(data)
