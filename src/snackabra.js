@@ -2467,7 +2467,7 @@ class StorageApi {
                 _localStorage.getItem(`${h.id}_cache`).then((payload) => {
                     if (payload) {
                         console.log("Found object in _localStorage");
-                        return this.#processData(base64ToArrayBuffer(payload), h);
+                        resolve(this.#processData(base64ToArrayBuffer(payload), h));
                     }
                     else {
                         console.log("Object not cached, fetching from server. SBObjectHandle is:");
@@ -2486,7 +2486,7 @@ class StorageApi {
                                 return response.arrayBuffer();
                             })
                                 .then((payload) => {
-                                return this.#processData(payload, h);
+                                resolve(this.#processData(payload, h));
                             });
                         });
                         // fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
