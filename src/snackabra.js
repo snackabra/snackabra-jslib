@@ -2281,6 +2281,7 @@ class StorageApi {
         // export async function saveImage(sbImage, roomId, sendSystemMessage)
         return new Promise((resolve, reject) => {
             if (!metadata) {
+                console.warn('No metadata');
                 const paddedBuf = this.#padBuf(buf);
                 this.#generateIdKey(paddedBuf).then((fullHash) => {
                     // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
@@ -2532,7 +2533,7 @@ class StorageApi {
                 type: 'p',
                 id: control_msg.id,
                 key: imageMetaData.previewKey,
-                verification: control_msg.verificationToken
+                verification: typeof control_msg.verificationToken === 'string' ? new Promise((res) => res(control_msg.verificationToken)) : control_msg.verificationToken
             };
             const img = await this.fetchData(obj);
             console.log(img);

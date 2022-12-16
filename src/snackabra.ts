@@ -2745,6 +2745,7 @@ class StorageApi {
     // export async function saveImage(sbImage, roomId, sendSystemMessage)
     return new Promise((resolve, reject) => {
       if (!metadata) {
+        console.warn('No metadata')
         const paddedBuf = this.#padBuf(buf)
         this.#generateIdKey(paddedBuf).then((fullHash: { id: string, key: string }) => {
           // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
@@ -2995,7 +2996,7 @@ class StorageApi {
         type: 'p',
         id: control_msg.id!,
         key: imageMetaData.previewKey!,
-        verification: control_msg.verificationToken!
+        verification: typeof control_msg.verificationToken === 'string' ? new Promise((res) => res(control_msg.verificationToken!)) : control_msg.verificationToken!
       }
       const img = await this.fetchData(obj)
       console.log(img)
@@ -3004,6 +3005,30 @@ class StorageApi {
       return { 'error': 'Failed to fetch data - missing control message for that image' };
     }
   }
+
+  // async retrieveObject(id: string, key: string, type: string, controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
+  //   console.trace("retrieveObject()")
+  //   console.log(id)
+  //   const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == id)
+  //   console.log(control_msg)
+  //   if (control_msg) {
+  //     _sb_assert(control_msg.verificationToken, "retrieveImage(): verificationToken missing (?)")
+  //     _sb_assert(control_msg.id, "retrieveImage(): id missing (?)")
+  //     const obj: SBObjectHandle = {
+  //       [SB_OBJECT_HANDLE_SYMBOL]: true,
+  //       version: '1',
+  //       type: type,
+  //       id: control_msg.id!,
+  //       key: key, //metadata key
+  //       verification: control_msg.verificationToken!
+  //     }
+  //     const img = await this.fetchData(obj)
+  //     console.log(img)
+  //     return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img, 'b64') };
+  //   } else {
+  //     return { 'error': 'Failed to fetch data - missing control message for that image' };
+  //   }
+  // }
 
   // // const imageFetch = await this.fetchData(control_msg.id!, control_msg.verificationToken);
   // const imageFetch = await this.fetchData(obj);
@@ -3288,8 +3313,8 @@ class ChannelApi {
   //     try {
   //       let message = JSON.parse(messages[id]);
   //       if (message.hasOwnProperty("encrypted_contents")) {
-	//   let _contents = message.encrypted_contents;
-	//   // let _contents = JSON.parse(message.encrypted_contents);
+  //   let _contents = message.encrypted_contents;
+  //   // let _contents = JSON.parse(message.encrypted_contents);
   //         let msg = await decrypt(decKey, _contents)
   //         if (msg.error && lockedKey !== null) {
   //           msg = await decrypt(lockedKey, _contents)
@@ -3330,11 +3355,11 @@ class ChannelApi {
         .then((data: Dictionary) => {
           Promise.all(Object
             .keys(data)
-            .filter((v) => { 
+            .filter((v) => {
               const regex = new RegExp(this.#channel.channelId as string);
-              if(v.match(regex)){
+              if (v.match(regex)) {
                 const message = jsonParseWrapper(data[v], "L3318")
-                if(message.hasOwnProperty('encrypted_contents')){
+                if (message.hasOwnProperty('encrypted_contents')) {
                   console.log(message)
                   return message;
                 }
@@ -3347,15 +3372,15 @@ class ChannelApi {
             }))
             .then((decryptedMessageArray) => {
               let storage: any = {}
-              decryptedMessageArray.forEach((message)=>{
-                if(!message.control && message.imageMetaData!.imageId){
+              decryptedMessageArray.forEach((message) => {
+                if (!message.control && message.imageMetaData!.imageId) {
                   const f_control_msg = decryptedMessageArray.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == message.imageMetaData!.imageId)
                   const p_control_msg = decryptedMessageArray.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == message.imageMetaData!.previewId)
                   storage[`${message.imageMetaData!.imageId}.f`] = f_control_msg?.verificationToken
                   storage[`${message.imageMetaData!.previewId}.p`] = p_control_msg?.verificationToken
                 }
               })
-              resolve({storage: storage, channel: data})
+              resolve({ storage: storage, channel: data })
             })
 
         }).catch((error: Error) => {
