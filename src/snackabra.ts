@@ -70,20 +70,30 @@ export interface SBServer {
  */
 const SBKnownServers: Array<SBServer> = [
   {
+    // local (miniflare) servers
     channel_server: 'http://localhost:4001',
     channel_ws: 'ws://localhost:4001',
     storage_server: 'http://localhost:4000'
   },
   {
+    // Matt dev servers (i think)
     channel_server: 'https://r.somethingstuff.workers.dev/',
     channel_ws: 'wss://r.somethingstuff.workers.dev/',
     storage_server: 'https://s.somethingstuff.workers.dev/'
   },
   {
+    // This is both "384.chat" (production) and "sn.ac"
     channel_server: 'https://r.384co.workers.dev/',
     channel_ws: 'wss://r.384co.workers.dev/',
     storage_server: 'https://s.384co.workers.dev/'
-  }
+  },
+  {
+    // Preview Servers
+    channel_server: 'https://channel.384co.workers.dev/',
+    channel_ws: 'wss://channel.384co.workers.dev/',
+    storage_server: 'https://storage.384co.workers.dev/'
+  },
+  
 ]
 
 interface IndexedKVOptions {
@@ -1742,10 +1752,10 @@ class SBMessage {
 
     this.channel = channel
     this.contents = { encrypted: false, isVerfied: false, contents: body, sign: '', image: '', imageMetaData: {} }
-    this.contents.sender_pubKey = this.channel.exportable_pubKey!
 
     this.ready = new Promise<SBMessage>((resolve) => {
       channel.ready.then(() => {
+        this.contents.sender_pubKey = this.channel.exportable_pubKey!
         if (channel.userName) this.contents.sender_username = channel.userName
         const signKey = this.channel.keys.channelSignKey
         const sign = sbCrypto.sign(signKey, body)
@@ -1771,8 +1781,8 @@ class SBMessage {
    * @param {SBMessage} message - the message object to send
    */
   send() {
-    console.log("SBMessage.send():")
-    console.log(this)
+    // console.log("SBMessage.send():")
+    // console.log(this)
     return new Promise<string>((resolve, reject) => {
       this.ready.then(() => {
         // message ready
@@ -2351,9 +2361,7 @@ export class ChannelSocket extends Channel {
    * Will throw an exception if keys are unknown or not yet loaded
    */
   get keys(): ChannelKeys {
-    if (!this.#keys) {
-      _sb_assert(false, "ChannelSocket.keys: not initialized (?)")
-    }
+    if (!this.#keys) _sb_assert(false, "ChannelSocket.keys: not initialized (?)")
     return (this.#keys!)
   }
 
@@ -2744,7 +2752,7 @@ class StorageApi {
   storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: string, metadata?: SBObjectMetadata): Promise<SBObjectHandle> {
     // export async function saveImage(sbImage, roomId, sendSystemMessage)
     return new Promise((resolve, reject) => {
-      if (!metadata) {
+      if (!metadata) {        
         console.warn('No metadata')
         const paddedBuf = this.#padBuf(buf)
         this.#generateIdKey(paddedBuf).then((fullHash: { id: string, key: string }) => {
@@ -3006,7 +3014,7 @@ class StorageApi {
     }
   }
 
-  // async retrieveObject(id: string, key: string, type: string, controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
+    // async retrieveObject(id: string, key: string, type: string, controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
   //   console.trace("retrieveObject()")
   //   console.log(id)
   //   const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == id)
@@ -3130,8 +3138,13 @@ class ChannelApi {
 
   /**
    * getOldMessages
+   * 
+   * TODO: this needs to be able to check that the channel socket
+   *       is ready, otherwise the keys might not be ... currently
+   *       before calling this, make a ready check on the socket
    */
   getOldMessages(currentMessagesLength: number): Promise<Array<ChannelMessage>> {
+    console.log("warning: this might throw an exception on keys() if ChannelSocket is not ready")
     return new Promise((resolve, reject) => {
       // const encryptionKey = this.#channel.keys.encryptionKey
       fetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
@@ -3342,6 +3355,7 @@ class ChannelApi {
     return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel.channelId + '/downloadData', {
         method: 'GET',
+        credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
         }

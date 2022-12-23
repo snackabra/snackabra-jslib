@@ -13,20 +13,29 @@ var __decorate = (this && this.__decorate) || function (decorators, target, key,
  */
 const SBKnownServers = [
     {
+        // local (miniflare) servers
         channel_server: 'http://localhost:4001',
         channel_ws: 'ws://localhost:4001',
         storage_server: 'http://localhost:4000'
     },
     {
+        // Matt dev servers (i think)
         channel_server: 'https://r.somethingstuff.workers.dev/',
         channel_ws: 'wss://r.somethingstuff.workers.dev/',
         storage_server: 'https://s.somethingstuff.workers.dev/'
     },
     {
+        // This is both "384.chat" (production) and "sn.ac"
         channel_server: 'https://r.384co.workers.dev/',
         channel_ws: 'wss://r.384co.workers.dev/',
         storage_server: 'https://s.384co.workers.dev/'
-    }
+    },
+    {
+        // Preview Servers
+        channel_server: 'https://channel.384co.workers.dev/',
+        channel_ws: 'wss://channel.384co.workers.dev/',
+        storage_server: 'https://storage.384co.workers.dev/'
+    },
 ];
 /**
  * Force EncryptedContents object to binary (interface
@@ -1341,9 +1350,9 @@ class SBMessage {
         _sb_assert(body.length < this.MAX_SB_BODY_SIZE, 'SBMessage(): body must be smaller than 64 KiB');
         this.channel = channel;
         this.contents = { encrypted: false, isVerfied: false, contents: body, sign: '', image: '', imageMetaData: {} };
-        this.contents.sender_pubKey = this.channel.exportable_pubKey;
         this.ready = new Promise((resolve) => {
             channel.ready.then(() => {
+                this.contents.sender_pubKey = this.channel.exportable_pubKey;
                 if (channel.userName)
                     this.contents.sender_username = channel.userName;
                 const signKey = this.channel.keys.channelSignKey;
@@ -1369,8 +1378,8 @@ class SBMessage {
      * @param {SBMessage} message - the message object to send
      */
     send() {
-        console.log("SBMessage.send():");
-        console.log(this);
+        // console.log("SBMessage.send():")
+        // console.log(this)
         return new Promise((resolve, reject) => {
             this.ready.then(() => {
                 // message ready
@@ -1933,9 +1942,8 @@ export class ChannelSocket extends Channel {
      * Will throw an exception if keys are unknown or not yet loaded
      */
     get keys() {
-        if (!this.#keys) {
+        if (!this.#keys)
             _sb_assert(false, "ChannelSocket.keys: not initialized (?)");
-        }
         return (this.#keys);
     }
     /**
@@ -2590,8 +2598,13 @@ class ChannelApi {
     }
     /**
      * getOldMessages
+     *
+     * TODO: this needs to be able to check that the channel socket
+     *       is ready, otherwise the keys might not be ... currently
+     *       before calling this, make a ready check on the socket
      */
     getOldMessages(currentMessagesLength) {
+        console.log("warning: this might throw an exception on keys() if ChannelSocket is not ready");
         return new Promise((resolve, reject) => {
             // const encryptionKey = this.#channel.keys.encryptionKey
             fetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
@@ -2795,6 +2808,7 @@ class ChannelApi {
         return new Promise((resolve, reject) => {
             fetch(this.#channelServer + this.#channel.channelId + '/downloadData', {
                 method: 'GET',
+                credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json'
                 }

@@ -228,10 +228,16 @@ function runTests(test_list) {
         "2Hi26GZ3N5vuYt8Gbvn3eM881s0L3VS3p_tx-gzIwfObUR3redN2ylvba0Y0AgVY",
         "goiGm90DfIJ0B4dgRx_hu6rG7O-aDMASiiwlIOsA55BpBgLGkFxDSjlRX7L_GtU2"
     ];
-    const sb_config = {
+    const sb_config_local = {
         channel_server: 'http://localhost:4001',
         channel_ws: 'ws://localhost:4001',
         storage_server: 'http://localhost:4000'
+    };
+    // preview servers
+    const sb_config_preview = {
+        channel_server: 'https://channel.384co.workers.dev',
+        channel_ws: 'wss://channel.384co.workers.dev',
+        storage_server: 'https://storage.384co.workers.dev'
     };
     // snackabra.pages.dev
     const sb_config_matt = {
@@ -246,17 +252,14 @@ function runTests(test_list) {
     if (test_list.includes('test06a')) {
         console.log("Test 'test06a");
         try {
-            // create server object (assumes miniflare test setup):
-            const sb_config = {
-                channel_server: 'http://localhost:4001',
-                channel_ws: 'ws://localhost:4001',
-                storage_server: 'http://localhost:4000'
-            };
-            const SB = new Snackabra(sb_config);
+            const SB = new Snackabra(sb_config_preview);
+            console.log("creating a room on the PREVIEW servers");
             // create a new channel (room), returns (owner) key and channel name:
-            SB.create(sb_config, 'password').then((handle) => {
+            SB.create(sb_config_preview, 'password').then((handle) => {
                 defaultChannelId = handle.channelId;
-                const roomUrl = `http://localhost:3000/rooms/${handle.channelId}`;
+                // depends on config above:
+                // const roomUrl = `http://localhost:3000/${handle.channelId}`
+                const roomUrl = `https://preview.384chat.pages.dev/${handle.channelId}`;
                 console.log(`you can (probably) connect here: ${roomUrl}`);
                 logTest(' ... received new channel:');
                 logTest(`<a href="${roomUrl}">${roomUrl}</a>`);
@@ -311,32 +314,42 @@ function runTests(test_list) {
     }
     // helper function, tries to get you a channel (ChannelSocket),
     // 'normal' failure will reject(null)
-    function getAnyChannel(channelIdArray, onMessage) {
-        return new Promise((resolve, reject) => Promise.any(channelIdArray.map((channelId) => (new Snackabra()).connect(onMessage, undefined /* anonymous */, channelId)))
-            .then((c) => c.ready).then((c) => { resolve(c); })
-            .catch((e) => {
-            if (e instanceof AggregateError) {
-                console.log("Could not find server for room ${channelId}");
-                reject(null); // 'normal' failure
-            }
-            else {
-                console.log(`Failed to find a server, unknown problem: ${e}`);
-                throw new Error(`getAnyChannel() fails with unknown error (${e})`);
-            }
-        }));
-    }
+    // UPDATE: this is now built-in capability of SB
+    // function getAnyChannel(channelIdArray: Array<string>, onMessage: (m: ChannelMessage) => void) {
+    //   return new Promise<ChannelSocket | null>((resolve, reject) =>
+    //     Promise.any(channelIdArray.map((channelId) =>
+    //       (new Snackabra()).connect(onMessage, undefined /* anonymous */, channelId)))
+    //       .then((c) => c.ready).then((c) => { resolve(c); })
+    //       .catch((e) => {
+    //         if (e instanceof AggregateError) {
+    //           console.log("Could not find server for room ${channelId}");
+    //           reject(null); // 'normal' failure
+    //         } else {
+    //           console.log(`Failed to find a server, unknown problem: ${e}`)
+    //           throw new Error(`getAnyChannel() fails with unknown error (${e})`)
+    //         }
+    //       })
+    //   )
+    // }
     if (test_list.includes('test06c')) {
-        getAnyChannel([defaultChannelId], (m) => { console.log('test06c got message:'); console.log(m); })
+        // getAnyChannel([defaultChannelId], (m: ChannelMessage) => { console.log('test06c got message:'); console.log(m); })
+        console.log(`will try to find channel '${defaultChannelId}`);
+        (new Snackabra(sb_config_preview)).connect((m) => { console.log('test06c got message:'); console.log(m); }, undefined /* anonymous */, defaultChannelId)
             .then((c) => {
             if (c) {
-                logTest(`test06c found channel ("${c.channelId}") on server ${c.sbServer.channel_server} (tracing)`);
-                c.enableTrace = TRACE_CHANNELS;
-                c.userName = "TestBot";
-                (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`[test06c] test message sent! (${c})`); });
-                logTest("old messages - on console");
-                c.api.getOldMessages(0).then((oldMessages) => {
-                    console.log("got a reply:");
-                    console.log(oldMessages);
+                console.log("Got channel:");
+                console.log(c);
+                c.ready.then((c) => {
+                    console.log("Channel is ready...");
+                    logTest(`test06c found channel ("${c.channelId}") on server ${c.sbServer.channel_server} (tracing)`);
+                    c.enableTrace = TRACE_CHANNELS;
+                    c.userName = "TestBot";
+                    (new SBMessage(c, "Hello from TestBot!")).send().then((c) => { console.log(`[test06c] test message sent! (${c})`); });
+                    logTest("old messages - on console");
+                    c.api.getOldMessages(0).then((oldMessages) => {
+                        console.log("got a reply:");
+                        console.log(oldMessages);
+                    });
                 });
             }
             else {
@@ -395,6 +408,7 @@ function runTests(test_list) {
                 console.log(handleSet);
                 console.log(`[${Date.now() - t0}] we'll now 'peek' into the process and first wait for all verifications:`);
                 let verificationPromiseSet = [];
+                // @ts-ignore
                 handleSet.forEach(s => verificationPromiseSet.push(Object.assign({}, s.verification)));
                 console.log(verificationPromiseSet);
                 Promise.all(verificationPromiseSet).then((verificationSet) => {
@@ -447,6 +461,7 @@ function runTests(test_list) {
                 let t1 = Date.now();
                 SB.storage.storeObject(blockSet[i], 'p', c.channelId).then((blobHandle) => {
                     console.log(`[${j}][${Date.now() - t0}] got handle for object ${i}`);
+                    // @ts-ignore
                     blobHandle.verification.then((ver) => {
                         console.log(`[${j}][${Date.now() - t0}] got verification for object ${i} (${ver}) total time to write ${Date.now() - t1}`);
                         resolve(blobHandle);
@@ -542,7 +557,7 @@ function runTests(test_list) {
         const z = getElement('test04d');
         // create orchestration (master) object (synchronous)
         console.log("++++test04d++++ SB object:");
-        const sbServer = sb_config;
+        const sbServer = sb_config_local;
         const SB = new Snackabra(sbServer);
         // console.log("++++test04d++++ new owner keys:")
         SB.create(sbServer, 'password').then((handle) => {

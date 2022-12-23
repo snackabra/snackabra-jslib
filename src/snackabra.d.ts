@@ -723,6 +723,10 @@ declare class ChannelApi {
     getLastMessageTimes(): Promise<unknown>;
     /**
      * getOldMessages
+     *
+     * TODO: this needs to be able to check that the channel socket
+     *       is ready, otherwise the keys might not be ... currently
+     *       before calling this, make a ready check on the socket
      */
     getOldMessages(currentMessagesLength: number): Promise<Array<ChannelMessage>>;
     /**
