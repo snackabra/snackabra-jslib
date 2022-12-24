@@ -3284,7 +3284,7 @@ class Snackabra {
                     resolve({ channelId: channelId, key: exportable_privateKey });
                 }
                 else {
-                    reject(new Error(JSON.stringify(resp)));
+                    reject(JSON.stringify(resp));
                 }
             }
             catch (e) {

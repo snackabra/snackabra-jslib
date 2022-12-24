@@ -3905,7 +3905,7 @@ class Snackabra {
           _localStorage.setItem(channelId, JSON.stringify(exportable_privateKey))
           resolve({ channelId: channelId, key: exportable_privateKey })
         } else {
-          reject(new Error(JSON.stringify(resp)));
+          reject(JSON.stringify(resp));
         }
       } catch (e) {
         reject(e);
