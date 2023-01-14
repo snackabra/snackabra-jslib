@@ -3355,7 +3355,8 @@ class ChannelApi {
     return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel.channelId + '/downloadData', {
         method: 'GET',
-        credentials: 'include',
+        // mtg: quick fix for issue with cors
+        // credentials: 'include',
         headers: {
           'Content-Type': 'application/json'
         }
