@@ -2,12 +2,6 @@
 
 # Snackabra Javascript Library
 
-Javascript utilities, shared by, amongst others:
-``snackabra-webclient``, ``snackabra-roomserver``, and
-``snackabra-storageserver``.
-
-For general documentation on Snackabra see: https://snackabra.io
-
 JSDOC is used for javascript documentation. See
 https://google.github.io/styleguide/jsguide.html for format.
 Currently the library needs to be explicitly copied into
@@ -17,13 +11,10 @@ If you would like to contribute or help out with the snackabra
 project, please feel free to reach out to us at snackabra@gmail.com or
 snackabra@protonmail.com
 
-All of Snackabra is licensed under GPL-v3, see [GPL v3 license
+Snackabra is licensed under GPL-v3, see [GPL v3 license
 file](LICENSE.md) for details.
 
-_Note: this module is under active development as we refactor
-the snackabra codebase; currently there's a lot of copy-pasted
-code in the various snackabra parts and that are intended to
-migrate to this shared library._
+_Note: this module is under active development_
 
 
 ## Usage in Node
@@ -104,37 +95,6 @@ npm pack
 
 This will generate the ``browser.mjs`` and ``index.mjs`` files;
 the former is for use in browsers, the latter for use with node.
-
-## Testing
-
-There are three main ways to test the library. First test the node version:
-
-```
-npm pack && npm test
-```
-
-To test browser usage, you will need to open 
-![index.html](test-web-server/index.html) test page.
-For that, you will
-need to be running a web server, for example:
-
-```
-cd test-web-server
-python3 -m http.server --bind 127.0.0.1
-```
-
-We will assume you you have the page served locally at ``127.0.0.1``.
-You can then just point your browser at it, e.g. on a Mac just do
-``open index.html``, and the file self-tests and reports results.
-
-You can also automate it with puppeteer:
-
-```
-cd test-web-server
-node test02.js
-```
-
-Which will report on command line if all the tests passed or not.
 
 
 ## Publishing
