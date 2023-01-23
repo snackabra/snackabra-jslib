@@ -706,7 +706,7 @@ declare class StorageApi {
      * StorageApi().retrieveData()
      * retrieves an object from storage
      */
-    retrieveImage(imageMetaData: ImageMetaData, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
+    retrieveImage(imageMetaData: ImageMetaData, controlMessages: Array<ChannelMessage>, imageId?: string, imageKey?: string, imageType?: SBObjectType): Promise<Dictionary>;
 }
 /**
  * Channel API
