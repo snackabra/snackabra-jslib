@@ -18,12 +18,6 @@ export interface SBServer {
     channel_ws: string;
     storage_server: string;
 }
-interface IndexedKVOptions {
-    db: string;
-    table: string;
-    onReady: CallableFunction;
-}
-declare type StorableDataType = string | number | bigint | boolean | symbol | object;
 interface Dictionary {
     [index: string]: any;
 }
@@ -152,7 +146,7 @@ export interface EncryptedContentsBin {
  */
 export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
 /******************************************************************************************************/
-export declare type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
+export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
 /******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
@@ -621,7 +615,7 @@ export declare class ChannelSocket extends Channel {
     send(msg: SBMessage | string | object): Promise<string>;
     /** @type {JsonWebKey} */ get exportable_owner_pubKey(): JsonWebKey | null;
 }
-export declare type SBObjectType = 'f' | 'p' | 'b';
+export type SBObjectType = 'f' | 'p' | 'b';
 export interface SBObjectHandle {
     version: '1';
     type: SBObjectType;
@@ -752,18 +746,6 @@ declare class ChannelApi {
  * @constructor
  * @public
  */
-export declare class IndexedKV {
-    #private;
-    db: IDBDatabase;
-    events: MessageBus;
-    options: IndexedKVOptions;
-    constructor();
-    openCursor(match: string, callback: CallableFunction): Promise<unknown>;
-    setItem(key: string, value: StorableDataType): Promise<unknown>;
-    add(key: string, value: StorableDataType): Promise<unknown>;
-    getItem(key: string): Promise<string | null>;
-    removeItem(key: string): Promise<unknown>;
-}
 declare class Snackabra {
     #private;
     /**
