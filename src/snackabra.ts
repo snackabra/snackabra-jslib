@@ -93,7 +93,7 @@ const SBKnownServers: Array<SBServer> = [
     channel_ws: 'wss://channel.384co.workers.dev/',
     storage_server: 'https://storage.384co.workers.dev/'
   },
-  
+
 ]
 
 interface IndexedKVOptions {
@@ -2095,7 +2095,9 @@ export class ChannelSocket extends Channel {
     this.ready = this.#readyPromise()
   }
 
-
+  close = () =>{
+    return this.#ws.websocket.close()
+  }
 
   /* ChannelSocket
     internal to channelsocket: this always gets all messages; certain
@@ -2752,7 +2754,7 @@ class StorageApi {
   storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: string, metadata?: SBObjectMetadata): Promise<SBObjectHandle> {
     // export async function saveImage(sbImage, roomId, sendSystemMessage)
     return new Promise((resolve, reject) => {
-      if (!metadata) {        
+      if (!metadata) {
         console.warn('No metadata')
         const paddedBuf = this.#padBuf(buf)
         this.#generateIdKey(paddedBuf).then((fullHash: { id: string, key: string }) => {
@@ -2990,10 +2992,14 @@ class StorageApi {
    * retrieves an object from storage
    */
   async retrieveImage(imageMetaData: ImageMetaData,
-    controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
+    controlMessages: Array<ChannelMessage>, imageId?: string, imageKey?: string, imageType?: SBObjectType): Promise<Dictionary> {
     console.trace("retrieveImage()")
     console.log(imageMetaData)
-    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == imageMetaData.previewId)
+    const id = imageId ? imageId : imageMetaData.previewId;
+    const key = imageKey ? imageKey : imageMetaData.previewKey;
+    const type = imageType ? imageType : 'p';
+
+    const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == id)
     console.log(control_msg)
     if (control_msg) {
       _sb_assert(control_msg.verificationToken, "retrieveImage(): verificationToken missing (?)")
@@ -3001,9 +3007,9 @@ class StorageApi {
       const obj: SBObjectHandle = {
         [SB_OBJECT_HANDLE_SYMBOL]: true,
         version: '1',
-        type: 'p',
+        type: type,
         id: control_msg.id!,
-        key: imageMetaData.previewKey!,
+        key: key!,
         verification: typeof control_msg.verificationToken === 'string' ? new Promise((res) => res(control_msg.verificationToken!)) : control_msg.verificationToken!
       }
       const img = await this.fetchData(obj)
@@ -3014,7 +3020,7 @@ class StorageApi {
     }
   }
 
-    // async retrieveObject(id: string, key: string, type: string, controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
+  // async retrieveObject(id: string, key: string, type: string, controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
   //   console.trace("retrieveObject()")
   //   console.log(id)
   //   const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == id)

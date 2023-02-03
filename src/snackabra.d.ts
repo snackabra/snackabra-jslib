@@ -604,6 +604,7 @@ export declare class ChannelSocket extends Channel {
      *
      * */
     constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string);
+    close: () => void;
     get status(): "CONNECTING" | "OPEN" | "CLOSING" | "CLOSED";
     set onMessage(f: (m: ChannelMessage) => void);
     set enableTrace(b: boolean);
@@ -706,7 +707,7 @@ declare class StorageApi {
      * StorageApi().retrieveData()
      * retrieves an object from storage
      */
-    retrieveImage(imageMetaData: ImageMetaData, controlMessages: Array<ChannelMessage>): Promise<Dictionary>;
+    retrieveImage(imageMetaData: ImageMetaData, controlMessages: Array<ChannelMessage>, imageId?: string, imageKey?: string, imageType?: SBObjectType): Promise<Dictionary>;
 }
 /**
  * Channel API
