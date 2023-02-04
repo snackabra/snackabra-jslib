@@ -2951,7 +2951,7 @@ class ChannelApi {
                 }, true, ['encrypt', 'decrypt']);
                 const _exportable_locked_key = await crypto.subtle.exportKey('jwk', _locked_key);
                 fetch(this.#channelServer + this.#channel.channelId + '/lockRoom', {
-                    method: 'GET', credentials: 'include'
+                    method: 'GET'
                 })
                     .then((response) => {
                     if (!response.ok) {
@@ -2982,8 +2982,7 @@ class ChannelApi {
                 body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
                 headers: {
                     'Content-Type': 'application/json'
-                },
-                credentials: 'include'
+                }
             })
                 .then((response) => {
                 if (!response.ok) {
