@@ -2459,42 +2459,41 @@ class StorageApi {
                 if (!h)
                     reject('invalid');
                 // TODO: haven't tested this caching stuff .. moving from the refactored web client
-                _localStorage.getItem(`${h.id}_cache`).then((payload) => {
-                    if (payload) {
-                        console.log("Found object in _localStorage");
-                        resolve(this.#processData(base64ToArrayBuffer(payload), h));
-                    }
-                    else {
-                        console.log("Object not cached, fetching from server. SBObjectHandle is:");
-                        console.log(h);
-                        if (typeof h.verification === 'string')
-                            h.verification = new Promise((resolve) => { resolve(h.verification); });
-                        h.verification.then((verificationToken) => {
-                            console.log("verification token:");
-                            console.log(verificationToken);
-                            _sb_assert(verificationToken, "fetchData(): missing verification token (?)");
-                            fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
-                                .then((response) => {
-                                if (!response.ok)
-                                    reject(new Error('Network response was not OK'));
-                                // console.log(response)
-                                return response.arrayBuffer();
-                            })
-                                .then((payload) => {
-                                resolve(this.#processData(payload, h));
-                            });
-                        });
-                        // fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
-                        //   .then((response: Response) => {
-                        //     if (!response.ok) reject(new Error('Network response was not OK'))
-                        //     // console.log(response)
-                        //     return response.arrayBuffer()
-                        //   })
-                        //   .then((payload: ArrayBuffer) => {
-                        //     resolve(this.#processData(payload, h))
-                        //   })
-                    }
+                // _localStorage.getItem(`${h.id}_cache`).then((payload) => {
+                // if (payload) {
+                //   console.log("Found object in _localStorage")
+                //   resolve(this.#processData(base64ToArrayBuffer(payload), h))
+                // } else {
+                console.log("Object not cached, fetching from server. SBObjectHandle is:");
+                console.log(h);
+                if (typeof h.verification === 'string')
+                    h.verification = new Promise((resolve) => { resolve(h.verification); });
+                h.verification.then((verificationToken) => {
+                    console.log("verification token:");
+                    console.log(verificationToken);
+                    _sb_assert(verificationToken, "fetchData(): missing verification token (?)");
+                    fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
+                        .then((response) => {
+                        if (!response.ok)
+                            reject(new Error('Network response was not OK'));
+                        // console.log(response)
+                        return response.arrayBuffer();
+                    })
+                        .then((payload) => {
+                        resolve(this.#processData(payload, h));
+                    });
                 });
+                // fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
+                //   .then((response: Response) => {
+                //     if (!response.ok) reject(new Error('Network response was not OK'))
+                //     // console.log(response)
+                //     return response.arrayBuffer()
+                //   })
+                //   .then((payload: ArrayBuffer) => {
+                //     resolve(this.#processData(payload, h))
+                //   })
+                // }
+                // })
             }
             catch (error) {
                 reject(error);

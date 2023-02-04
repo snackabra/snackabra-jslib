@@ -2940,11 +2940,11 @@ class StorageApi {
       try {
         if (!h) reject('invalid')
         // TODO: haven't tested this caching stuff .. moving from the refactored web client
-        _localStorage.getItem(`${h.id}_cache`).then((payload) => {
-          if (payload) {
-            console.log("Found object in _localStorage")
-            resolve(this.#processData(base64ToArrayBuffer(payload), h))
-          } else {
+        // _localStorage.getItem(`${h.id}_cache`).then((payload) => {
+          // if (payload) {
+          //   console.log("Found object in _localStorage")
+          //   resolve(this.#processData(base64ToArrayBuffer(payload), h))
+          // } else {
             console.log("Object not cached, fetching from server. SBObjectHandle is:")
             console.log(h)
             if (typeof h.verification === 'string') h.verification = new Promise<string>((resolve) => { resolve(h.verification); })
@@ -2971,8 +2971,8 @@ class StorageApi {
             //   .then((payload: ArrayBuffer) => {
             //     resolve(this.#processData(payload, h))
             //   })
-          }
-        })
+          // }
+        // })
       } catch (error) {
         reject(error)
       }
