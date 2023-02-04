@@ -3016,166 +3016,162 @@ class ChannelApi {
  * @constructor
  * @public
  */
-class IndexedKV {
-    db;
-    events = new MessageBus();
-    options = {
-        db: 'MyDB', table: 'default', onReady: () => {
-            return;
-        },
-    };
-    // psm: override doesn't seem to be used
-    // mtg: we have the option to expose this elswhere, but it might be better to break this out into a helper
-    constructor( /* options: IndexedKVOptions */) {
-        // psm: hm?
-        this.options = Object.assign(this.options, this.options);
-        if (typeof this.options.onReady === 'function') {
-            this.events.subscribe(`ready`, (e) => {
-                this.options.onReady(e);
-            });
-        }
-        // if (!false) {
-        //   this.indexedDB = global.indexedDB;
-        // } else {
-        // }
-        const openReq = indexedDB.open(this.options.db);
-        openReq.onerror = (event) => {
-            console.error(event);
-        };
-        openReq.onsuccess = (event) => {
-            this.db = event.target.result;
-            this.events.publish('ready');
-        };
-        openReq.onerror = (event) => {
-            console.error('Database error: ' + event.target.errorCode);
-        };
-        openReq.onupgradeneeded = (event) => {
-            this.db = event.target.result;
-            this.db.createObjectStore(this.options.table, { keyPath: 'key' });
-            this.#useDatabase();
-            this.events.publish('ready');
-        };
-    }
-    openCursor(match, callback) {
-        return new Promise((resolve, reject) => {
-            const objectStore = this.db.transaction([this.options.table], 'readonly').objectStore(this.options.table);
-            const request = objectStore.openCursor(null, 'next');
-            request.onsuccess = (event) => {
-                resolve(event.target.result);
-                const cursor = event.target.result;
-                if (cursor) {
-                    const regex = new RegExp(`^${match}`);
-                    if (cursor.key.match(regex)) {
-                        callback(cursor.value.value);
-                    }
-                    cursor.continue();
-                }
-                else {
-                    resolve(true);
-                }
-            };
-            request.onerror = (event) => {
-                reject(event);
-            };
-        });
-    }
-    #useDatabase() {
-        this.db.onversionchange = () => {
-            this.db.close();
-            console.info('A new version of this page is ready. Please reload or close this tab!');
-        };
-    }
-    // Set item will insert or replace
-    setItem(key, value) {
-        return new Promise((resolve, reject) => {
-            const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
-            const request = objectStore.get(key);
-            request.onerror = (event) => {
-                reject(event);
-            };
-            request.onsuccess = (event) => {
-                const data = event?.target?.result;
-                if (data?.value) {
-                    data.value = value;
-                    const requestUpdate = objectStore.put(data);
-                    requestUpdate.onerror = (event) => {
-                        reject(event);
-                    };
-                    requestUpdate.onsuccess = (event) => {
-                        const data = event.target.result;
-                        resolve(data.value);
-                    };
-                }
-                else {
-                    const requestAdd = objectStore.add({ key: key, value: value });
-                    requestAdd.onsuccess = (event) => {
-                        resolve(event.target.result);
-                    };
-                    requestAdd.onerror = (event) => {
-                        reject(event);
-                    };
-                }
-            };
-        });
-    }
-    //Add item but not replace
-    add(key, value) {
-        return new Promise((resolve, reject) => {
-            const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
-            const request = objectStore.get(key);
-            request.onerror = (event) => {
-                reject(event);
-            };
-            request.onsuccess = (event) => {
-                const data = event?.target?.result;
-                if (data?.value) {
-                    resolve(data.value);
-                }
-                else {
-                    const requestAdd = objectStore.add({ key: key, value: value });
-                    requestAdd.onsuccess = (event) => {
-                        resolve(event.target.result);
-                    };
-                    requestAdd.onerror = (event) => {
-                        reject(event);
-                    };
-                }
-            };
-        });
-    }
-    getItem(key) {
-        return new Promise((resolve, reject) => {
-            const objectStore = this.db.transaction([this.options.table]).objectStore(this.options.table);
-            const request = objectStore.get(key);
-            request.onerror = (event) => {
-                reject(event);
-            };
-            request.onsuccess = (event) => {
-                const data = event?.target?.result;
-                if (data?.value) {
-                    resolve(data.value);
-                }
-                else {
-                    resolve(null);
-                }
-            };
-        });
-    }
-    removeItem(key) {
-        return new Promise((resolve, reject) => {
-            const request = this.db.transaction([this.options.table], 'readwrite')
-                .objectStore(this.options.table)
-                .delete(key);
-            request.onsuccess = () => {
-                resolve(true);
-            };
-            request.onerror = (event) => {
-                reject(event);
-            };
-        });
-    }
-}
-const _localStorage = new IndexedKV();
+// export class IndexedKV {
+//   db!: IDBDatabase;
+//   events = new MessageBus();
+//   options: IndexedKVOptions = {
+//     db: 'MyDB', table: 'default', onReady: () => {
+//       return;
+//     },
+//   };
+//   // psm: override doesn't seem to be used
+//   // mtg: we have the option to expose this elswhere, but it might be better to break this out into a helper
+//   constructor(/* options: IndexedKVOptions */) {
+//     // psm: hm?
+//     this.options = Object.assign(this.options, this.options);
+//     if (typeof this.options.onReady === 'function') {
+//       this.events.subscribe(`ready`, (e: Error) => {
+//         this.options.onReady(e);
+//       });
+//     }
+//     // if (!false) {
+//     //   this.indexedDB = global.indexedDB;
+//     // } else {
+//     // }
+//     const openReq = indexedDB.open(this.options.db);
+//     openReq.onerror = (event: Dictionary) => {
+//       console.error(event);
+//     };
+//     openReq.onsuccess = (event: Dictionary) => {
+//       this.db = event.target.result;
+//       this.events.publish('ready');
+//     };
+//     openReq.onerror = (event: Dictionary) => {
+//       console.error('Database error: ' + event.target.errorCode);
+//     };
+//     openReq.onupgradeneeded = (event: Dictionary) => {
+//       this.db = event.target.result;
+//       this.db.createObjectStore(this.options.table, { keyPath: 'key' });
+//       this.#useDatabase();
+//       this.events.publish('ready');
+//     };
+//   }
+//   openCursor(match: string, callback: CallableFunction) {
+//     return new Promise((resolve, reject) => {
+//       const objectStore = this.db.transaction([this.options.table], 'readonly').objectStore(this.options.table);
+//       const request = objectStore.openCursor(null, 'next');
+//       request.onsuccess = (event: Dictionary) => {
+//         resolve(event.target.result);
+//         const cursor = event.target.result;
+//         if (cursor) {
+//           const regex = new RegExp(`^${match}`);
+//           if (cursor.key.match(regex)) {
+//             callback(cursor.value.value);
+//           }
+//           cursor.continue();
+//         } else {
+//           resolve(true);
+//         }
+//       };
+//       request.onerror = (event: Dictionary) => {
+//         reject(event);
+//       };
+//     });
+//   }
+//   #useDatabase() {
+//     this.db.onversionchange = () => {
+//       this.db.close();
+//       console.info('A new version of this page is ready. Please reload or close this tab!');
+//     };
+//   }
+//   // Set item will insert or replace
+//   setItem(key: string, value: StorableDataType) {
+//     return new Promise((resolve, reject) => {
+//       const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
+//       const request = objectStore.get(key);
+//       request.onerror = (event: Dictionary) => {
+//         reject(event);
+//       };
+//       request.onsuccess = (event: Dictionary) => {
+//         const data = event?.target?.result;
+//         if (data?.value) {
+//           data.value = value;
+//           const requestUpdate = objectStore.put(data);
+//           requestUpdate.onerror = (event: Dictionary) => {
+//             reject(event);
+//           };
+//           requestUpdate.onsuccess = (event: Dictionary) => {
+//             const data = event.target.result;
+//             resolve(data.value);
+//           };
+//         } else {
+//           const requestAdd = objectStore.add({ key: key, value: value });
+//           requestAdd.onsuccess = (event: Dictionary) => {
+//             resolve(event.target.result);
+//           };
+//           requestAdd.onerror = (event: Dictionary) => {
+//             reject(event);
+//           };
+//         }
+//       };
+//     });
+//   }
+//   //Add item but not replace
+//   add(key: string, value: StorableDataType) {
+//     return new Promise((resolve, reject) => {
+//       const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
+//       const request = objectStore.get(key);
+//       request.onerror = (event: Dictionary) => {
+//         reject(event);
+//       };
+//       request.onsuccess = (event: Dictionary) => {
+//         const data = event?.target?.result;
+//         if (data?.value) {
+//           resolve(data.value);
+//         } else {
+//           const requestAdd = objectStore.add({ key: key, value: value });
+//           requestAdd.onsuccess = (event: Dictionary) => {
+//             resolve(event.target.result);
+//           };
+//           requestAdd.onerror = (event: Dictionary) => {
+//             reject(event);
+//           };
+//         }
+//       };
+//     });
+//   }
+//   getItem(key: string): Promise<string | null> {
+//     return new Promise((resolve, reject) => {
+//       const objectStore = this.db.transaction([this.options.table]).objectStore(this.options.table);
+//       const request = objectStore.get(key);
+//       request.onerror = (event: Event) => {
+//         reject(event);
+//       };
+//       request.onsuccess = (event: Dictionary) => {
+//         const data = event?.target?.result;
+//         if (data?.value) {
+//           resolve(data.value);
+//         } else {
+//           resolve(null);
+//         }
+//       };
+//     });
+//   }
+//   removeItem(key: string) {
+//     return new Promise((resolve, reject) => {
+//       const request = this.db.transaction([this.options.table], 'readwrite')
+//         .objectStore(this.options.table)
+//         .delete(key);
+//       request.onsuccess = () => {
+//         resolve(true);
+//       };
+//       request.onerror = (event: Event) => {
+//         reject(event);
+//       };
+//     });
+//   }
+// }
+// const _localStorage = new IndexedKV();
 //#endregion IndexedKV
 class Snackabra {
     #storage;
@@ -3286,7 +3282,7 @@ class Snackabra {
                 resp = await resp.json();
                 if (resp.success) {
                     // await this.connect(channelId, identity);
-                    _localStorage.setItem(channelId, JSON.stringify(exportable_privateKey));
+                    // _localStorage.setItem(channelId, JSON.stringify(exportable_privateKey)) // TODO
                     resolve({ channelId: channelId, key: exportable_privateKey });
                 }
                 else {
@@ -3329,4 +3325,4 @@ var SB = {
     SBCrypto: SBCrypto,
 };
 
-export { Channel, ChannelSocket, IndexedKV, MessageBus, SB, SBCrypto, SBFile, SBMessage, Snackabra, _appendBuffer, _assertBase64, _sb_assert, _sb_exception, _sb_resolve, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, compareBuffers, decodeB64Url, encodeB64Url, encryptedContentsMakeBinary, extractPayload, extractPayloadV1, getRandomValues, importPublicKey, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };
+export { Channel, ChannelSocket, MessageBus, SB, SBCrypto, SBFile, SBMessage, Snackabra, _appendBuffer, _assertBase64, _sb_assert, _sb_exception, _sb_resolve, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, compareBuffers, decodeB64Url, encodeB64Url, encryptedContentsMakeBinary, extractPayload, extractPayloadV1, getRandomValues, importPublicKey, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };

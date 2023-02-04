@@ -18,12 +18,6 @@ export interface SBServer {
     channel_ws: string;
     storage_server: string;
 }
-interface IndexedKVOptions {
-    db: string;
-    table: string;
-    onReady: CallableFunction;
-}
-type StorableDataType = string | number | bigint | boolean | symbol | object;
 interface Dictionary {
     [index: string]: any;
 }
@@ -777,18 +771,6 @@ declare class ChannelApi {
  * @constructor
  * @public
  */
-export declare class IndexedKV {
-    #private;
-    db: IDBDatabase;
-    events: MessageBus;
-    options: IndexedKVOptions;
-    constructor();
-    openCursor(match: string, callback: CallableFunction): Promise<unknown>;
-    setItem(key: string, value: StorableDataType): Promise<unknown>;
-    add(key: string, value: StorableDataType): Promise<unknown>;
-    getItem(key: string): Promise<string | null>;
-    removeItem(key: string): Promise<unknown>;
-}
 declare class Snackabra {
     #private;
     /**
