@@ -2095,7 +2095,9 @@ export class ChannelSocket extends Channel {
     this.ready = this.#readyPromise()
   }
 
-
+  close = () =>{
+    return this.#ws.websocket.close()
+  }
 
   /* ChannelSocket
     internal to channelsocket: this always gets all messages; certain

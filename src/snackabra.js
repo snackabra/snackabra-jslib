@@ -1673,6 +1673,9 @@ export class ChannelSocket extends Channel {
         // console.log("setting ChannelSocket.ready")
         this.ready = this.#readyPromise();
     }
+    close = () => {
+        return this.#ws.websocket.close();
+    };
     /* ChannelSocket
       internal to channelsocket: this always gets all messages; certain
       protocol aspects are low-level (independent of 'app') and those
