@@ -10,3 +10,4 @@ __tests__/cov_profile
 temp/
 .vscode/
 yarn.lock
+*.js.map
