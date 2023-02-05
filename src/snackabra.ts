@@ -1,5 +1,22 @@
-/* Copyright (c) 2020-2022 Magnusson Institute, All Rights Reserved
-   Distributed under GPL-v03, see 'LICENSE' file for details */
+/*
+   Copyright (C) 2020-2023 Magnusson Institute, All Rights Reserved
+
+   "Snackabra" is a registered trademark
+
+   This program is free software: you can redistribute it and/or
+   modify it under the terms of the GNU Affero General Public License
+   as published by the Free Software Foundation, either version 3 of
+   the License, or (at your option) any later version.
+
+   This program is distributed in the hope that it will be useful, but
+   WITHOUT ANY WARRANTY; without even the implied warranty of
+   MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+   Affero General Public License for more details.
+
+   You should have received a copy of the GNU Affero General Public
+   License along with this program.  If not, see www.gnu.org/licenses/
+
+*/
 
 //#region header
 /******************************************************************************************************/
@@ -8,9 +25,9 @@
   NOTE: public additional documentation on Snackabra, including this library,
   is eventually published here:
 
-  https://snackabra.readthedocs.io/en/latest/
+  https://snackabra.io
 
-  We are currently working on major overhaul to finalize "0.5.0", you
+  We are currently working on major overhaul to finalize "0.5.x", you
   can access current state of it here:
 
   https://snackabra-050-docs.readthedocs.io/en/latest/jslib.html
