@@ -826,6 +826,9 @@ export function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Uint8Array
   return true
 }
 
+
+/** UTILS SECTION */
+
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short
