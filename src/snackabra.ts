@@ -264,7 +264,7 @@ interface ChannelKeysMessage {
 }
 
 // TODO: cross-reference with the old 'loadKeys()'
-interface ChannelKeys {
+export interface ChannelKeys {
   // these come from the channel server;
   ownerKey: CryptoKey,
   guestKey?: CryptoKey,
@@ -2101,7 +2101,8 @@ export class ChannelSocket extends Channel {
     // console.log("----ChannelSocket.constructor() start:")
     // console.log(sbServer)
     // console.log("----ChannelSocket.constructor() ... end")
-    super(sbServer, key, channelId /*, identity ? identity : new Identity() */) // initialize 'channel' parent       
+    super(sbServer, key, channelId /*, identity ? identity : new Identity() */) // initialize 'channel' parent    
+    _sb_assert(sbServer.channel_ws, 'ChannelSocket(): no websocket server name provided')
     const url = sbServer.channel_ws + '/api/room/' + channelId + '/websocket'
     this.#onMessage = onMessage
     this.#sbServer = sbServer

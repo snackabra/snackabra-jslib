@@ -114,7 +114,7 @@ interface ChannelKeyStrings {
     signKey: string;
     lockedKey?: string;
 }
-interface ChannelKeys {
+export interface ChannelKeys {
     ownerKey: CryptoKey;
     guestKey?: CryptoKey;
     encryptionKey: CryptoKey;
@@ -218,6 +218,7 @@ export declare function base64ToArrayBuffer(str: string): Uint8Array;
  * Compare buffers
  */
 export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Uint8Array | ArrayBuffer | null): boolean;
+/** UTILS SECTION */
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short

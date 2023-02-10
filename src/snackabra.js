@@ -470,6 +470,7 @@ export function compareBuffers(a, b) {
             return false;
     return true;
 }
+/** UTILS SECTION */
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short
@@ -1676,7 +1677,8 @@ export class ChannelSocket extends Channel {
         // console.log("----ChannelSocket.constructor() start:")
         // console.log(sbServer)
         // console.log("----ChannelSocket.constructor() ... end")
-        super(sbServer, key, channelId /*, identity ? identity : new Identity() */); // initialize 'channel' parent       
+        super(sbServer, key, channelId /*, identity ? identity : new Identity() */); // initialize 'channel' parent    
+        _sb_assert(sbServer.channel_ws, 'ChannelSocket(): no websocket server name provided');
         const url = sbServer.channel_ws + '/api/room/' + channelId + '/websocket';
         this.#onMessage = onMessage;
         this.#sbServer = sbServer;
