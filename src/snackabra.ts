@@ -145,8 +145,11 @@ interface Dictionary {
   [index: string]: any;
 }
 
+// more of a placeholder for now
+export type SBChannelId = string
+
 interface ChannelData {
-  roomId?: string;
+  roomId?: SBChannelId
   channelId?: string;
   ownerKey: string;
   encryptionKey: string;
@@ -531,6 +534,8 @@ export class MessageBus {
 //   }
 // }
 // throw new RethrownError(`Oh no a "${error.message}" error`, error)
+
+
 
 export function _sb_exception(loc: string, msg: string) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';

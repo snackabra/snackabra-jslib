@@ -21,8 +21,9 @@ export interface SBServer {
 interface Dictionary {
     [index: string]: any;
 }
+export type SBChannelId = string;
 interface ChannelData {
-    roomId?: string;
+    roomId?: SBChannelId;
     channelId?: string;
     ownerKey: string;
     encryptionKey: string;
