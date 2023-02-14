@@ -3,6 +3,9 @@
 
    "Snackabra" is a registered trademark
 
+   Snackabra SDK - Server
+   See https://snackabra.io for more information.
+
    This program is free software: you can redistribute it and/or
    modify it under the terms of the GNU Affero General Public License
    as published by the Free Software Foundation, either version 3 of
@@ -109,6 +112,48 @@ function encryptedContentsMakeBinary(o) {
     _sb_assert(iv.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv.length})`);
     return { content: t, iv: iv };
 }
+//#endregion
+/******************************************************************************************************/
+//#region (COMMENTED OUT) code experimenting with types and protocols
+// interface ChannelEncryptedMessageArray {
+//   type: 'channelMessageArray',
+//   messages: ChannelEncryptedMessageArray[]
+// }
+// mtg: we shouldn't need the export here because we are using them internally
+// export type ChannelMessage = ChannelMessage2 | ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray
+/******************************************************************************************************/
+// interface ChannelSystemMessage {
+//   type: 'system',
+//   _id: string,
+//   systemMessage: string,
+// }
+// type xChannelMessageType = 'ack' | 'system' | 'invalid' | 'ready'
+// interface xChannelMessage {
+//   // type: 'ack'
+//   type: xChannelMessageType,
+//   _id: string
+// }
+// interface xChannelMessage {
+//   // type: 'system'
+//   type: xChannelMessageType,
+//   _id: string,
+//   systemMessage: string
+// }
+// // demo / example / testing
+// export function f(v: ChannelMessage): ChannelKeysMessage | null {
+//   if (v!.type === 'channelKeys') {
+//     return v as ChannelKeysMessage
+//   } else {
+//     return null
+//   }
+// }
+// export function g(v: xChannelMessage) {
+//   if (v.type === 'system') {
+//     return v
+//   } else {
+//     return null
+//   }
+// }
 // interface ChannelMessage1 {
 //   // currently we can't do a regex match here, and i can't figure
 //   // out a more clever way of collapsing this.  TODO maybe we should
@@ -117,8 +162,9 @@ function encryptedContentsMakeBinary(o) {
 //   message: { [prop: string]: any },
 // }
 // export type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
-//#region - not so core stuff
+//#endregion
 /******************************************************************************************************/
+//#region - MessageBus class
 /**
  * SB simple events (mesage bus) class
  */
@@ -177,16 +223,10 @@ class MessageBus {
     }
   }
 */
-/**
- * @fileoverview Main file for snackabra javascript utilities.
- *               See https://snackabra.io for details.
- * @package
- */
-/* TODO - list of modules that main.js can now fully support:
-          (note: some MI-internal references)
-   m042/src/scripts/components/FormSubmission.js
-*/
-// the below general exception handler can be improved so us to
+//#endregion
+/******************************************************************************************************/
+//#region - SB internal utility functions
+// the below general exception handler might be improved to
 // retain the error stack, per:
 // https://stackoverflow.com/a/42755876
 // class RethrownError extends Error {
@@ -231,7 +271,8 @@ function _sb_assert(val, msg) {
     }
 }
 //#endregion
-//#region - crypto and translation stuff used by SBCrypto etc
+/******************************************************************************************************/
+//#region - SBCryptoUtils - crypto and translation stuff used by SBCrypto etc
 /******************************************************************************************************/
 /**
  * Fills buffer with random data
@@ -287,26 +328,6 @@ function ensureSafe(base64) {
     const z = b64_regex.exec(base64);
     _sb_assert((z) && (z[0] === base64), 'ensureSafe() tripped: something is not URI safe');
     return base64;
-}
-/**
- * Standardized 'str2ab()' function, string to array buffer.
- * This assumes on byte per character.
- *
- * @param {string} string
- * @return {Uint8Array} buffer
- */
-function str2ab(string) {
-    return new TextEncoder().encode(string);
-}
-/**
- * Standardized 'ab2str()' function, array buffer to string.
- * This assumes one byte per character.
- *
- * @param {Uint8Array} buffer
- * @return {string} string
- */
-function ab2str(buffer) {
-    return new TextDecoder('utf-8').decode(buffer);
 }
 /**
  * based on https://github.com/qwtel/base64-encoding/blob/master/base64-js.ts
@@ -454,7 +475,6 @@ function compareBuffers(a, b) {
             return false;
     return true;
 }
-/** UTILS SECTION */
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short
@@ -657,7 +677,7 @@ function cleanBase32mi(s) {
  *
  */
 function packageEncryptDict(dict, publicKeyPEM, callback) {
-    const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
+    const clearDataArrayBufferView = sbCrypto.str2ab(JSON.stringify(dict));
     const aesAlgorithmKeyGen = { name: 'AES-GCM', length: 256 };
     const aesAlgorithmEncrypt = { name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(16)) };
     if (!publicKeyPEM)
@@ -882,17 +902,15 @@ function decodeB64Url(input) {
     }
     return input;
 }
-//#endregion - crypto and translation stuff used by SBCrypto etc
-//#region - SBCrypto
-/******************************************************************************************************/
-/**
- * SBCrypto contains all the SB specific crypto functions. It should be the only area where
- * SB code uses subtle crypto directly.
+//#endregion - SBCryptoUtils
+/******************************************************************************************************
+ * SBCrypto contains all the SB specific crypto functions,
+ * as well as some general utility functions.
  *
  * @class
  * @constructor
  * @public
- */
+ ******************************************************************************************************/
 class SBCrypto {
     /**
      * Extracts (generates) public key from a private key.
@@ -1008,7 +1026,7 @@ class SBCrypto {
             if (bodyType === 'string') {
                 // console.log("wrap() got string:")
                 // console.log(b as string)
-                a = str2ab(b);
+                a = sbCrypto.str2ab(b);
             }
             else {
                 a = b;
@@ -1088,7 +1106,7 @@ class SBCrypto {
                 const _sign = base64ToArrayBuffer(sign);
                 // const encoder = new TextEncoder();
                 // const encoded = encoder.encode(contents);
-                const encoded = str2ab(contents);
+                const encoded = sbCrypto.str2ab(contents);
                 try {
                     crypto.subtle.verify('HMAC', verifyKey, _sign, encoded).then((verified) => {
                         resolve(verified);
@@ -1104,10 +1122,29 @@ class SBCrypto {
         });
     }
     /**
+   * Standardized 'str2ab()' function, string to array buffer.
+   * This assumes on byte per character.
+   *
+   * @param {string} string
+   * @return {Uint8Array} buffer
+   */
+    str2ab(string) {
+        return new TextEncoder().encode(string);
+    }
+    /**
+     * Standardized 'ab2str()' function, array buffer to string.
+     * This assumes one byte per character.
+     *
+     * @param {Uint8Array} buffer
+     * @return {string} string
+     */
+    ab2str(buffer) {
+        return new TextDecoder('utf-8').decode(buffer);
+    }
+    /**
      * SBCrypto.compareKeys()
      *
-     * Compare keys, true if the 'same', false if different.
-     * TODO: type it up.
+     * Compare JSON keys, true if the 'same', false if different.
      */
     compareKeys(key1, key2) {
         if (key1 != null && key2 != null && typeof key1 === 'object' && typeof key2 === 'object') {
@@ -1117,9 +1154,8 @@ class SBCrypto {
     }
 } /* SBCrypto */
 const sbCrypto = new SBCrypto();
-//#endregion - SBCrypto
-//#region - local decorators
 /******************************************************************************************************/
+//#region "Memoize and Ready decorators"
 function Memoize(target, propertyKey, descriptor) {
     if (descriptor.get) {
         let get = descriptor.get;
@@ -1175,7 +1211,7 @@ function VerifyParameters(_target, _propertyKey, descriptor) {
         return operation.call(this, ...args);
     };
 }
-//# endregion - local decorators
+//#endregion - local decorators
 /**
  * @class
  * @constructor
@@ -1198,7 +1234,7 @@ class SB384 {
      * corresponding information is not ready.
      *
      * Like most SB classes, SB384 follows the "ready template" design
-     * principle: the object is immediately available upon creation,
+     * pattern: the object is immediately available upon creation,
      * but isn't "ready" until it says it's ready. See `Channel Class`_
      * example below.
      *
@@ -1290,7 +1326,7 @@ class SB384 {
     /** @type {CryptoKeyPair} */ get keyPair() { return this.#keyPair; }
     /** @type {JsonWebKey}    */ get _id() { return JSON.stringify(this.exportable_pubKey); }
     /** @type {string}        */ get ownerChannelId() { return this.#ownerChannelId; }
-} /* class Identity */
+} /* class SB384 */
 __decorate([
     Memoize
 ], SB384.prototype, "readyFlag", null);
@@ -1539,11 +1575,11 @@ class Channel extends SB384 {
             }
             else {
                 this.sb384Ready.then((x) => {
-                    console.log('using this channelId');
-                    console.log(Object.assign({}, this));
-                    console.log(Object.assign({}, x));
-                    console.log(Object.assign({}, this.ownerChannelId));
-                    console.log(Object.assign({}, x));
+                    // console.log('using this channelId')
+                    // console.log(Object.assign({}, this))
+                    // console.log(Object.assign({}, x))
+                    // console.log(Object.assign({}, this.ownerChannelId))
+                    // console.log(Object.assign({}, x))
                     this.#channelId = this.ownerChannelId;
                     this.#ChannelReadyFlag = true;
                     resolve(this);
@@ -2420,7 +2456,7 @@ class StorageApi {
             console.log(payload);
             console.log(h);
             try {
-                let j = JSON.parse(ab2str(new Uint8Array(payload)));
+                let j = JSON.parse(sbCrypto.ab2str(new Uint8Array(payload)));
                 // normal operation is to break on the JSON.parse() and continue to finally clause
                 if (j.error)
                     reject(`#processData() error: ${j.error}`);
@@ -2980,7 +3016,7 @@ class ChannelApi {
         return new Promise(async (resolve, reject) => {
             // psm: need some "!"
             const shared_key = await sbCrypto.deriveKey(this.#channel.keys.privateKey, await sbCrypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
-            const _encrypted_locked_key = await sbCrypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.lockedKey)), shared_key);
+            const _encrypted_locked_key = await sbCrypto.encrypt(sbCrypto.str2ab(JSON.stringify(this.#channel.keys.lockedKey)), shared_key);
             fetch(this.#channelServer + this.#channel.channelId + '/acceptVisitor', {
                 method: 'POST',
                 body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
@@ -3343,4 +3379,4 @@ var SB = {
     SBCrypto: SBCrypto,
 };
 
-export { Channel, ChannelSocket, MessageBus, SB, SBCrypto, SBFile, SBMessage, Snackabra, _appendBuffer, _assertBase64, _sb_assert, _sb_exception, _sb_resolve, ab2str, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, compareBuffers, decodeB64Url, encodeB64Url, encryptedContentsMakeBinary, extractPayload, extractPayloadV1, getRandomValues, importPublicKey, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString, str2ab };
+export { Channel, ChannelSocket, MessageBus, SB, SBCrypto, SBFile, SBMessage, Snackabra, _appendBuffer, _assertBase64, _sb_assert, _sb_exception, _sb_resolve, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, compareBuffers, decodeB64Url, encodeB64Url, encryptedContentsMakeBinary, extractPayload, extractPayloadV1, getRandomValues, importPublicKey, jsonParseWrapper, packageEncryptDict, partition, simpleRand256, simpleRandomString };

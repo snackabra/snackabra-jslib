@@ -3,6 +3,9 @@
 
    "Snackabra" is a registered trademark
 
+   Snackabra SDK - Server
+   See https://snackabra.io for more information.
+
    This program is free software: you can redistribute it and/or
    modify it under the terms of the GNU Affero General Public License
    as published by the Free Software Foundation, either version 3 of
@@ -18,46 +21,8 @@
 
 */
 
-//#region header
 /******************************************************************************************************/
-
-/*
-  NOTE: public additional documentation on Snackabra, including this library,
-  is eventually published here:
-
-  https://snackabra.io
-
-  We are currently working on major overhaul to finalize "0.5.x", you
-  can access current state of it here:
-
-  https://snackabra-050-docs.readthedocs.io/en/latest/jslib.html
-
-*/
-
-/*
-
-  current tsc command-line settings:
-  tsc -t es2022 --pretty false --strict ./snackabra.ts
-
-  - Use decorators where appropriate
-    -https://www.typescriptlang.org/docs/handbook/decorators.html
-  
-
-  TODO list:
-  
-  * latest (fast) code for image loading etc is in the JS client:
-    384-snackabra-webclient/src/utils/ImageProcessor.js
-    384-snackabra-webclient/src/utils/ImageWorker.js
-    that JS code needs to carry over, below the "most modified"
-    parts of that code will throw an error
-
-  Long Term Todo:
-  * eventually defined the protocol, potentially registering with:
-    https://www.iana.org/assignments/websocket/websocket.xml#subprotocol-name
-
-*/
-//#endregion header
-
+//#region Interfaces
 /**
  * Interfaces
  */
@@ -140,9 +105,9 @@ interface WSProtocolOptions {
 
 type StorableDataType = string | number | bigint | boolean | symbol | object
 
-// TODO: get rid of all uses of this
-interface Dictionary {
-  [index: string]: any;
+// TODO: there are many uses of 'Dictionary<any>' that should be tightened up
+interface Dictionary<T> {
+  [index: string]: T;
 }
 
 // more of a placeholder for now
@@ -301,7 +266,6 @@ export interface EncryptedContentsBin {
   iv: Uint8Array,
 }
 
-
 /**
  * Force EncryptedContents object to binary (interface
  * supports either string or arrays)
@@ -375,6 +339,12 @@ interface ChannelEncryptedMessage {
 
 }
 
+export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted'
+
+//#endregion
+
+/******************************************************************************************************/
+//#region (COMMENTED OUT) code experimenting with types and protocols
 
 // interface ChannelEncryptedMessageArray {
 //   type: 'channelMessageArray',
@@ -384,7 +354,6 @@ interface ChannelEncryptedMessage {
 // mtg: we shouldn't need the export here because we are using them internally
 // export type ChannelMessage = ChannelMessage2 | ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray
 
-//#region (currently unused) code experimenting with types and protocols
 /******************************************************************************************************/
 
 // interface ChannelSystemMessage {
@@ -392,7 +361,6 @@ interface ChannelEncryptedMessage {
 //   _id: string,
 //   systemMessage: string,
 // }
-
 
 // type xChannelMessageType = 'ack' | 'system' | 'invalid' | 'ready'
 
@@ -426,10 +394,6 @@ interface ChannelEncryptedMessage {
 //   }
 // }
 
-//#endregion
-
-export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted'
-
 // interface ChannelMessage1 {
 //   // currently we can't do a regex match here, and i can't figure
 //   // out a more clever way of collapsing this.  TODO maybe we should
@@ -441,14 +405,16 @@ export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypt
 
 // export type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
 
-//#region - not so core stuff
+//#endregion
+
 /******************************************************************************************************/
+//#region - MessageBus class
 
 /**
  * SB simple events (mesage bus) class
  */
 export class MessageBus {
-  bus: Dictionary = {}
+  bus: Dictionary<any> = {}
 
   /**
    * Safely returns handler for any event
@@ -506,19 +472,12 @@ export class MessageBus {
   }
 */
 
+//#endregion
 
-/**
- * @fileoverview Main file for snackabra javascript utilities.
- *               See https://snackabra.io for details.
- * @package
- */
+/******************************************************************************************************/
+//#region - SB internal utility functions
 
-/* TODO - list of modules that main.js can now fully support:
-          (note: some MI-internal references)
-   m042/src/scripts/components/FormSubmission.js
-*/
-
-// the below general exception handler can be improved so us to
+// the below general exception handler might be improved to
 // retain the error stack, per:
 // https://stackoverflow.com/a/42755876
 // class RethrownError extends Error {
@@ -534,8 +493,6 @@ export class MessageBus {
 //   }
 // }
 // throw new RethrownError(`Oh no a "${error.message}" error`, error)
-
-
 
 export function _sb_exception(loc: string, msg: string) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
@@ -569,7 +526,8 @@ export function _sb_assert(val: unknown, msg: string) {
 
 //#endregion
 
-//#region - crypto and translation stuff used by SBCrypto etc
+/******************************************************************************************************/
+//#region - SBCryptoUtils - crypto and translation stuff used by SBCrypto etc
 /******************************************************************************************************/
 
 /**
@@ -643,27 +601,6 @@ function typedArrayToBuffer(array: Uint8Array): ArrayBuffer {
   }
 }
 
-/**
- * Standardized 'str2ab()' function, string to array buffer.
- * This assumes on byte per character.
- *
- * @param {string} string
- * @return {Uint8Array} buffer
- */
-export function str2ab(string: string): Uint8Array {
-  return new TextEncoder().encode(string);
-}
-
-/**
- * Standardized 'ab2str()' function, array buffer to string.
- * This assumes one byte per character.
- *
- * @param {Uint8Array} buffer 
- * @return {string} string
- */
-export function ab2str(buffer: Uint8Array): string {
-  return new TextDecoder('utf-8').decode(buffer);
-}
 
 /*
   we use URI/URL 'safe' characters in our b64 encoding to avoid having
@@ -830,9 +767,6 @@ export function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Uint8Array
   for (let i = 0; i < av.byteLength; i++)  if (av.getUint8(i) !== bv.getUint8(i)) return false
   return true
 }
-
-
-/** UTILS SECTION */
 
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
@@ -1050,8 +984,8 @@ export function cleanBase32mi(s: string) {
  * @param {callback} callback function, called with results
  *
  */
-export function packageEncryptDict(dict: Dictionary, publicKeyPEM: string, callback: CallableFunction) {
-  const clearDataArrayBufferView = str2ab(JSON.stringify(dict));
+export function packageEncryptDict(dict: Dictionary<any>, publicKeyPEM: string, callback: CallableFunction) {
+  const clearDataArrayBufferView = sbCrypto.str2ab(JSON.stringify(dict));
   const aesAlgorithmKeyGen = { name: 'AES-GCM', length: 256 };
   const aesAlgorithmEncrypt = { name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(16)) };
   if (!publicKeyPEM) publicKeyPEM = defaultPublicKeyPEM;
@@ -1145,9 +1079,9 @@ export function extractPayloadV1(payload: ArrayBuffer) {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
-    const metadata: Dictionary = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L476');
+    const metadata: Dictionary<any> = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L476');
     let startIndex = 4 + metadataSize;
-    const data: Dictionary = {};
+    const data: Dictionary<any> = {};
     for (const key in metadata) {
       if (data.key) {
         data[key] = payload.slice(startIndex, startIndex + metadata[key]);
@@ -1164,11 +1098,11 @@ export function extractPayloadV1(payload: ArrayBuffer) {
 /**
  * Assemble payload
  */
-export function assemblePayload(data: Dictionary): BodyInit | null {
+export function assemblePayload(data: Dictionary<any>): BodyInit | null {
   try {
     // console.log("assemblePayload():")
     // console.log(data)
-    const metadata: Dictionary = {};
+    const metadata: Dictionary<any> = {};
     metadata['version'] = '002';
     let keyCount = 0;
     let startIndex = 0;
@@ -1201,7 +1135,7 @@ export function assemblePayload(data: Dictionary): BodyInit | null {
  * to a JS object. This provides a binary encoding of any JSON,
  * and it allows some elements of the JSON to be raw (binary).
  */
-export function extractPayload(payload: ArrayBuffer): Dictionary {
+export function extractPayload(payload: ArrayBuffer): Dictionary<any> {
   try {
     // number of bytes of meta data (encoded as a 32-bit Uint)
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
@@ -1209,7 +1143,7 @@ export function extractPayload(payload: ArrayBuffer): Dictionary {
     const decoder = new TextDecoder();
     // extracts the string of meta data and parses
     // console.info('METADATASTRING: ', decoder.decode(payload.slice(4, 4 + metadataSize)));
-    const _metadata: Dictionary = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
+    const _metadata: Dictionary<any> = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L533');
     // console.info('METADATA EXTRACTED', JSON.stringify(_metadata))
     // console.log(_metadata)
     // calculate start of actual contents
@@ -1223,7 +1157,7 @@ export function extractPayload(payload: ArrayBuffer): Dictionary {
       }
       case '002': {
         // console.log('version 2')
-        const data: Dictionary = [];
+        const data: Dictionary<any> = [];
         for (let i = 1; i < Object.keys(_metadata).length; i++) {
           const _index = i.toString();
           if (_metadata[_index]) {
@@ -1233,7 +1167,7 @@ export function extractPayload(payload: ArrayBuffer): Dictionary {
             // console.info(propertyStartIndex);
             const size: number = _metadata[_index]['size'];
             // where to put it
-            const entry: Dictionary = _metadata[_index]
+            const entry: Dictionary<any> = _metadata[_index]
             // extracts contents - this supports raw data
             data[entry['name']] = payload.slice(startIndex + propertyStartIndex, startIndex + propertyStartIndex + size);
             // console.log(data[entry['name']])
@@ -1277,20 +1211,19 @@ export function decodeB64Url(input: string) {
   return input;
 }
 
-//#endregion - crypto and translation stuff used by SBCrypto etc
+//#endregion - SBCryptoUtils
 
-//#region - SBCrypto
-/******************************************************************************************************/
-
-/**
- * SBCrypto contains all the SB specific crypto functions. It should be the only area where
- * SB code uses subtle crypto directly.
+/******************************************************************************************************
+ * SBCrypto contains all the SB specific crypto functions,
+ * as well as some general utility functions.
  *
  * @class
  * @constructor
  * @public
- */
-class SBCrypto {
+ ******************************************************************************************************/
+
+class SBCrypto {  /************************************************************************************/
+
   /**
    * Extracts (generates) public key from a private key.
    */
@@ -1352,7 +1285,7 @@ class SBCrypto {
    */
   deriveKey(privateKey: CryptoKey, publicKey: CryptoKey, type: string, extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey> {
     return new Promise(async (resolve, reject) => {
-      const keyAlgorithms: Dictionary = {
+      const keyAlgorithms: Dictionary<any> = {
         AES: {
           name: 'AES-GCM', length: 256
         }, HMAC: {
@@ -1417,7 +1350,7 @@ class SBCrypto {
       if (bodyType === 'string') {
         // console.log("wrap() got string:")
         // console.log(b as string)
-        a = str2ab(b as string)
+        a = sbCrypto.str2ab(b as string)
       } else {
         a = b as ArrayBuffer
       }
@@ -1503,7 +1436,7 @@ class SBCrypto {
         const _sign = base64ToArrayBuffer(sign);
         // const encoder = new TextEncoder();
         // const encoded = encoder.encode(contents);
-        const encoded = str2ab(contents)
+        const encoded = sbCrypto.str2ab(contents)
         try {
           crypto.subtle.verify('HMAC', verifyKey, _sign, encoded).then((verified) => {
             resolve(verified)
@@ -1518,24 +1451,48 @@ class SBCrypto {
   }
 
   /**
+ * Standardized 'str2ab()' function, string to array buffer.
+ * This assumes on byte per character.
+ *
+ * @param {string} string
+ * @return {Uint8Array} buffer
+ */
+  str2ab(string: string): Uint8Array {
+    return new TextEncoder().encode(string);
+  }
+
+  /**
+   * Standardized 'ab2str()' function, array buffer to string.
+   * This assumes one byte per character.
+   *
+   * @param {Uint8Array} buffer 
+   * @return {string} string
+   */
+  ab2str(buffer: Uint8Array): string {
+    return new TextDecoder('utf-8').decode(buffer);
+  }
+
+
+  /**
    * SBCrypto.compareKeys()
    *
-   * Compare keys, true if the 'same', false if different.
-   * TODO: type it up.
+   * Compare JSON keys, true if the 'same', false if different.
    */
-  compareKeys(key1: Dictionary, key2: Dictionary): boolean {
+  compareKeys(key1: Dictionary<any>, key2: Dictionary<any>): boolean {
     if (key1 != null && key2 != null && typeof key1 === 'object' && typeof key2 === 'object') {
       return key1['x'] === key2['x'] && key1['y'] === key2['y'];
     }
     return false;
   }
+
 } /* SBCrypto */
 
 const sbCrypto = new SBCrypto();
-//#endregion - SBCrypto
 
-//#region - local decorators
 /******************************************************************************************************/
+
+
+//#region "Memoize and Ready decorators"
 
 function Memoize(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
   if (descriptor.get) {
@@ -1593,8 +1550,7 @@ function VerifyParameters(_target: any, _propertyKey: string, descriptor: Proper
   }
 }
 
-
-//# endregion - local decorators
+//#endregion - local decorators
 
 
 /**
@@ -1621,7 +1577,7 @@ class SB384 {
    * corresponding information is not ready.
    *  
    * Like most SB classes, SB384 follows the "ready template" design
-   * principle: the object is immediately available upon creation,
+   * pattern: the object is immediately available upon creation,
    * but isn't "ready" until it says it's ready. See `Channel Class`_
    * example below.
    * 
@@ -1715,7 +1671,7 @@ class SB384 {
   /** @type {JsonWebKey}    */ @Memoize @Ready get _id() { return JSON.stringify(this.exportable_pubKey) }
   /** @type {string}        */ @Memoize @Ready get ownerChannelId() { return this.#ownerChannelId }
 
-} /* class Identity */
+} /* class SB384 */
 
 
 interface SBMessageContents {
@@ -1838,7 +1794,7 @@ export class SBFile extends SBMessage {
   // contents: string = ''
   // senderPubKey: CryptoKey
   // sign: Promise<string>
-  data: Dictionary = {
+  data: Dictionary<string> = {
     previewImage: '',
     fullImage: ''
   }
@@ -1906,7 +1862,7 @@ abstract class Channel extends SB384 {
   abstract set onMessage(f: CallableFunction)
 
   #api!: ChannelApi
-  abstract adminData?: Dictionary // TODO: make into getter
+  abstract adminData?: Dictionary<any> // TODO: make into getter
 
   /**
    * Join a channel, returns channel object.
@@ -1984,11 +1940,11 @@ abstract class Channel extends SB384 {
         resolve(this)
       } else {
         this.sb384Ready.then((x) => {
-          console.log('using this channelId')
-          console.log(Object.assign({}, this))
-          console.log(Object.assign({}, x))
-          console.log(Object.assign({}, this.ownerChannelId))
-          console.log(Object.assign({}, x))
+          // console.log('using this channelId')
+          // console.log(Object.assign({}, this))
+          // console.log(Object.assign({}, x))
+          // console.log(Object.assign({}, this.ownerChannelId))
+          // console.log(Object.assign({}, x))
           this.#channelId = this.ownerChannelId!
           this.#ChannelReadyFlag = true
           resolve(this)
@@ -2090,10 +2046,10 @@ export class ChannelSocket extends Channel {
   #keys?: ChannelKeys
   #exportable_owner_pubKey: JsonWebKey | null = null
   #sbServer: SBServer
-  adminData?: Dictionary // TODO: add getter
+  adminData?: Dictionary<any> // TODO: add getter
   // #queue: Array<SBMessage> = [];
   #onMessage: (m: ChannelMessage) => void  // CallableFunction // the user message handler
-  #ack: Dictionary = []
+  #ack: Dictionary<any> = []
   #traceSocket: boolean = false
 
   /**
@@ -2122,7 +2078,7 @@ export class ChannelSocket extends Channel {
     this.ready = this.#readyPromise()
   }
 
-  close = () =>{
+  close = () => {
     return this.#ws.websocket.close()
   }
 
@@ -2302,7 +2258,7 @@ export class ChannelSocket extends Channel {
               ]).then((d) => {
                 // console.log("++++++++ readyPromise() getting adminData:")
                 // console.log(adminData)
-                this.adminData = d[0] as Dictionary
+                this.adminData = d[0] as Dictionary<any>
 
                 // TODO: until we have better logic here a shim from old code
                 this.admin = this.owner
@@ -2870,7 +2826,7 @@ class StorageApi {
   /**
    * StorageApi().storeData()
    */
-  storeData(type: string, fileId: string, iv: Uint8Array, salt: Uint8Array, storageToken: string, data: ArrayBuffer): Promise<Dictionary> {
+  storeData(type: string, fileId: string, iv: Uint8Array, salt: Uint8Array, storageToken: string, data: ArrayBuffer): Promise<Dictionary<any>> {
     // async function uploadImage(storageToken, encrypt_data, type, image_id, data)
     return new Promise((resolve, reject) => {
       fetch(this.server + '/storeData?type=' + type + '&key=' + ensureSafe(fileId), {
@@ -2911,7 +2867,7 @@ class StorageApi {
       console.log(payload)
       console.log(h)
       try {
-        let j = JSON.parse(ab2str(new Uint8Array(payload)))
+        let j = JSON.parse(sbCrypto.ab2str(new Uint8Array(payload)))
         // normal operation is to break on the JSON.parse() and continue to finally clause
         if (j.error) reject(`#processData() error: ${j.error}`)
       } catch (e) {
@@ -2967,37 +2923,37 @@ class StorageApi {
         if (!h) reject('invalid')
         // TODO: haven't tested this caching stuff .. moving from the refactored web client
         // _localStorage.getItem(`${h.id}_cache`).then((payload) => {
-          // if (payload) {
-          //   console.log("Found object in _localStorage")
-          //   resolve(this.#processData(base64ToArrayBuffer(payload), h))
-          // } else {
-            console.log("Object not cached, fetching from server. SBObjectHandle is:")
-            console.log(h)
-            if (typeof h.verification === 'string') h.verification = new Promise<string>((resolve) => { resolve(h.verification); })
-            h.verification.then((verificationToken) => {
-              console.log("verification token:")
-              console.log(verificationToken)
-              _sb_assert(verificationToken, "fetchData(): missing verification token (?)")
-              fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
-                .then((response: Response) => {
-                  if (!response.ok) reject(new Error('Network response was not OK'))
-                  // console.log(response)
-                  return response.arrayBuffer()
-                })
-                .then((payload: ArrayBuffer) => {
-                  resolve(this.#processData(payload, h))
-                })
+        // if (payload) {
+        //   console.log("Found object in _localStorage")
+        //   resolve(this.#processData(base64ToArrayBuffer(payload), h))
+        // } else {
+        console.log("Object not cached, fetching from server. SBObjectHandle is:")
+        console.log(h)
+        if (typeof h.verification === 'string') h.verification = new Promise<string>((resolve) => { resolve(h.verification); })
+        h.verification.then((verificationToken) => {
+          console.log("verification token:")
+          console.log(verificationToken)
+          _sb_assert(verificationToken, "fetchData(): missing verification token (?)")
+          fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
+            .then((response: Response) => {
+              if (!response.ok) reject(new Error('Network response was not OK'))
+              // console.log(response)
+              return response.arrayBuffer()
             })
-            // fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
-            //   .then((response: Response) => {
-            //     if (!response.ok) reject(new Error('Network response was not OK'))
-            //     // console.log(response)
-            //     return response.arrayBuffer()
-            //   })
-            //   .then((payload: ArrayBuffer) => {
-            //     resolve(this.#processData(payload, h))
-            //   })
-          // }
+            .then((payload: ArrayBuffer) => {
+              resolve(this.#processData(payload, h))
+            })
+        })
+        // fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
+        //   .then((response: Response) => {
+        //     if (!response.ok) reject(new Error('Network response was not OK'))
+        //     // console.log(response)
+        //     return response.arrayBuffer()
+        //   })
+        //   .then((payload: ArrayBuffer) => {
+        //     resolve(this.#processData(payload, h))
+        //   })
+        // }
         // })
       } catch (error) {
         reject(error)
@@ -3019,7 +2975,7 @@ class StorageApi {
    * retrieves an object from storage
    */
   async retrieveImage(imageMetaData: ImageMetaData,
-    controlMessages: Array<ChannelMessage>, imageId?: string, imageKey?: string, imageType?: SBObjectType): Promise<Dictionary> {
+    controlMessages: Array<ChannelMessage>, imageId?: string, imageKey?: string, imageType?: SBObjectType): Promise<Dictionary<any>> {
     console.trace("retrieveImage()")
     console.log(imageMetaData)
     const id = imageId ? imageId : imageMetaData.previewId;
@@ -3237,7 +3193,7 @@ class ChannelApi {
           reject(new Error('Network response was not OK'));
         }
         return response.json();
-      }).then((data: Dictionary) => {
+      }).then((data: Dictionary<any>) => {
         resolve(data.capacity);
       }).catch((e: Error) => {
         reject(e);
@@ -3259,7 +3215,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           if (data.error) {
             reject(new Error(data.error));
           }
@@ -3284,7 +3240,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           resolve(data.locked);
         }).catch((error: Error) => {
           reject(error);
@@ -3309,7 +3265,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           resolve(data);
         }).catch((error: Error) => {
           reject(error);
@@ -3339,7 +3295,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           if (data.error) {
             reject(new Error(data.error));
           }
@@ -3400,7 +3356,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           Promise.all(Object
             .keys(data)
             .filter((v) => {
@@ -3450,7 +3406,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           resolve(data);
         }).catch((error: Error) => {
           reject(error);
@@ -3458,7 +3414,7 @@ class ChannelApi {
     });
   }
 
-  authorize(ownerPublicKey: Dictionary, serverSecret: string) {
+  authorize(ownerPublicKey: Dictionary<any>, serverSecret: string) {
     return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel.channelId + '/authorizeRoom', {
         method: 'POST',
@@ -3470,7 +3426,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           resolve(data);
         }).catch((error: Error) => {
           reject(error);
@@ -3502,7 +3458,7 @@ class ChannelApi {
     });
   }
 
-  storageRequest(byteLength: number): Promise<Dictionary> {
+  storageRequest(byteLength: number): Promise<Dictionary<any>> {
     return new Promise((resolve, reject) => {
       fetch(this.#channelServer + this.#channel.channelId + '/storageRequest?size=' + byteLength, {
         method: 'GET', credentials: 'include', headers: {
@@ -3515,7 +3471,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           resolve(data);
         }).catch((error: Error) => {
           reject(error);
@@ -3533,7 +3489,7 @@ class ChannelApi {
         const _locked_key: CryptoKey = await crypto.subtle.generateKey({
           name: 'AES-GCM', length: 256
         }, true, ['encrypt', 'decrypt']);
-        const _exportable_locked_key: Dictionary = await crypto.subtle.exportKey('jwk', _locked_key);
+        const _exportable_locked_key: Dictionary<any> = await crypto.subtle.exportKey('jwk', _locked_key);
         fetch(this.#channelServer + this.#channel.channelId + '/lockRoom', {
           method: 'GET'
         })
@@ -3543,7 +3499,7 @@ class ChannelApi {
             }
             return response.json();
           })
-          .then(async (data: Dictionary) => {
+          .then(async (data: Dictionary<any>) => {
             if (data.locked) {
               await this.acceptVisitor(JSON.stringify(this.#channel.exportable_pubKey));
             }
@@ -3562,7 +3518,7 @@ class ChannelApi {
       // psm: need some "!"
       const shared_key = await sbCrypto.deriveKey(this.#channel.keys.privateKey,
         await sbCrypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
-      const _encrypted_locked_key = await sbCrypto.encrypt(str2ab(JSON.stringify(this.#channel.keys.lockedKey!)), shared_key)
+      const _encrypted_locked_key = await sbCrypto.encrypt(sbCrypto.str2ab(JSON.stringify(this.#channel.keys.lockedKey!)), shared_key)
       fetch(this.#channelServer + this.#channel.channelId + '/acceptVisitor', {
         method: 'POST',
         body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
@@ -3576,7 +3532,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           resolve(data);
         }).catch((error: Error) => {
           reject(error);
@@ -3599,7 +3555,7 @@ class ChannelApi {
           }
           return response.json();
         })
-        .then((data: Dictionary) => {
+        .then((data: Dictionary<any>) => {
           resolve(data);
         }).catch((error: Error) => {
           reject(error);
@@ -3907,19 +3863,19 @@ class Snackabra {
         //   name: 'ECDH',
         //   namedCurve: 'P-384'
         // }, true, ['deriveKey']);
-        const exportable_privateKey: Dictionary = await crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
-        const exportable_pubKey: Dictionary = await crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
+        const exportable_privateKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
+        const exportable_pubKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
         // const channelId: string = await this.#generateRoomId(exportable_pubKey.x, exportable_pubKey.y);
         const channelId = owner384.ownerChannelId!
         const encryptionKey: CryptoKey = await crypto.subtle.generateKey({
           name: 'AES-GCM',
           length: 256
         }, true, ['encrypt', 'decrypt']);
-        const exportable_encryptionKey: Dictionary = await crypto.subtle.exportKey('jwk', encryptionKey);
+        const exportable_encryptionKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', encryptionKey);
         const signKeyPair: CryptoKeyPair = await crypto.subtle.generateKey({
           name: 'ECDH', namedCurve: 'P-384'
         }, true, ['deriveKey']);
-        const exportable_signKey: Dictionary = await crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
+        const exportable_signKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
         const channelData: ChannelData = {
           roomId: channelId,
           ownerKey: JSON.stringify(exportable_pubKey),
@@ -3928,7 +3884,7 @@ class Snackabra {
           SERVER_SECRET: serverSecret
         };
         const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
-        let resp: Dictionary = await fetch(sbServer.channel_server + '/api/room/' + channelId + '/uploadRoom', {
+        let resp: Dictionary<any> = await fetch(sbServer.channel_server + '/api/room/' + channelId + '/uploadRoom', {
           method: 'POST',
           body: data
         });
@@ -3978,7 +3934,6 @@ class Snackabra {
 } /* class Snackabra */
 
 export {
-  // ChannelMessage,
   Channel,
   SBMessage,
   Snackabra,

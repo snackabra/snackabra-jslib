@@ -11,3 +11,4 @@ temp/
 .vscode/
 yarn.lock
 *.js.map
+src/snackabra.ts.html
