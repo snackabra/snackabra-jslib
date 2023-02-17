@@ -1,7 +1,7 @@
 {
     "name": "snackabra060",
     "//": "Pre-relase of 0.6.0 (version numbers will be 0.5.x)",
-    "version": "0.5.159",
+    "version": "0.5.160",
     "description": "Snackabra Core Library 0.5.x/0.6.0 ('jslib')",
     "type": "module",
     "main": "index.mjs",
