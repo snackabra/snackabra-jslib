@@ -18,8 +18,8 @@ export interface SBServer {
     channel_ws: string;
     storage_server: string;
 }
-interface Dictionary {
-    [index: string]: any;
+interface Dictionary<T> {
+    [index: string]: T;
 }
 export type SBChannelId = string;
 interface ChannelData {
@@ -148,15 +148,16 @@ export interface EncryptedContentsBin {
  * supports either string or arrays)
  */
 export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
-/******************************************************************************************************/
 export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
+/******************************************************************************************************/
+/******************************************************************************************************/
 /******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
  */
 export declare class MessageBus {
     #private;
-    bus: Dictionary;
+    bus: Dictionary<any>;
     /**
      * Subscribe. 'event' is a string, special case '*' means everything
      *  (in which case the handler is also given the message)
@@ -171,14 +172,11 @@ export declare class MessageBus {
      */
     publish(event: string, ...args: unknown[]): void;
 }
-/**
- * @fileoverview Main file for snackabra javascript utilities.
- *               See https://snackabra.io for details.
- * @package
- */
+/******************************************************************************************************/
 export declare function _sb_exception(loc: string, msg: string): void;
 export declare function _sb_resolve(val: any): any;
 export declare function _sb_assert(val: unknown, msg: string): void;
+/******************************************************************************************************/
 /******************************************************************************************************/
 /**
  * Fills buffer with random data
@@ -189,22 +187,6 @@ export declare function getRandomValues(buffer: Uint8Array): Uint8Array;
  * Works same on browsers and nodejs.
  */
 export declare function _assertBase64(base64: string): boolean;
-/**
- * Standardized 'str2ab()' function, string to array buffer.
- * This assumes on byte per character.
- *
- * @param {string} string
- * @return {Uint8Array} buffer
- */
-export declare function str2ab(string: string): Uint8Array;
-/**
- * Standardized 'ab2str()' function, array buffer to string.
- * This assumes one byte per character.
- *
- * @param {Uint8Array} buffer
- * @return {string} string
- */
-export declare function ab2str(buffer: Uint8Array): string;
 /**
  * Standardized 'atob()' function, e.g. takes the a Base64 encoded
  * input and decodes it. Note: always returns Uint8Array.
@@ -219,7 +201,6 @@ export declare function base64ToArrayBuffer(str: string): Uint8Array;
  * Compare buffers
  */
 export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Uint8Array | ArrayBuffer | null): boolean;
-/** UTILS SECTION */
 /**
  * Standardized 'btoa()'-like function, e.g., takes a binary string
  * ('b') and returns a Base64 encoded version ('a' used to be short
@@ -308,7 +289,7 @@ export declare function cleanBase32mi(s: string): string;
  * @param {callback} callback function, called with results
  *
  */
-export declare function packageEncryptDict(dict: Dictionary, publicKeyPEM: string, callback: CallableFunction): void;
+export declare function packageEncryptDict(dict: Dictionary<any>, publicKeyPEM: string, callback: CallableFunction): void;
 /**
  * Partition
  */
@@ -322,17 +303,17 @@ export declare function jsonParseWrapper(str: string, loc: string): any;
 /**
  * Deprecated (older version of payloads, for older channels)
  */
-export declare function extractPayloadV1(payload: ArrayBuffer): Dictionary;
+export declare function extractPayloadV1(payload: ArrayBuffer): Dictionary<any>;
 /**
  * Assemble payload
  */
-export declare function assemblePayload(data: Dictionary): BodyInit | null;
+export declare function assemblePayload(data: Dictionary<any>): BodyInit | null;
 /**
  * Extract payload - this decodes from our binary (wire) format
  * to a JS object. This provides a binary encoding of any JSON,
  * and it allows some elements of the JSON to be raw (binary).
  */
-export declare function extractPayload(payload: ArrayBuffer): Dictionary;
+export declare function extractPayload(payload: ArrayBuffer): Dictionary<any>;
 /**
  * Encode into b64 URL
  */
@@ -341,15 +322,14 @@ export declare function encodeB64Url(input: string): string;
  * Decode b64 URL
  */
 export declare function decodeB64Url(input: string): string;
-/******************************************************************************************************/
-/**
- * SBCrypto contains all the SB specific crypto functions. It should be the only area where
- * SB code uses subtle crypto directly.
+/******************************************************************************************************
+ * SBCrypto contains all the SB specific crypto functions,
+ * as well as some general utility functions.
  *
  * @class
  * @constructor
  * @public
- */
+ ******************************************************************************************************/
 declare class SBCrypto {
     /**
      * Extracts (generates) public key from a private key.
@@ -405,12 +385,27 @@ declare class SBCrypto {
      */
     verify(verifyKey: CryptoKey, sign: string, contents: string): Promise<boolean>;
     /**
+   * Standardized 'str2ab()' function, string to array buffer.
+   * This assumes on byte per character.
+   *
+   * @param {string} string
+   * @return {Uint8Array} buffer
+   */
+    str2ab(string: string): Uint8Array;
+    /**
+     * Standardized 'ab2str()' function, array buffer to string.
+     * This assumes one byte per character.
+     *
+     * @param {Uint8Array} buffer
+     * @return {string} string
+     */
+    ab2str(buffer: Uint8Array): string;
+    /**
      * SBCrypto.compareKeys()
      *
-     * Compare keys, true if the 'same', false if different.
-     * TODO: type it up.
+     * Compare JSON keys, true if the 'same', false if different.
      */
-    compareKeys(key1: Dictionary, key2: Dictionary): boolean;
+    compareKeys(key1: Dictionary<any>, key2: Dictionary<any>): boolean;
 }
 /**
  * @class
@@ -429,7 +424,7 @@ declare class SB384 {
      * corresponding information is not ready.
      *
      * Like most SB classes, SB384 follows the "ready template" design
-     * principle: the object is immediately available upon creation,
+     * pattern: the object is immediately available upon creation,
      * but isn't "ready" until it says it's ready. See `Channel Class`_
      * example below.
      *
@@ -492,7 +487,7 @@ declare class SBMessage {
  */
 export declare class SBFile extends SBMessage {
     #private;
-    data: Dictionary;
+    data: Dictionary<string>;
     image: string;
     image_sign: string;
     imageMetaData: ImageMetaData;
@@ -512,7 +507,7 @@ declare abstract class Channel extends SB384 {
     abstract get keys(): ChannelKeys;
     abstract send(m: SBMessage | string, messageType?: 'string' | 'SBMessage'): Promise<string>;
     abstract set onMessage(f: CallableFunction);
-    abstract adminData?: Dictionary;
+    abstract adminData?: Dictionary<any>;
     /**
      * Join a channel, returns channel object.
      *
@@ -592,7 +587,7 @@ declare abstract class Channel extends SB384 {
 export declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
-    adminData?: Dictionary;
+    adminData?: Dictionary<any>;
     /**
      * ChannelSocket
      *
@@ -685,7 +680,7 @@ declare class StorageApi {
     /**
      * StorageApi().storeData()
      */
-    storeData(type: string, fileId: string, iv: Uint8Array, salt: Uint8Array, storageToken: string, data: ArrayBuffer): Promise<Dictionary>;
+    storeData(type: string, fileId: string, iv: Uint8Array, salt: Uint8Array, storageToken: string, data: ArrayBuffer): Promise<Dictionary<any>>;
     /**
      * StorageApi().storeImage()
      */
@@ -703,7 +698,7 @@ declare class StorageApi {
      * StorageApi().retrieveData()
      * retrieves an object from storage
      */
-    retrieveImage(imageMetaData: ImageMetaData, controlMessages: Array<ChannelMessage>, imageId?: string, imageKey?: string, imageType?: SBObjectType): Promise<Dictionary>;
+    retrieveImage(imageMetaData: ImageMetaData, controlMessages: Array<ChannelMessage>, imageId?: string, imageKey?: string, imageType?: SBObjectType): Promise<Dictionary<any>>;
 }
 /**
  * Channel API
@@ -755,11 +750,11 @@ declare class ChannelApi {
      */
     downloadData(): Promise<unknown>;
     uploadChannel(channelData: ChannelData): Promise<unknown>;
-    authorize(ownerPublicKey: Dictionary, serverSecret: string): Promise<unknown>;
+    authorize(ownerPublicKey: Dictionary<any>, serverSecret: string): Promise<unknown>;
     postPubKey(_exportable_pubKey: JsonWebKey): Promise<{
         success: boolean;
     }>;
-    storageRequest(byteLength: number): Promise<Dictionary>;
+    storageRequest(byteLength: number): Promise<Dictionary<any>>;
     lock(): Promise<unknown>;
     acceptVisitor(pubKey: string): Promise<unknown>;
     ownerKeyRotation(): Promise<unknown>;
