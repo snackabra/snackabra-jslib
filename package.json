@@ -1,8 +1,8 @@
 {
-    "name": "snackabra",
-    "//": "this is pre-relase of 0.6.0, effectively",
+    "name": "snackabra060",
+    "//": "Pre-relase of 0.6.0 (version numbers will be 0.5.x)",
     "version": "0.5.159",
-    "description": "Snackabra Core Library 0.5.x ('jslib')",
+    "description": "Snackabra Core Library 0.5.x/0.6.0 ('jslib')",
     "type": "module",
     "main": "index.mjs",
     "types": "index.d.ts",
@@ -26,12 +26,12 @@
         "file",
         "share"
     ],
-    "author": "Magnusson Institute and 384co",
+    "author": "384, Inc",
     "license": "GPL-3.0-only",
     "bugs": {
         "url": "https://github.com/snackabra/snackabra-jslib/issues"
     },
-    "homepage": "https://snackabra.io",
+    "homepage": "https://snackabra-050-docs.readthedocs.io/en/latest/",
     "browser": {
         "./index.mjs": "./browser.mjs"
     },

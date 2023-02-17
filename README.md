@@ -1,5 +1,48 @@
 <img src="https://user-images.githubusercontent.com/844289/156240563-cfa8d1ff-fd55-43d7-a867-e9e7c77d183e.svg" width="100">
 
+## Version Numbering
+
+SB follows the following version numbering system for ''vA.B.C'':
+
+* ''A'' of zero means alpha/beta, first production will be ''1''.
+  If ''A'' is odd or even currently has no special meaning.
+
+* If ''B'' is odd it's a pre-release for the next version
+  of ''B+1''. Thus ''0.5.nnn'' is a pre-release for the _next_
+  ''0.6''. 
+
+* ''C'' is sequence number.
+
+So for example, currently ''0.5.159'' is a pre-release for 
+''0.6.0'', because no ''0.6'' has been released.
+
+Optionally, a repo might be called "snackabraABC" for major
+changes, for example ''0.5.159'' is currently released as
+''snackabra060-0.5.159''.
+
+A few notes / reiterations:
+
+* there is no specific relationship between a pre-release
+  and the next stable. For example ''0.5.185'' might be the last
+  pre-release before ''0.6.0'', and ''0.5.203'' might later
+  be the last pre-release before ''0.6.1''.
+
+* odd vs even only has meaning for the middle version
+  number (''B'').
+
+* you can always pick the highest version number and you will
+  get most recent and stable version.
+
+* you can always pick the highest ''a.b.c'' where ''b'' is
+  _odd_ and you will get the latest development versions.
+
+* if (and only if) ''B'' is _even_, then ''A.B.n+1'' will
+  try the hardest not to have breaking changes from ''A.B.n''.
+
+* conversely, if ''B'' is _odd_, then ''A.B.m'' can have
+  any sort of breaking changes vs any ''A.B.n'' where m is
+  greater than n.
+
 # Snackabra Javascript Library
 
 JSDOC is used for javascript documentation. See
