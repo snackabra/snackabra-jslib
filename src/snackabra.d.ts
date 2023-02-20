@@ -172,7 +172,6 @@ export declare class MessageBus {
      */
     publish(event: string, ...args: unknown[]): void;
 }
-/******************************************************************************************************/
 export declare function _sb_exception(loc: string, msg: string): void;
 export declare function _sb_resolve(val: any): any;
 export declare function _sb_assert(val: unknown, msg: string): void;
@@ -596,7 +595,7 @@ export declare class ChannelSocket extends Channel {
      * */
     constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string);
     close: () => void;
-    get status(): "CONNECTING" | "OPEN" | "CLOSING" | "CLOSED";
+    get status(): "CLOSED" | "CONNECTING" | "OPEN" | "CLOSING";
     set onMessage(f: (m: ChannelMessage) => void);
     set enableTrace(b: boolean);
     get onMessage(): (m: ChannelMessage) => void;

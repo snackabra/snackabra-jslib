@@ -12,3 +12,5 @@ temp/
 yarn.lock
 *.js.map
 src/snackabra.ts.html
+scratch
+scratch/
