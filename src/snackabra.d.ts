@@ -407,6 +407,7 @@ declare class SBCrypto {
     compareKeys(key1: Dictionary<any>, key2: Dictionary<any>): boolean;
 }
 /**
+ *
  * @class
  * @constructor
  * @public

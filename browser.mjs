@@ -14,35 +14,7 @@
    This program is distributed in the hope that it will be useful, but
    WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-   Affero General Public License for   SBFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const _headers = new Headers();
-    _headers.append('Content-Type', 'application/octet-stream');
-    if (init && init.headers) {
-      for (const [key, value] of init.headers.entries()) {
-        _headers.append(key, value);
-      }
-    }
-    const _init = {
-      method: 'POST',
-      headers: _headers,
-      body: init && init.body ? init.body : null
-    }
-    return fetch(input, _init);
-   }  SBFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-    const _headers = new Headers();
-    _headers.append('Content-Type', 'application/octet-stream');
-    if (init && init.headers) {
-      for (const [key, value] of init.headers.entries()) {
-        _headers.append(key, value);
-      }
-    }
-    const _init = {
-      method: 'POST',
-      headers: _headers,
-      body: init && init.body ? init.body : null
-    }
-    return fetch(input, _init);
-   }more details.
+   Affero General Public License for more details.
 
    You should have received a copy of the GNU Affero General Public
    License along with this program.  If not, see www.gnu.org/licenses/
@@ -61,6 +33,12 @@ var __decorate = (undefined && undefined.__decorate) || function (decorators, ta
  */
 const SBKnownServers = [
     {
+        // Preview Servers
+        channel_server: 'https://channel.384co.workers.dev',
+        channel_ws: 'wss://channel.384co.workers.dev',
+        storage_server: 'https://storage.384co.workers.dev'
+    },
+    {
         // local (miniflare) servers
         channel_server: 'http://localhost:4001',
         channel_ws: 'ws://localhost:4001',
@@ -71,12 +49,6 @@ const SBKnownServers = [
         channel_server: 'https://r.384co.workers.dev',
         channel_ws: 'wss://r.384co.workers.dev',
         storage_server: 'https://s.384co.workers.dev'
-    },
-    {
-        // Preview Servers
-        channel_server: 'https://channel.384co.workers.dev',
-        channel_ws: 'wss://channel.384co.workers.dev',
-        storage_server: 'https://storage.384co.workers.dev'
     },
 ];
 /**
@@ -250,7 +222,7 @@ class MessageBus {
 //#region - SB internal utility functions
 function SBFetch(input, init) {
     if (navigator.onLine === false)
-        return Promise.reject(new Error("offline"));
+        return Promise.reject(new Error("you are offline"));
     else
         return fetch(input, init);
 }
@@ -1247,8 +1219,25 @@ function VerifyParameters(_target, _propertyKey, descriptor) {
         return operation.call(this, ...args);
     };
 }
+/**
+ * Online decorator - throws an error if the browser is not online.
+ *
+ * @param _target
+ * @param _propertyKey
+ * @param descriptor
+ */
+function Online(_target, _propertyKey, descriptor) {
+    const operation = descriptor.value;
+    descriptor.value = function (...args) {
+        if (navigator.onLine)
+            return operation.call(this, ...args);
+        else
+            return new Promise((_resolve, reject) => reject("offline"));
+    };
+}
 //#endregion - local decorators
 /**
+ *
  * @class
  * @constructor
  * @public
@@ -2281,7 +2270,7 @@ class StorageApi {
     }
     #_allocateObject(image_id, type) {
         return new Promise((resolve, reject) => {
-            fetch(this.server + "/storeRequest?name=" + image_id + "&type=" + type)
+            SBFetch(this.server + "/storeRequest?name=" + image_id + "&type=" + type)
                 .then((r) => { /* console.log('got storage reply:'); console.log(r); */ return r.arrayBuffer(); })
                 .then((b) => {
                 // console.log('got b back:')
@@ -2305,7 +2294,7 @@ class StorageApi {
             this.#getObjectKey(keyData, salt).then((key) => {
                 sbCrypto.encrypt(image, key, iv, 'arrayBuffer').then((data) => {
                     // const storageTokenReq = await(await 
-                    fetch(this.channelServer + roomId + '/storageRequest?size=' + data.byteLength)
+                    SBFetch(this.channelServer + roomId + '/storageRequest?size=' + data.byteLength)
                         .then((r) => r.json())
                         .then((storageTokenReq) => {
                         if (storageTokenReq.hasOwnProperty('error'))
@@ -2448,7 +2437,7 @@ class StorageApi {
      */
     storeRequest(fileId) {
         return new Promise((resolve, reject) => {
-            fetch(this.server + '/storeRequest?name=' + fileId)
+            SBFetch(this.server + '/storeRequest?name=' + fileId)
                 .then((response) => {
                 if (!response.ok) {
                     reject(new Error('Network response was not OK'));
@@ -2468,7 +2457,7 @@ class StorageApi {
     storeData(type, fileId, iv, salt, storageToken, data) {
         // async function uploadImage(storageToken, encrypt_data, type, image_id, data)
         return new Promise((resolve, reject) => {
-            fetch(this.server + '/storeData?type=' + type + '&key=' + ensureSafe(fileId), {
+            SBFetch(this.server + '/storeData?type=' + type + '&key=' + ensureSafe(fileId), {
                 // psm: need to clean up these types
                 method: 'POST',
                 body: assemblePayload({
@@ -2577,7 +2566,7 @@ class StorageApi {
                     console.log("verification token:");
                     console.log(verificationToken);
                     _sb_assert(verificationToken, "fetchData(): missing verification token (?)");
-                    fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
+                    SBFetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
                         .then((response) => {
                         if (!response.ok)
                             reject(new Error('Network response was not OK'));
@@ -2675,7 +2664,7 @@ class ChannelApi {
      */
     getLastMessageTimes() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelApi + '/getLastMessageTimes', {
+            SBFetch(this.#channelApi + '/getLastMessageTimes', {
                 method: 'POST', body: JSON.stringify([this.#channel.channelId])
             }).then((response) => {
                 if (!response.ok) {
@@ -2701,7 +2690,7 @@ class ChannelApi {
         // console.log("warning: this might throw an exception on keys() if ChannelSocket is not ready")
         return new Promise((resolve, reject) => {
             // const encryptionKey = this.#channel.keys.encryptionKey
-            fetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength, {
                 method: 'GET',
             }).then((response) => {
                 if (!response.ok) {
@@ -2731,7 +2720,7 @@ class ChannelApi {
      */
     updateCapacity(capacity) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channelId + '/updateRoomCapacity?capacity=' + capacity, {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/updateRoomCapacity?capacity=' + capacity, {
                 method: 'GET', credentials: 'include'
             }).then((response) => {
                 if (!response.ok) {
@@ -2750,7 +2739,7 @@ class ChannelApi {
      */
     getCapacity() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channelId + '/getRoomCapacity', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/getRoomCapacity', {
                 method: 'GET', credentials: 'include'
             }).then((response) => {
                 if (!response.ok) {
@@ -2769,7 +2758,7 @@ class ChannelApi {
      */
     getJoinRequests() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channelId + '/getJoinRequests', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/getJoinRequests', {
                 method: 'GET', credentials: 'include'
             })
                 .then((response) => {
@@ -2826,7 +2815,7 @@ class ChannelApi {
     setMOTD(motd) {
         return new Promise((resolve, reject) => {
             //if (this.#channel.owner) {
-            fetch(this.#channelServer + this.#channel.channelId + '/motd', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/motd', {
                 method: 'POST', body: JSON.stringify({ motd: motd }), headers: {
                     'Content-Type': 'application/json'
                 }
@@ -2855,7 +2844,7 @@ class ChannelApi {
             //if (this.#channel.owner) {
             const token_data = new Date().getTime().toString();
             const token_sign = await sbCrypto.sign(this.#channel.keys.channelSignKey, token_data);
-            fetch(this.#channelServer + this.#channel.channelId + '/getAdminData', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/getAdminData', {
                 method: 'GET', credentials: 'include', headers: {
                     'authorization': token_data + '.' + token_sign, 'Content-Type': 'application/json'
                 }
@@ -2911,7 +2900,7 @@ class ChannelApi {
      */
     downloadData() {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channelId + '/downloadData', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/downloadData', {
                 method: 'GET',
                 // mtg: quick fix for issue with cors
                 // credentials: 'include',
@@ -2962,7 +2951,7 @@ class ChannelApi {
     }
     uploadChannel(channelData) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channelId + '/uploadRoom', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/uploadRoom', {
                 method: 'POST', body: JSON.stringify(channelData), headers: {
                     'Content-Type': 'application/json'
                 }
@@ -2982,7 +2971,7 @@ class ChannelApi {
     }
     authorize(ownerPublicKey, serverSecret) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channelId + '/authorizeRoom', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/authorizeRoom', {
                 method: 'POST',
                 body: JSON.stringify({ roomId: this.#channel.channelId, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey })
             })
@@ -3002,7 +2991,7 @@ class ChannelApi {
     // we post our pub key if we're first
     postPubKey(_exportable_pubKey) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channelId + '/postPubKey?type=guestKey', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/postPubKey?type=guestKey', {
                 method: 'POST',
                 body: JSON.stringify(_exportable_pubKey),
                 headers: {
@@ -3024,7 +3013,7 @@ class ChannelApi {
     }
     storageRequest(byteLength) {
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channelId + '/storageRequest?size=' + byteLength, {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/storageRequest?size=' + byteLength, {
                 method: 'GET', credentials: 'include', headers: {
                     'Content-Type': 'application/json'
                 }
@@ -3052,7 +3041,7 @@ class ChannelApi {
                     name: 'AES-GCM', length: 256
                 }, true, ['encrypt', 'decrypt']);
                 const _exportable_locked_key = await crypto.subtle.exportKey('jwk', _locked_key);
-                fetch(this.#channelServer + this.#channel.channelId + '/lockRoom', {
+                SBFetch(this.#channelServer + this.#channel.channelId + '/lockRoom', {
                     method: 'GET'
                 })
                     .then((response) => {
@@ -3079,7 +3068,7 @@ class ChannelApi {
             // psm: need some "!"
             const shared_key = await sbCrypto.deriveKey(this.#channel.keys.privateKey, await sbCrypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
             const _encrypted_locked_key = await sbCrypto.encrypt(sbCrypto.str2ab(JSON.stringify(this.#channel.keys.lockedKey)), shared_key);
-            fetch(this.#channelServer + this.#channel.channelId + '/acceptVisitor', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/acceptVisitor', {
                 method: 'POST',
                 body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
                 headers: {
@@ -3103,7 +3092,7 @@ class ChannelApi {
     ownerKeyRotation() {
         console.trace("WARNING: ownerKeyRotation() on channel api has not been tested/debugged fully ..");
         return new Promise((resolve, reject) => {
-            fetch(this.#channelServer + this.#channel.channelId + '/ownerKeyRotation', {
+            SBFetch(this.#channelServer + this.#channel.channelId + '/ownerKeyRotation', {
                 method: 'GET', credentials: 'include', headers: {
                     'Content-Type': 'application/json'
                 }
@@ -3391,7 +3380,7 @@ class Snackabra {
                     SERVER_SECRET: serverSecret
                 };
                 const data = new TextEncoder().encode(JSON.stringify(channelData));
-                let resp = await fetch(sbServer.channel_server + '/api/room/' + channelId + '/uploadRoom', {
+                let resp = await SBFetch(sbServer.channel_server + '/api/room/' + channelId + '/uploadRoom', {
                     method: 'POST',
                     body: data
                 });
@@ -3434,6 +3423,9 @@ class Snackabra {
         this.storage.saveFile(this.#channel, file);
     }
 } /* class Snackabra */
+__decorate([
+    Online
+], Snackabra.prototype, "connect", null);
 var SB = {
     Snackabra: Snackabra,
     SBMessage: SBMessage,
