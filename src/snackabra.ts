@@ -125,8 +125,6 @@ interface ImageMetaData {
   previewSalt?: string
 }
 
-
-
 /**
 @typedef {import("./snackabra.d.ts").ChannelMessage} ChannelMessage
 */
@@ -182,7 +180,6 @@ interface ChannelAckMessage {
   type: 'ack',
   _id: string,
 }
-
 
 /** sample channelKeys contents
  * 
@@ -264,19 +261,6 @@ export interface EncryptedContentsBin {
  * supports either string or arrays)
  */
 export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin {
-  // TODO:
-  // i think i'll write a generic helper eg 'toUint8Array' that can handle lots
-  // of different messy JS objects, figure out what they are, and convert to a 
-  // clean Uint8Array object. so far what i come across is: (a) base64 string (and
-  // there are some variations of encoding), (b) a 'binary string', (c) a dictionary
-  // of entries (e.g. '{0: 42, 1: 178, 2:130' etc). conceivably there are other
-  // messy ones (e.g. just an array [42, 178, 130, ...]). such a helper would
-  // replace base64ToArrayBuffer(), decodeURIComponent(), str2ab(), and of course
-  // this function here.
-
-  // console.log("encryptedContentsMakeBinary():")
-  // console.log(o)
-
   let t: ArrayBuffer
   let iv: Uint8Array
   if (typeof o.content === 'string') {
@@ -336,69 +320,7 @@ export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypt
 
 //#endregion
 
-/******************************************************************************************************/
-//#region (COMMENTED OUT) code experimenting with types and protocols
 
-// interface ChannelEncryptedMessageArray {
-//   type: 'channelMessageArray',
-//   messages: ChannelEncryptedMessageArray[]
-// }
-
-// mtg: we shouldn't need the export here because we are using them internally
-// export type ChannelMessage = ChannelMessage2 | ChannelKeysMessage | ChannelEncryptedMessage | ChannelEncryptedMessageArray
-
-/******************************************************************************************************/
-
-// interface ChannelSystemMessage {
-//   type: 'system',
-//   _id: string,
-//   systemMessage: string,
-// }
-
-// type xChannelMessageType = 'ack' | 'system' | 'invalid' | 'ready'
-
-// interface xChannelMessage {
-//   // type: 'ack'
-//   type: xChannelMessageType,
-//   _id: string
-// }
-
-// interface xChannelMessage {
-//   // type: 'system'
-//   type: xChannelMessageType,
-//   _id: string,
-//   systemMessage: string
-// }
-
-// // demo / example / testing
-// export function f(v: ChannelMessage): ChannelKeysMessage | null {
-//   if (v!.type === 'channelKeys') {
-//     return v as ChannelKeysMessage
-//   } else {
-//     return null
-//   }
-// }
-
-// export function g(v: xChannelMessage) {
-//   if (v.type === 'system') {
-//     return v
-//   } else {
-//     return null
-//   }
-// }
-
-// interface ChannelMessage1 {
-//   // currently we can't do a regex match here, and i can't figure
-//   // out a more clever way of collapsing this.  TODO maybe we should
-//   // change the message format
-//   [key: string]: ChannelMessage2,
-
-//   message: { [prop: string]: any },
-// }
-
-// export type ChannelMessageV1 = ChannelMessage1 | ChannelMessage2 | ChannelAckMessage
-
-//#endregion
 
 /******************************************************************************************************/
 //#region - MessageBus class
@@ -453,18 +375,6 @@ export class MessageBus {
   }
 }
 
-/*
-  For possible future use with cleaner identifiers:
-
-  * #uniqueID() {
-    let i = 0;
-    while (true) {
-      i += 1;
-      yield i;
-    }
-  }
-*/
-
 //#endregion
 
 /******************************************************************************************************/
@@ -472,7 +382,8 @@ export class MessageBus {
 
 function SBFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   if (navigator.onLine === false) return Promise.reject(new Error("you are offline"))
-  else return fetch(input, init)
+  else if (init) return fetch(input, init)
+  else return fetch(input, { method: 'GET', credentials: 'include' })
 }
 
 function WrapError(e: any) {
@@ -608,7 +519,6 @@ function typedArrayToBuffer(array: Uint8Array): ArrayBuffer {
   }
 }
 
-
 /*
   we use URI/URL 'safe' characters in our b64 encoding to avoid having
   to perform URI encoding, which also avoids issues with composed URI
@@ -729,35 +639,6 @@ function encodeChunk(lookup: string[], view: DataView, start: number, end: numbe
   return output.join('');
 }
 
-// /* ALTERNATIVE solution below, just needs some typescripting */
-//
-// const b64ch = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=';
-// const b64chs = Array.prototype.slice.call(b64ch);
-// const b64tab = ((a) => {
-//   const tab = {};
-//   a.forEach((c, i) => tab[c] = i);
-//   return tab;
-// })(b64chs);
-//
-// function base64ToArrayBuffer(asc) {
-//   asc = asc.replace(/\s+/g, ''); // collapse any whitespace
-//   asc += '=='.slice(2 - (asc.length & 3)); // make it tolerant of padding
-//   if (!_assertBase64(asc)) throw new Error('Invalid Character');
-//   if (process.browser) {
-//     // we could use window.atob but chose not to
-//     let u24, bin = '', r1, r2;
-//     for (let i = 0; i < asc.length;) {
-//       u24 = b64tab[asc.charAt(i++)] << 18 | b64tab[asc.charAt(i++)] << 12 | (r1 = b64tab[asc.charAt(i++)]) << 6 | (r2 = b64tab[asc.charAt(i++)]);
-//       bin += r1 === 64 ? _fromCC(u24 >> 16 & 255) : r2 === 64 ? _fromCC(u24 >> 16 & 255, u24 >> 8 & 255) : _fromCC(u24 >> 16 & 255, u24 >> 8 & 255, u24 & 255);
-//     }
-//     return str2ab(bin);
-//   } else {
-//     return _U8Afrom(Buffer.from(asc, 'base64'));
-//   }
-// }
-
-// TODO: we might want an SB class for what SB thinks of as buffers
-
 const bs2dv = (bs: BufferSource) => bs instanceof ArrayBuffer
   ? new DataView(bs)
   : new DataView(bs.buffer, bs.byteOffset, bs.byteLength)
@@ -830,78 +711,18 @@ export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, var
   }
 }
 
-// /* ALTERNATIVE implementation to above (not yet typescripted) */
-// const _fromCC = String.fromCharCode.bind(String);
-// const _U8Afrom = (it, fn = (x) => x) => new Uint8Array(Array.prototype.slice.call(it, 0).map(fn));
-// function arrayBufferToBase64(buffer) {
-//   const u8a = new Uint8Array(buffer);
-//   if (process.browser) {
-//     // we could use window.btoa but chose not to
-//     let u32, c0, c1, c2, asc = '';
-//     const maxargs = 0x1000;
-//     const strs = [];
-//     for (let i = 0, l = u8a.length; i < l; i += maxargs) strs.push(_fromCC.apply(null, u8a.subarray(i, i + maxargs)));
-//     const bin = strs.join('');
-//     const pad = bin.length % 3;
-//     for (let i = 0; i < bin.length;) {
-//       if ((c0 = bin.charCodeAt(i++)) > 255 || (c1 = bin.charCodeAt(i++)) > 255 || (c2 = bin.charCodeAt(i++)) > 255) throw new Error('Invalid Character');
-//       u32 = (c0 << 16) | (c1 << 8) | c2;
-//       asc += b64chs[u32 >> 18 & 63] + b64chs[u32 >> 12 & 63] + b64chs[u32 >> 6 & 63] + b64chs[u32 & 63];
-//     }
-//     return pad ? asc.slice(0, pad - 3) + '==='.substring(pad) : asc;
-//   } else {
-//     // nodejs, so has Buffer, just use that
-//     return Buffer.from(u8a).toString('base64');
-//   }
-// }
-
+/**
+ * Appends two buffers and returns a new buffer
+ * 
+ * @param buffer1 
+ * @param buffer2 
+ * @returns 
+ */
 export function _appendBuffer(buffer1: Uint8Array | ArrayBuffer, buffer2: Uint8Array | ArrayBuffer): ArrayBuffer {
   const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
   tmp.set(new Uint8Array(buffer1), 0);
   tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
   return tmp.buffer;
-}
-
-// the publicKeyPEM paramater below needs to look like this
-// if not given, will use this default (MI/384 has private key)
-const defaultPublicKeyPEM = `-----BEGIN PUBLIC KEY-----
-MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEAtVedzwPq7OIl84xx9ruV
-TAkv+sUPUYeQJ3PtFOJkBSrMyGPErVxjXQQ6nvb+OevQ2t7EhimyQ3bnP7PdeAU2
-mWQX6V8LfhJj0ox8Envtw9DF7nEED5aLwnimTjox906j7itXO2xDdJCRuAfpar3u
-Tj3d0EAKWFXTBHrorKI0pHCg1opIRsqNjpVnetZn1SweCtArE7YymNRQmoi8XWzj
-yCt41fGFoFcmVeE87hiq41NJkE0iMfrmf6QqE91Fp1BSSTD75KEbKPXepS/jl3nV
-VFe4tWrHypcT+Uk7I2UBqHnR+AnODVrSxZMzoVnXoYbhDAdReTQ81MrSQ+LW7yZV
-rTxa5uYVPIRB6l58dpBEhIGcvEz376fvEwdhEqw9iXm7FchbqX3FQpwDVKvguj+w
-jIaV60/hyBaRPO2oD9IhByvL3F+Gq+iwQRXbEgvI8QvkJ1w/WcelytljcwUoYbC5
-7VS7EvnoNvMQT+r5RJfoPVPbwsCOFAQCVnzyOPAMZyUn69ycK+rONvrVxkM+c8Q2
-8w7do2MDeRWJRf4Va0XceXsN+YcK7g9bqBWrBYJIWzeRiAQ3R6kyaxxbdEhyY3Hl
-OlY876IbVmwlWAQ82l9r7ECjBL2nGMjDFm5Lv8TXKC5NHWHwY1b2vfvl6cyGtG1I
-OTJj8TMRI6y3Omop3kIfpgUCAwEAAQ==
------END PUBLIC KEY-----`;
-
-/**
- * Import a PEM encoded RSA public key, to use for RSA-OAEP
- * encryption.  Takes a string containing the PEM encoded key, and
- * returns a Promise that will resolve to a CryptoKey representing
- * the public key.
- *
- * @param {pem} RSA public key, string, PEM format
- * @return {cryptoKey} RSA-OAEP key
- *
- */
-export function importPublicKey(pem?: string) {
-  if (typeof pem == 'undefined') pem = defaultPublicKeyPEM;
-  // fetch the part of the PEM string between header and footer
-  const pemHeader = '-----BEGIN PUBLIC KEY-----';
-  const pemFooter = '-----END PUBLIC KEY-----';
-  const start = pem.indexOf(pemHeader);
-  const end = pem.indexOf(pemFooter);
-  if ((start < 0) || (end < 0)) _sb_exception('importPublicKey()', 'fail to find BEGIN and/or END string in RSA (PEM) key');
-  const pemContents = pem.slice(start + pemHeader.length, end);
-  // const pemContents = pem.substring(pemHeader.length, pem.length - pemFooter.length);
-  // console.log(pemContents)
-  const binaryDer = base64ToArrayBuffer(pemContents);
-  return crypto.subtle.importKey('spki', binaryDer, { name: 'RSA-OAEP', hash: 'SHA-256' }, true, ['encrypt']);
 }
 
 /**
@@ -944,7 +765,9 @@ export function simpleRandomString(n: number, code: string): string {
  *
  *     'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
  *
- * This is the base32mi disambiguation table ::
+ * This is the base32mi disambiguation table
+ * 
+ *  ::
  *
  *     [OoQD] -> '0'
  *     [lIiJ] -> '1'
@@ -964,7 +787,9 @@ export function simpleRandomString(n: number, code: string): string {
  *     [uvV] -> 'U'
  *     [w] -> 'W'
  *
- * Another way to think of it is that this, becomes this ('.' means no change): ::
+ * Another way to think of it is this transform ('.' means no change):
+ * 
+ * ::
  *
  *     0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
  *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
@@ -974,60 +799,6 @@ export function cleanBase32mi(s: string) {
   // this of course is not the most efficient
   return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
 }
-
-/**
- * Takes an arbitrary dict object, a public key in PEM
- * format, and a callback function: generates a random AES key,
- * wraps that in (RSA) key, and when all done will call the
- * callback function with the results.
- *
- * This function is for direct use in a web page, for example
- * capturing a 'form' input set of data about a user, and
- * sending towards a backend in such a way that the contents
- * can only be decrypted and read off-line (air gapped).
- *
- * @param {dict} dictionary (payload)
- * @param {publicKeyPEM} public key (PEM format)
- * @param {callback} callback function, called with results
- *
- */
-export function packageEncryptDict(dict: Dictionary<any>, publicKeyPEM: string, callback: CallableFunction) {
-  const clearDataArrayBufferView = sbCrypto.str2ab(JSON.stringify(dict));
-  const aesAlgorithmKeyGen = { name: 'AES-GCM', length: 256 };
-  const aesAlgorithmEncrypt = { name: 'AES-GCM', iv: crypto.getRandomValues(new Uint8Array(16)) };
-  if (!publicKeyPEM) publicKeyPEM = defaultPublicKeyPEM;
-  // Create a key generator to produce a one-time-use AES key to encrypt some data
-  crypto.subtle.generateKey(aesAlgorithmKeyGen, true, ['encrypt']).then((aesKey) => {
-    // we are exporting the symmetric AES key so we can encrypt it using pub key
-    crypto.subtle.exportKey('raw', aesKey).then((theKey) => {
-      const rsaAlgorithmEncrypt = { name: 'RSA-OAEP' };
-      importPublicKey(publicKeyPEM).then((publicKey) => {
-        return crypto.subtle.encrypt(rsaAlgorithmEncrypt, publicKey, theKey);
-      }).then((buf) => {
-        const encryptedAesKey = arrayBufferToBase64(buf);
-        return encryptedAesKey;
-      }).then((encAesKey) => {
-        return Promise.all([crypto.subtle.encrypt(aesAlgorithmEncrypt, aesKey, clearDataArrayBufferView), encAesKey]);
-      }).then((arr) => {
-        // arr[0] is the encrypted dict in raw format, arr[1] is the aes key encrypted with rsa public key
-        const encryptedData = arrayBufferToBase64(arr[0]);
-        const postableEncryptedAesKey = arr[1];
-        const theContent = ensureSafe(encryptedData)
-        const data = {
-          enc_aes_key: ensureSafe(postableEncryptedAesKey),
-          iv: ensureSafe(arrayBufferToBase64(aesAlgorithmEncrypt.iv)),
-          content: theContent
-        };
-        if (callback) {
-          callback(data);
-        } else {
-          console.error('(No Callback) Resulting data:');
-          console.error(data);
-        }
-      });
-    });
-  });
-} // packageEncrypt()
 
 /**
  * Partition
@@ -1077,7 +848,6 @@ export function jsonParseWrapper(str: string, loc: string) {
     }
   }
 }
-
 
 /**
  * Deprecated (older version of payloads, for older channels)
@@ -1479,7 +1249,6 @@ class SBCrypto {  /*************************************************************
     return new TextDecoder('utf-8').decode(buffer);
   }
 
-
   /**
    * SBCrypto.compareKeys()
    *
@@ -1497,7 +1266,6 @@ class SBCrypto {  /*************************************************************
 const sbCrypto = new SBCrypto();
 
 /******************************************************************************************************/
-
 
 //#region "Memoize and Ready decorators"
 
@@ -1573,7 +1341,6 @@ function Online(_target: any, _propertyKey: string, descriptor: PropertyDescript
 }
 
 //#endregion - local decorators
-
 
 /**
  * 
@@ -1696,7 +1463,6 @@ class SB384 {
 
 } /* class SB384 */
 
-
 interface SBMessageContents {
   sender_pubKey?: JsonWebKey,
   sender_username?: string,
@@ -1709,7 +1475,6 @@ interface SBMessageContents {
   imageMetadata_sign?: string,
   imageMetaData?: ImageMetaData,
 }
-
 
 const SB_CLASS_ARRAY = ['SBMessage', 'SBObjectHandle'] as const
 type SB_CLASS_TYPES = typeof SB_CLASS_ARRAY[number]
@@ -1730,7 +1495,6 @@ function SBValidateObject(obj: SB_CLASSES | any, type: SB_CLASS_TYPES): boolean 
     case 'SBObjectHandle': return SB_OBJECT_HANDLE_SYMBOL in obj
   }
 }
-
 
 /**
  * SBMessage
@@ -1804,8 +1568,6 @@ class SBMessage {
   }
 } /* class SBMessage */
 
-
-
 /**
  * SBFile
  * @class
@@ -1861,7 +1623,6 @@ export class SBFile extends SBMessage {
   }
 
 } /* class SBFile */
-
 
 /** SB384 */
 abstract class Channel extends SB384 {
@@ -2204,7 +1965,7 @@ export class ChannelSocket extends Channel {
     let processingKeys = false
     return new Promise<ChannelSocket>((resolve, reject) => {
       try {
-        this.api.isLocked().then((locked) => {
+        this.api.isLocked().then(() => {
           // if (this.#ws.websocket) this.#ws.websocket.close() // keep clean
           if (!this.#ws.websocket) this.#ws.websocket = new WebSocket(this.#ws.url)
           if (this.#ws.websocket.readyState === 3) {
@@ -2330,10 +2091,9 @@ export class ChannelSocket extends Channel {
             reject('ChannelSocket creation error (see log)')
           })
         })
-          .catch((e) => {
+          .catch((e: Error) => {
             this.#ws.closed = true
-            // console.error(e)
-            reject('failed to create ChannelSocket, see log')
+            reject(`failed to create ChannelSocket, see log ${WrapError(e)}`)
           })
       } catch (e) {
         this.#ws.closed = true
@@ -2346,14 +2106,10 @@ export class ChannelSocket extends Channel {
   get status() {
     if (!this.#ws.websocket) return 'CLOSED'
     else switch (this.#ws.websocket.readyState) {
-      case 0:
-        return 'CONNECTING'
-      case 1:
-        return 'OPEN'
-      case 2:
-        return 'CLOSING'
-      default:
-        return 'CLOSED'
+      case 0: return 'CONNECTING'
+      case 1: return 'OPEN'
+      case 2: return 'CLOSING'
+      default: return 'CLOSED'
     }
   }
 
@@ -2363,13 +2119,13 @@ export class ChannelSocket extends Channel {
     this.#onMessage = f
   }
 
+  get onMessage() {
+    return this.#onMessage
+  }
+
   set enableTrace(b: boolean) {
     this.#traceSocket = b;
     console.log(`Tracing ${b ? 'en' : 'dis'}abled`);
-  }
-
-  get onMessage() {
-    return this.#onMessage
   }
 
   /**
@@ -2481,7 +2237,6 @@ export class ChannelSocket extends Channel {
 
 } /* class ChannelSocket */
 
-
 // these map to conventions and are different namespaces
 // currently: 'full', 'preview', and 'block'. there's an (old)
 // bug in current servers that they don't like reads unless
@@ -2559,76 +2314,35 @@ class StorageApi {
     })
   }
 
-  // TODO: his function needs to be cleaned up
+  /**
+   * Pads object up to closest permitted size boundaries;
+   * currently that means a minimum of 4KB and a maximum of
+   * of 1 MB, after which it rounds up to closest MB.
+   *
+   * @param buf blob of data to be eventually stored
+   */
   #padBuf(buf: ArrayBuffer) {
-    // // design change: 12 sizes
-    // const pad21 = 21 // need 21 bytes margin ... forget why?  ... not good
-    // let _sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192] // in KB
-    // _sizes = _sizes.map((size) => size * 1024)
-    // const image_size = buf.byteLength
-    // // console.log('BEFORE PADDING: ', image_size)
-    // let _target = 0
-    // if (image_size < _sizes[_sizes.length - 1]) {
-    //   for (let i = 0; i < _sizes.length; i++) {
-    //     if (image_size + pad21 < _sizes[i]) {
-    //       _target = _sizes[i];
-    //       break;
-    //     }
-    //   }
-    // } else {
-    //   _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
-    //   if (image_size + pad21 >= _target) {
-    //     _target += 1024;
-    //   }
-    // }
-    // let _padding_array = [128];
-    // _target = _target - image_size - pad21;
-    // // We will finally convert to Uint32Array where each element is 4 bytes
-    // // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
-    // // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
-    // for (let i = 0; i < _target; i++) {
-    //   _padding_array.push(0);
-    // }
-    // // _padding_array.push(image_size)
-    // const _padding = new Uint8Array(_padding_array).buffer
-    // console.log('Padding size: ', _padding.byteLength)
-    // let final_data = _appendBuffer(buf, _padding)
-    // final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
-    // // console.log('AFTER PADDING: ', final_data.byteLength)
-    // return final_data
-    let _sizes = [4, 8, 16, 32, 64, 128, 256, 512, 1024, 2048, 4096, 8192] // in KB
-    _sizes = _sizes.map((size) => size * 1024);
-    const image_size = buf.byteLength;
-    // console.log('BEFORE PADDING: ', image_size)
-    let _target: number;
-    if (image_size < _sizes[_sizes.length - 1]) {
-      for (let i = 0; i < _sizes.length; i++) {
-        if (image_size + 21 < _sizes[i]) {
-          _target = _sizes[i];
-          break;
-        }
-      }
-    } else {
-      _target = (Math.ceil(image_size / (1024 * 1024))) * 1024 * 1024;
-      if (image_size + 21 >= _target) {
-        _target += 1024;
-      }
-    }
-    let _padding_array = [128];
-    _target = _target! - image_size - 21;
-    // We will finally convert to Uint32Array where each element is 4 bytes
-    // So we need (_target/4) - 6 array elements with value 0 (128 bits or 16 bytes or 4 elements to be left empty,
-    // last 4 bytes or 1 element to represent the size and 1st element is 128 or 0x80)
-    for (let i = 0; i < _target; i++) {
-      _padding_array.push(0);
-    }
-    // _padding_array.push(image_size);
-    const _padding = new Uint8Array(_padding_array).buffer;
-    // console.log('Padding size: ', _padding.byteLength)
-    let final_data = _appendBuffer(buf, _padding);
-    final_data = _appendBuffer(final_data, new Uint32Array([image_size]).buffer);
-    // console.log('AFTER PADDING: ', final_data.byteLength)
-    return final_data;
+    const image_size = buf.byteLength; let _target
+    // pick the size to be rounding up to
+    if ((image_size + 4) < 4096) _target = 4096 // smallest size
+    else if ((image_size + 4) < 1048576) _target = 2 ** Math.ceil(Math.log2(image_size + 4)) // in between
+    else _target = (Math.ceil((image_size + 4) / 1048576)) * 1048576 // largest size
+    // append the padding buffer
+    let finalArray = _appendBuffer(buf, (new Uint8Array(_target - image_size)).buffer);
+    // set the (original) size in the last 4 bytes
+    (new DataView(finalArray)).setUint32(_target - 4, image_size)
+    return finalArray
+  }
+
+  /**
+   * The actual size of the object is encoded in the
+   * last 4 bytes of the buffer. This function removes
+   * all the padding and returns the actual object. 
+   */
+  #unpadData(data_buffer: ArrayBuffer): ArrayBuffer {
+    const _size = new Uint32Array(data_buffer.slice(-4))[0]
+    // console.log(`#unpadData - size of object is ${_size}`)
+    return data_buffer.slice(0, _size);
   }
 
   #getObjectKey(fileHash: string, _salt: ArrayBuffer): Promise<CryptoKey> {
@@ -2659,16 +2373,11 @@ class StorageApi {
     });
   }
 
-
-
-
   #_allocateObject(image_id: string, type: SBObjectType): Promise<{ salt: Uint8Array, iv: Uint8Array }> {
     return new Promise((resolve, reject) => {
       SBFetch(this.server + "/storeRequest?name=" + image_id + "&type=" + type)
         .then((r) => { /* console.log('got storage reply:'); console.log(r); */ return r.arrayBuffer(); })
         .then((b) => {
-          // console.log('got b back:')
-          // console.log(b)
           const par = extractPayload(b)
           // console.log("_allocateObject() returned salt/iv::")
           // console.log(`object ID: ${image_id}`)
@@ -2682,7 +2391,6 @@ class StorageApi {
         })
     })
   }
-
 
   #_storeObject(
     image: ArrayBuffer,
@@ -2725,12 +2433,12 @@ class StorageApi {
   }
 
   /**
- * 
- * @param buf 
- * @param type
- * @param roomId
- *
- */
+   * 
+   * @param buf 
+   * @param type
+   * @param roomId
+   *
+   */
   getObjectMetadata(buf: ArrayBuffer, type: SBObjectType): Promise<SBObjectMetadata> {
     // export async function saveImage(sbImage, roomId, sendSystemMessage)
     return new Promise((resolve, reject) => {
@@ -2760,7 +2468,6 @@ class StorageApi {
       })
     })
   }
-
 
   /**
    * 
@@ -2836,9 +2543,7 @@ class StorageApi {
       // channel.sendSbObject(sbFile);
       channel.send(sbFile)
     });
-
   }
-
 
   /**
    * StorageApi().storeRequest
@@ -2997,15 +2702,6 @@ class StorageApi {
   }
 
   /**
-   * StorageApi().unpadData()
-   */
-  #unpadData(data_buffer: ArrayBuffer): ArrayBuffer {
-    const _size = new Uint32Array(data_buffer.slice(-4))[0]
-    console.log(`#unpadData - size of object is ${_size}`)
-    return data_buffer.slice(0, _size);
-  }
-
-  /**
    * StorageApi().retrieveData()
    * retrieves an object from storage
    */
@@ -3038,81 +2734,14 @@ class StorageApi {
     }
   }
 
-  // async retrieveObject(id: string, key: string, type: string, controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
-  //   console.trace("retrieveObject()")
-  //   console.log(id)
-  //   const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == id)
-  //   console.log(control_msg)
-  //   if (control_msg) {
-  //     _sb_assert(control_msg.verificationToken, "retrieveImage(): verificationToken missing (?)")
-  //     _sb_assert(control_msg.id, "retrieveImage(): id missing (?)")
-  //     const obj: SBObjectHandle = {
-  //       [SB_OBJECT_HANDLE_SYMBOL]: true,
-  //       version: '1',
-  //       type: type,
-  //       id: control_msg.id!,
-  //       key: key, //metadata key
-  //       verification: control_msg.verificationToken!
-  //     }
-  //     const img = await this.fetchData(obj)
-  //     console.log(img)
-  //     return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img, 'b64') };
-  //   } else {
-  //     return { 'error': 'Failed to fetch data - missing control message for that image' };
-  //   }
-  // }
-
-  // // const imageFetch = await this.fetchData(control_msg.id!, control_msg.verificationToken);
-  // const imageFetch = await this.fetchData(obj);
-  // const data = extractPayload(imageFetch);
-  // const iv: string = data.iv;
-  // const salt: Uint8Array = data.salt;
-  // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
-  // const encrypted_image: string = data.image;
-  // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
-  // const img: ArrayBuffer = this.#unpadData(padded_img);
-  // // if (img.error) {
-  //   console.error('(Image error: ' + img.error + ')');
-  //   throw new Error('Failed to fetch data - authentication or formatting error');
-  // }
-
-
-  // /*
-  //  * StorageApi().retrieveDataFromMessage()
-  //  */
-  // async retrieveDataFromMessage(sign: string,
-  //   controlMessages: Array<ChannelMessage>): Promise<Dictionary> {
-  //   console.log(sign)
-  //   console.log(controlMessages)
-  //   const imageMetaData = controlMessages.find((msg: ChannelMessage) => msg!.sign === sign)!.imageMetaData
-  //   // const imageMetaData = controlMessages.find((msg: ChannelMessage) => msg!._id === msgId)!.imageMetaData
-  //   console.log(imageMetaData)
-  //   const image_id = imageMetaData!.previewId;
-  //   const control_msg = controlMessages.find((ctrl_msg) => ctrl_msg.id && ctrl_msg.id == image_id)!
-  //   if (!control_msg) {
-  //     return { 'error': 'Failed to fetch data - missing control message for that image' };
-  //   }
-  //   const obj: SBObjectHandle = {
-  //     [SB_OBJECT_HANDLE_SYMBOL]: true,
-  //     version: '1', type: 'p', id: control_msg.id!, key: imageMetaData!.previewKey!,
-  //     verification: new Promise((resolve) => resolve(control_msg.verificationToken!))
-  //   }
-  //   console.log("retrieveDataFromMessage: handle is")
-  //   console.log(obj)
-  //   const img = await this.fetchData(obj)
-  //   console.log(img)
-  //   return { 'url': 'data:image/jpeg;base64,' + arrayBufferToBase64(img) };
-  // }
-
   /* Unused Currently
   migrateStorage() {
-
   }
 
   fetchDataMigration() {
-
   }
    */
+
 } /* class StorageApi */
 
 /**
@@ -3196,130 +2825,60 @@ class ChannelApi {
     });
   }
 
+  #callApi(path: string, init?: RequestInit): Promise<any> {
+    return new Promise((resolve, reject) => {
+      SBFetch(this.#channelServer + this.#channel.channelId + path, init)
+        .then((response: Response) => {
+          if (!response.ok) reject(new Error('Network response was not OK'))
+          return response.json()
+        })
+        .then((data: Dictionary<any>) => {
+          if (data.error) reject(new Error(data.error))
+          resolve(data)
+        })
+        .catch((e: Error) => { reject("ChannelApi Error: " + WrapError(e)) })
+    })
+  }
 
   /**
-   * updateCapacity
+   * Update (set) the capacity of the channel; Owner only
    */
   updateCapacity(capacity: number) {
-    return new Promise((resolve, reject) => {
-      SBFetch(this.#channelServer + this.#channel.channelId + '/updateRoomCapacity?capacity=' + capacity, {
-        method: 'GET', credentials: 'include'
-      }).then((response: Response) => {
-        if (!response.ok) {
-          reject(new Error('Network response was not OK'));
-        }
-        return response.json();
-      }).then((data) => {
-        resolve(data);
-      }).catch((e: Error) => {
-        reject(e);
-      });
-    });
+    return this.#callApi('/updateRoomCapacity?capacity=' + capacity)
   }
 
   /**
    * getCapacity
    */
   getCapacity() {
-    return new Promise((resolve, reject) => {
-      SBFetch(this.#channelServer + this.#channel.channelId + '/getRoomCapacity', {
-        method: 'GET', credentials: 'include'
-      }).then((response: Response) => {
-        if (!response.ok) {
-          reject(new Error('Network response was not OK'));
-        }
-        return response.json();
-      }).then((data: Dictionary<any>) => {
-        resolve(data.capacity);
-      }).catch((e: Error) => {
-        reject(e);
-      });
-    });
+    return (this.#callApi('/getRoomCapacity') as Dictionary<any>).capacity
   }
 
   /**
    * getJoinRequests
    */
   getJoinRequests() {
-    return new Promise((resolve, reject) => {
-      SBFetch(this.#channelServer + this.#channel.channelId + '/getJoinRequests', {
-        method: 'GET', credentials: 'include'
-      })
-        .then((response: Response) => {
-          if (!response.ok) {
-            reject(new Error('Network response was not OK'));
-          }
-          return response.json();
-        })
-        .then((data: Dictionary<any>) => {
-          if (data.error) {
-            reject(new Error(data.error));
-          }
-          resolve(data);
-        }).catch((error: Error) => {
-          reject(error);
-        });
-    });
+    return this.#callApi('/getJoinRequests')
   }
 
   /**
    * isLocked
    */
   isLocked() {
-    return new Promise((resolve, reject) => {
-      try {
-        SBFetch(this.#channelServer + this.#channel.channelId + '/roomLocked', {
-          method: 'GET', credentials: 'include'
-        })
-          .then((response: Response) => {
-            if (!response.ok) {
-              reject(new Error('Network response was not OK'));
-            }
-            return response.json();
-          })
-          .then((data: Dictionary<any>) => {
-            resolve(data.locked);
-          })
-          .catch((error: Error) => {
-            // console.log("error on accessing (promise)")
-            // console.log(error)
-            reject(error);
-          });
-      } catch (e) {
-        const eW = WrapError(e)
-        console.log("error on accessing")
-        console.log(eW)
-        reject(eW)
-      }
-    });
+    return (this.#callApi('/roomLocked') as Dictionary<any>).locked
   }
 
   /**
    * Set message of the day
    */
   setMOTD(motd: string) {
-    return new Promise((resolve, reject) => {
-      //if (this.#channel.owner) {
-      SBFetch(this.#channelServer + this.#channel.channelId + '/motd', {
-        method: 'POST', body: JSON.stringify({ motd: motd }), headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-        .then((response: Response) => {
-          if (!response.ok) {
-            reject(new Error('Network response was not OK'));
-          }
-          return response.json();
-        })
-        .then((data: Dictionary<any>) => {
-          resolve(data);
-        }).catch((error: Error) => {
-          reject(error);
-        });
-      //} else {
-      //  reject(new Error('Must be channel owner to get admin data'));
-      //}
-    });
+    return this.#callApi('/motd', {
+      method: 'POST',
+      body: JSON.stringify({ motd: motd }),
+      headers: {
+        'Content-Type': 'application/json'
+      }
+    })
   }
 
   /**
@@ -3327,61 +2886,18 @@ class ChannelApi {
    */
   getAdminData() {
     return new Promise(async (resolve, reject) => {
-      //if (this.#channel.owner) {
       const token_data: string = new Date().getTime().toString();
       const token_sign: string = await sbCrypto.sign(this.#channel.keys.channelSignKey, token_data);
-      SBFetch(this.#channelServer + this.#channel.channelId + '/getAdminData', {
-        method: 'GET', credentials: 'include', headers: {
-          'authorization': token_data + '.' + token_sign, 'Content-Type': 'application/json'
+      return this.#callApi('/getAdminData', {
+        method: 'GET',
+        credentials: 'include',
+        headers: {
+          'authorization': token_data + '.' + token_sign,
+          'Content-Type': 'application/json'
         }
       })
-        .then((response: Response) => {
-          if (!response.ok) {
-            reject(new Error('Network response was not OK'));
-          }
-          return response.json();
-        })
-        .then((data: Dictionary<any>) => {
-          if (data.error) {
-            reject(new Error(data.error));
-          }
-          resolve(data);
-        }).catch((error: Error) => {
-          reject(error);
-        });
-      ///} else {
-      ///  reject(new Error('Must be channel owner to get admin data'));
-      //}
-    });
+    })
   }
-
-  //  const getImageIds = async (messages, decKey, lockedKey) => {
-  //   let unwrapped_messages = {}
-  //   for (let id in messages) {
-  //     try {
-  //       let message = JSON.parse(messages[id]);
-  //       if (message.hasOwnProperty("encrypted_contents")) {
-  //   let _contents = message.encrypted_contents;
-  //   // let _contents = JSON.parse(message.encrypted_contents);
-  //         let msg = await decrypt(decKey, _contents)
-  //         if (msg.error && lockedKey !== null) {
-  //           msg = await decrypt(lockedKey, _contents)
-  //         }
-  //         // console.log(msg)
-  //         const _json_msg = JSON.parse(msg.plaintext);
-  //         // console.log(_json_msg)
-  //         if (_json_msg.hasOwnProperty('control')) {
-  //           console.log(_json_msg)
-  //           unwrapped_messages[_json_msg["id"] + "."  + (_json_msg.hasOwnProperty("type") ? _json_msg["type"] : "")] = _json_msg['verificationToken'];
-  //         }
-  //       }
-  //     } catch (e) {
-  //       // console.log(e);
-  //       // Skip the message if decryption fails - its probably due to the user not having <roomId>_lockedKey. 
-  //     }
-  //   }
-  //   return unwrapped_messages;
-  // }
 
   /**
    * downloadData
@@ -3442,7 +2958,8 @@ class ChannelApi {
   uploadChannel(channelData: ChannelData) {
     return new Promise((resolve, reject) => {
       SBFetch(this.#channelServer + this.#channel.channelId + '/uploadRoom', {
-        method: 'POST', body: JSON.stringify(channelData), headers: {
+        method: 'POST',
+        body: JSON.stringify(channelData), headers: {
           'Content-Type': 'application/json'
         }
       })
@@ -3461,71 +2978,28 @@ class ChannelApi {
   }
 
   authorize(ownerPublicKey: Dictionary<any>, serverSecret: string) {
-    return new Promise((resolve, reject) => {
-      SBFetch(this.#channelServer + this.#channel.channelId + '/authorizeRoom', {
-        method: 'POST',
-        body: JSON.stringify({ roomId: this.#channel.channelId, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey })
-      })
-        .then((response: Response) => {
-          if (!response.ok) {
-            reject(new Error('Network response was not OK'));
-          }
-          return response.json();
-        })
-        .then((data: Dictionary<any>) => {
-          resolve(data);
-        }).catch((error: Error) => {
-          reject(error);
-        });
-    });
+    return this.#callApi('/authorizeRoom', {
+      method: 'POST',
+      body: JSON.stringify({ roomId: this.#channel.channelId, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey }),
+    })
   }
 
   // we post our pub key if we're first
   postPubKey(_exportable_pubKey: JsonWebKey): Promise<{ success: boolean }> {
-    return new Promise((resolve, reject) => {
-      SBFetch(this.#channelServer + this.#channel.channelId + '/postPubKey?type=guestKey', {
-        method: 'POST',
-        body: JSON.stringify(_exportable_pubKey),
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-        .then((response: Response) => {
-          if (!response.ok) {
-            reject(new Error('Network response was not OK'));
-          }
-          return response.json();
-        })
-        .then((data: { success: boolean }) => {
-          resolve(data);
-        }).catch((error: Error) => {
-          reject(error);
-        });
-    });
+    return this.#callApi('/postPubKey?type=guestKey', {
+      method: 'POST',
+      body: JSON.stringify(_exportable_pubKey),
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
 
   storageRequest(byteLength: number): Promise<Dictionary<any>> {
-    return new Promise((resolve, reject) => {
-      SBFetch(this.#channelServer + this.#channel.channelId + '/storageRequest?size=' + byteLength, {
-        method: 'GET', credentials: 'include', headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-        .then((response: Response) => {
-          if (!response.ok) {
-            reject(new Error('Network response was not OK'));
-          }
-          return response.json();
-        })
-        .then((data: Dictionary<any>) => {
-          resolve(data);
-        }).catch((error: Error) => {
-          reject(error);
-        });
-    });
+    return this.#callApi('/storageRequest?size=' + byteLength, {
+      method: 'GET',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    })
   }
-
-  //#region - class ChannelAPI - TODO implement these methods
 
   // TODO: test this guy, i doubt if it's working post-re-factor
   lock() {
@@ -3536,9 +3010,11 @@ class ChannelApi {
           name: 'AES-GCM', length: 256
         }, true, ['encrypt', 'decrypt']);
         const _exportable_locked_key: Dictionary<any> = await crypto.subtle.exportKey('jwk', _locked_key);
-        SBFetch(this.#channelServer + this.#channel.channelId + '/lockRoom', {
-          method: 'GET'
-        })
+
+        SBFetch(this.#channelServer + this.#channel.channelId + '/lockRoom',
+          {
+            method: 'GET'
+          })
           .then((response: Response) => {
             if (!response.ok) {
               reject(new Error('Network response was not OK'));
@@ -3628,201 +3104,9 @@ class ChannelApi {
   }
    */
 
-  //#endregion - class ChannelAPI - TODO implement these methods
-
 } /* class ChannelAPI */
 
-
-//#region IndexedKV - our (local storage) KV interface
-/******************************************************************************************************/
-
-/**
- * Augments IndexedDB to be used as a KV to easily
- * replace _localStorage for larger and more complex datasets
- *
- * @class
- * @constructor
- * @public
- */
-// export class IndexedKV {
-//   db!: IDBDatabase;
-//   events = new MessageBus();
-//   options: IndexedKVOptions = {
-//     db: 'MyDB', table: 'default', onReady: () => {
-//       return;
-//     },
-//   };
-
-//   // psm: override doesn't seem to be used
-//   // mtg: we have the option to expose this elswhere, but it might be better to break this out into a helper
-//   constructor(/* options: IndexedKVOptions */) {
-//     // psm: hm?
-//     this.options = Object.assign(this.options, this.options);
-//     if (typeof this.options.onReady === 'function') {
-//       this.events.subscribe(`ready`, (e: Error) => {
-//         this.options.onReady(e);
-//       });
-//     }
-//     // if (!process.browser) {
-//     //   this.indexedDB = global.indexedDB;
-//     // } else {
-//     // }
-
-//     const openReq = indexedDB.open(this.options.db);
-
-//     openReq.onerror = (event: Dictionary) => {
-//       console.error(event);
-//     };
-
-//     openReq.onsuccess = (event: Dictionary) => {
-//       this.db = event.target.result;
-//       this.events.publish('ready');
-//     };
-
-//     openReq.onerror = (event: Dictionary) => {
-//       console.error('Database error: ' + event.target.errorCode);
-//     };
-
-//     openReq.onupgradeneeded = (event: Dictionary) => {
-//       this.db = event.target.result;
-//       this.db.createObjectStore(this.options.table, { keyPath: 'key' });
-//       this.#useDatabase();
-//       this.events.publish('ready');
-//     };
-//   }
-
-//   openCursor(match: string, callback: CallableFunction) {
-//     return new Promise((resolve, reject) => {
-//       const objectStore = this.db.transaction([this.options.table], 'readonly').objectStore(this.options.table);
-//       const request = objectStore.openCursor(null, 'next');
-//       request.onsuccess = (event: Dictionary) => {
-//         resolve(event.target.result);
-//         const cursor = event.target.result;
-//         if (cursor) {
-//           const regex = new RegExp(`^${match}`);
-//           if (cursor.key.match(regex)) {
-//             callback(cursor.value.value);
-//           }
-//           cursor.continue();
-//         } else {
-//           resolve(true);
-//         }
-//       };
-//       request.onerror = (event: Dictionary) => {
-//         reject(event);
-//       };
-//     });
-//   }
-
-//   #useDatabase() {
-//     this.db.onversionchange = () => {
-//       this.db.close();
-//       console.info('A new version of this page is ready. Please reload or close this tab!');
-//     };
-//   }
-
-//   // Set item will insert or replace
-//   setItem(key: string, value: StorableDataType) {
-//     return new Promise((resolve, reject) => {
-//       const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
-//       const request = objectStore.get(key);
-//       request.onerror = (event: Dictionary) => {
-//         reject(event);
-//       };
-//       request.onsuccess = (event: Dictionary) => {
-//         const data = event?.target?.result;
-
-//         if (data?.value) {
-//           data.value = value;
-//           const requestUpdate = objectStore.put(data);
-//           requestUpdate.onerror = (event: Dictionary) => {
-//             reject(event);
-//           };
-//           requestUpdate.onsuccess = (event: Dictionary) => {
-//             const data = event.target.result;
-//             resolve(data.value);
-//           };
-//         } else {
-//           const requestAdd = objectStore.add({ key: key, value: value });
-//           requestAdd.onsuccess = (event: Dictionary) => {
-//             resolve(event.target.result);
-//           };
-
-//           requestAdd.onerror = (event: Dictionary) => {
-//             reject(event);
-//           };
-//         }
-//       };
-//     });
-//   }
-
-//   //Add item but not replace
-//   add(key: string, value: StorableDataType) {
-//     return new Promise((resolve, reject) => {
-//       const objectStore = this.db.transaction([this.options.table], 'readwrite').objectStore(this.options.table);
-//       const request = objectStore.get(key);
-//       request.onerror = (event: Dictionary) => {
-//         reject(event);
-//       };
-//       request.onsuccess = (event: Dictionary) => {
-//         const data = event?.target?.result;
-
-//         if (data?.value) {
-//           resolve(data.value);
-//         } else {
-//           const requestAdd = objectStore.add({ key: key, value: value });
-//           requestAdd.onsuccess = (event: Dictionary) => {
-//             resolve(event.target.result);
-//           };
-
-//           requestAdd.onerror = (event: Dictionary) => {
-//             reject(event);
-//           };
-//         }
-//       };
-//     });
-//   }
-
-//   getItem(key: string): Promise<string | null> {
-//     return new Promise((resolve, reject) => {
-//       const objectStore = this.db.transaction([this.options.table]).objectStore(this.options.table);
-//       const request = objectStore.get(key);
-
-//       request.onerror = (event: Event) => {
-//         reject(event);
-//       };
-
-//       request.onsuccess = (event: Dictionary) => {
-//         const data = event?.target?.result;
-//         if (data?.value) {
-//           resolve(data.value);
-//         } else {
-//           resolve(null);
-//         }
-//       };
-//     });
-//   }
-
-//   removeItem(key: string) {
-//     return new Promise((resolve, reject) => {
-//       const request = this.db.transaction([this.options.table], 'readwrite')
-//         .objectStore(this.options.table)
-//         .delete(key);
-//       request.onsuccess = () => {
-//         resolve(true);
-//       };
-
-//       request.onerror = (event: Event) => {
-//         reject(event);
-//       };
-//     });
-//   }
-// }
-
-// const _localStorage = new IndexedKV();
-
-//#endregion IndexedKV
-
+//#region - class ChannelAPI - TODO implement these methods
 
 class Snackabra {
   #storage!: StorageApi
@@ -3836,7 +3120,6 @@ class Snackabra {
    * below shows the miniflare local dev config. Note that 'new Snackabra()' is
    * guaranteed synchronous, so can be 'used' right away. You can optionally call
    * without a parameter in which case SB will ping known servers.
-   *
    *
    * ::
    *

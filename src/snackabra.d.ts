@@ -150,8 +150,6 @@ export interface EncryptedContentsBin {
 export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
 export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';
 /******************************************************************************************************/
-/******************************************************************************************************/
-/******************************************************************************************************/
 /**
  * SB simple events (mesage bus) class
  */
@@ -209,18 +207,14 @@ export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Ui
  * @return {string} base64 string
  */
 export declare function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant?: 'b64' | 'url'): string;
-export declare function _appendBuffer(buffer1: Uint8Array | ArrayBuffer, buffer2: Uint8Array | ArrayBuffer): ArrayBuffer;
 /**
- * Import a PEM encoded RSA public key, to use for RSA-OAEP
- * encryption.  Takes a string containing the PEM encoded key, and
- * returns a Promise that will resolve to a CryptoKey representing
- * the public key.
+ * Appends two buffers and returns a new buffer
  *
- * @param {pem} RSA public key, string, PEM format
- * @return {cryptoKey} RSA-OAEP key
- *
+ * @param buffer1
+ * @param buffer2
+ * @returns
  */
-export declare function importPublicKey(pem?: string): Promise<CryptoKey>;
+export declare function _appendBuffer(buffer1: Uint8Array | ArrayBuffer, buffer2: Uint8Array | ArrayBuffer): ArrayBuffer;
 /**
  * Returns random number
  *
@@ -245,7 +239,9 @@ export declare function simpleRandomString(n: number, code: string): string;
  *
  *     'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
  *
- * This is the base32mi disambiguation table ::
+ * This is the base32mi disambiguation table
+ *
+ *  ::
  *
  *     [OoQD] -> '0'
  *     [lIiJ] -> '1'
@@ -265,30 +261,15 @@ export declare function simpleRandomString(n: number, code: string): string;
  *     [uvV] -> 'U'
  *     [w] -> 'W'
  *
- * Another way to think of it is that this, becomes this ('.' means no change): ::
+ * Another way to think of it is this transform ('.' means no change):
+ *
+ * ::
  *
  *     0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
  *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
  *
  */
 export declare function cleanBase32mi(s: string): string;
-/**
- * Takes an arbitrary dict object, a public key in PEM
- * format, and a callback function: generates a random AES key,
- * wraps that in (RSA) key, and when all done will call the
- * callback function with the results.
- *
- * This function is for direct use in a web page, for example
- * capturing a 'form' input set of data about a user, and
- * sending towards a backend in such a way that the contents
- * can only be decrypted and read off-line (air gapped).
- *
- * @param {dict} dictionary (payload)
- * @param {publicKeyPEM} public key (PEM format)
- * @param {callback} callback function, called with results
- *
- */
-export declare function packageEncryptDict(dict: Dictionary<any>, publicKeyPEM: string, callback: CallableFunction): void;
 /**
  * Partition
  */
@@ -598,8 +579,8 @@ export declare class ChannelSocket extends Channel {
     close: () => void;
     get status(): "CLOSED" | "CONNECTING" | "OPEN" | "CLOSING";
     set onMessage(f: (m: ChannelMessage) => void);
-    set enableTrace(b: boolean);
     get onMessage(): (m: ChannelMessage) => void;
+    set enableTrace(b: boolean);
     /**
      * ChannelSocket.keys
      *
@@ -654,12 +635,12 @@ declare class StorageApi {
     channelServer: string;
     constructor(server: string, channelServer: string);
     /**
-   *
-   * @param buf
-   * @param type
-   * @param roomId
-   *
-   */
+     *
+     * @param buf
+     * @param type
+     * @param roomId
+     *
+     */
     getObjectMetadata(buf: ArrayBuffer, type: SBObjectType): Promise<SBObjectMetadata>;
     /**
      *
@@ -722,25 +703,25 @@ declare class ChannelApi {
      */
     getOldMessages(currentMessagesLength: number): Promise<Array<ChannelMessage>>;
     /**
-     * updateCapacity
+     * Update (set) the capacity of the channel; Owner only
      */
-    updateCapacity(capacity: number): Promise<unknown>;
+    updateCapacity(capacity: number): Promise<any>;
     /**
      * getCapacity
      */
-    getCapacity(): Promise<unknown>;
+    getCapacity(): any;
     /**
      * getJoinRequests
      */
-    getJoinRequests(): Promise<unknown>;
+    getJoinRequests(): Promise<any>;
     /**
      * isLocked
      */
-    isLocked(): Promise<unknown>;
+    isLocked(): any;
     /**
      * Set message of the day
      */
-    setMOTD(motd: string): Promise<unknown>;
+    setMOTD(motd: string): Promise<any>;
     /**
      * getAdminData
      */
@@ -750,7 +731,7 @@ declare class ChannelApi {
      */
     downloadData(): Promise<unknown>;
     uploadChannel(channelData: ChannelData): Promise<unknown>;
-    authorize(ownerPublicKey: Dictionary<any>, serverSecret: string): Promise<unknown>;
+    authorize(ownerPublicKey: Dictionary<any>, serverSecret: string): Promise<any>;
     postPubKey(_exportable_pubKey: JsonWebKey): Promise<{
         success: boolean;
     }>;
@@ -759,15 +740,6 @@ declare class ChannelApi {
     acceptVisitor(pubKey: string): Promise<unknown>;
     ownerKeyRotation(): Promise<unknown>;
 }
-/******************************************************************************************************/
-/**
- * Augments IndexedDB to be used as a KV to easily
- * replace _localStorage for larger and more complex datasets
- *
- * @class
- * @constructor
- * @public
- */
 declare class Snackabra {
     #private;
     /**
@@ -775,7 +747,6 @@ declare class Snackabra {
      * below shows the miniflare local dev config. Note that 'new Snackabra()' is
      * guaranteed synchronous, so can be 'used' right away. You can optionally call
      * without a parameter in which case SB will ping known servers.
-     *
      *
      * ::
      *
