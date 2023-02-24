@@ -20,7 +20,7 @@
    License along with this program.  If not, see www.gnu.org/licenses/
 
 */
-var __decorate = (undefined && undefined.__decorate) || function (decorators, target, key, desc) {
+var __decorate = (this && this.__decorate) || function (decorators, target, key, desc) {
     var c = arguments.length, r = c < 3 ? target : desc === null ? desc = Object.getOwnPropertyDescriptor(target, key) : desc, d;
     if (typeof Reflect === "object" && typeof Reflect.decorate === "function") r = Reflect.decorate(decorators, target, key, desc);
     else for (var i = decorators.length - 1; i >= 0; i--) if (d = decorators[i]) r = (c < 3 ? d(r) : c > 3 ? d(target, key, r) : d(target, key)) || r;
@@ -55,7 +55,7 @@ const SBKnownServers = [
  * Force EncryptedContents object to binary (interface
  * supports either string or arrays)
  */
-function encryptedContentsMakeBinary(o) {
+export function encryptedContentsMakeBinary(o) {
     let t;
     let iv;
     if (typeof o.content === 'string') {
@@ -101,7 +101,7 @@ function encryptedContentsMakeBinary(o) {
 /**
  * SB simple events (mesage bus) class
  */
-class MessageBus {
+export class MessageBus {
     bus = {};
     /**
      * Safely returns handler for any event
@@ -149,6 +149,9 @@ class MessageBus {
 /******************************************************************************************************/
 //#region - SB internal utility functions
 function SBFetch(input, init) {
+    console.log("SBFetch()");
+    console.log(input);
+    console.log(init);
     if (navigator.onLine === false)
         return Promise.reject(new Error("you are offline"));
     else if (init)
@@ -180,7 +183,7 @@ function WrapError(e) {
 //   }
 // }
 // throw new RethrownError(`Oh no a "${error.message}" error`, error)
-function _sb_exception(loc, msg) {
+export function _sb_exception(loc, msg) {
     const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
     // for now disabling this to keep node testing less noisy
     // console.error(m);
@@ -189,7 +192,7 @@ function _sb_exception(loc, msg) {
 // internal - general handling of paramaters that might be promises
 // (basically the "anti" of resolve, if it's *not* a promise then
 // it becomes one
-function _sb_resolve(val) {
+export function _sb_resolve(val) {
     if (val.then) {
         // it's already a promise
         // console.log('it is a promise')
@@ -201,7 +204,7 @@ function _sb_resolve(val) {
     }
 }
 // internal - handle assertions
-function _sb_assert(val, msg) {
+export function _sb_assert(val, msg) {
     if (!(val)) {
         const m = `<< SB assertion error: ${msg} >>`;
         // debugger;
@@ -215,7 +218,7 @@ function _sb_assert(val, msg) {
 /**
  * Fills buffer with random data
  */
-function getRandomValues(buffer) {
+export function getRandomValues(buffer) {
     if (buffer.byteLength < (4096)) {
         return crypto.getRandomValues(buffer);
     }
@@ -249,11 +252,13 @@ const messageIdRegex = /([A-Za-z0-9+/_\-=]{64})([01]{42})/;
 // const b64_regex = new RegExp('^(?:[A-Za-z0-9+/_\-]{4})*(?:[A-Za-z0-9+/_\-]{2}==|[A-Za-z0-9+/_\-]{3}=)?$')
 // But we will go (very) lenient:
 const b64_regex = /^([A-Za-z0-9+/_\-=]*)$/;
+// stricter - only accepts URI friendly:
+const url_regex = /^([A-Za-z0-9_\-=]*)$/;
 /**
  * Returns 'true' if (and only if) string is well-formed base64.
  * Works same on browsers and nodejs.
  */
-function _assertBase64(base64) {
+export function _assertBase64(base64) {
     // return (b64_regex.exec(base64)?.[0] === base64);
     const z = b64_regex.exec(base64);
     if (z)
@@ -266,6 +271,20 @@ function ensureSafe(base64) {
     const z = b64_regex.exec(base64);
     _sb_assert((z) && (z[0] === base64), 'ensureSafe() tripped: something is not URI safe');
     return base64;
+}
+function typedArrayToBuffer(array) {
+    console.log('typedArrayToBuffer');
+    console.log(typeof array);
+    console.log(Object.assign({}, array));
+    console.log(Object.assign({}, array.buffer));
+    try {
+        return array.buffer.slice(array.byteOffset, array.byteLength + array.byteOffset);
+    }
+    catch (e) {
+        console.log('ERROR in typedArrayTo Buffer');
+        console.log(e);
+        return array;
+    }
 }
 /**
  * based on https://github.com/qwtel/base64-encoding/blob/master/base64-js.ts
@@ -305,7 +324,7 @@ function _byteLength(validLen, placeHoldersLen) {
  * @param {str} base64 string in either regular or URL-friendly representation.
  * @return {Uint8Array} returns decoded binary result
  */
-function base64ToArrayBuffer(str) {
+export function base64ToArrayBuffer(str) {
     if (!_assertBase64(str))
         throw new Error(`invalid character in string '${str}'`);
     let tmp;
@@ -372,7 +391,7 @@ const bs2dv = (bs) => bs instanceof ArrayBuffer
 /**
  * Compare buffers
  */
-function compareBuffers(a, b) {
+export function compareBuffers(a, b) {
     if (typeof a != typeof b)
         return false;
     if ((a == null) || (b == null))
@@ -394,7 +413,7 @@ function compareBuffers(a, b) {
  * @param {bufferSource} ArrayBuffer buffer
  * @return {string} base64 string
  */
-function arrayBufferToBase64(buffer, variant = 'url') {
+export function arrayBufferToBase64(buffer, variant = 'url') {
     if (buffer == null) {
         _sb_exception('L509', 'arrayBufferToBase64() -> null paramater');
         return '';
@@ -438,7 +457,7 @@ function arrayBufferToBase64(buffer, variant = 'url') {
  * @param buffer2
  * @returns
  */
-function _appendBuffer(buffer1, buffer2) {
+export function _appendBuffer(buffer1, buffer2) {
     const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
     tmp.set(new Uint8Array(buffer1), 0);
     tmp.set(new Uint8Array(buffer2), buffer1.byteLength);
@@ -450,7 +469,7 @@ function _appendBuffer(buffer1, buffer2) {
  * @return {int} integer 0..255
  *
  */
-function simpleRand256() {
+export function simpleRand256() {
     return crypto.getRandomValues(new Uint8Array(1))[0];
 }
 const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
@@ -463,7 +482,7 @@ const base32mi = '0123456789abcdefyhEjkLmNHpFrRTUW';
  *
  * base32mi: ``0123456789abcdefyhEjkLmNHpFrRTUW``
  */
-function simpleRandomString(n, code) {
+export function simpleRandomString(n, code) {
     if (code == 'base32mi') {
         // yeah, of course we need to add base64 etc
         const z = crypto.getRandomValues(new Uint8Array(n));
@@ -512,14 +531,14 @@ function simpleRandomString(n, code) {
  *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
  *
  */
-function cleanBase32mi(s) {
+export function cleanBase32mi(s) {
     // this of course is not the most efficient
     return s.replace(/[OoQD]/g, '0').replace(/[lIiJ]/g, '1').replace(/[Zz]/g, '2').replace(/[A]/g, '4').replace(/[Ss]/g, '5').replace(/[G]/g, '6').replace(/[t]/g, '7').replace(/[B]/g, '8').replace(/[gq]/g, '9').replace(/[C]/g, 'c').replace(/[Y]/g, 'y').replace(/[KxX]/g, 'k').replace(/[M]/g, 'm').replace(/[n]/g, 'N').replace(/[P]/g, 'p').replace(/[uvV]/g, 'U').replace(/[w]/g, 'w');
 }
 /**
  * Partition
  */
-function partition(str, n) {
+export function partition(str, n) {
     throw (`partition() not tested on TS yet - (${str}, ${n})`);
     // const returnArr = [];
     // let i, l;
@@ -533,7 +552,7 @@ function partition(str, n) {
  * The 'loc' parameter should be a (unique) string that allows you to find the usage
  * in the code; one approach is the line number in the file (at some point).
  */
-function jsonParseWrapper(str, loc) {
+export function jsonParseWrapper(str, loc) {
     // psm: you can't have a return type in TS if the function
     //      might throw an exception
     try {
@@ -569,7 +588,7 @@ function jsonParseWrapper(str, loc) {
 /**
  * Deprecated (older version of payloads, for older channels)
  */
-function extractPayloadV1(payload) {
+export function extractPayloadV1(payload) {
     try {
         const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
         const decoder = new TextDecoder();
@@ -592,7 +611,7 @@ function extractPayloadV1(payload) {
 /**
  * Assemble payload
  */
-function assemblePayload(data) {
+export function assemblePayload(data) {
     try {
         // console.log("assemblePayload():")
         // console.log(data)
@@ -629,7 +648,7 @@ function assemblePayload(data) {
  * to a JS object. This provides a binary encoding of any JSON,
  * and it allows some elements of the JSON to be raw (binary).
  */
-function extractPayload(payload) {
+export function extractPayload(payload) {
     try {
         // number of bytes of meta data (encoded as a 32-bit Uint)
         const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
@@ -685,13 +704,13 @@ function extractPayload(payload) {
 /**
  * Encode into b64 URL
  */
-function encodeB64Url(input) {
+export function encodeB64Url(input) {
     return input.replaceAll('+', '-').replaceAll('/', '_');
 }
 /**
  * Decode b64 URL
  */
-function decodeB64Url(input) {
+export function decodeB64Url(input) {
     input = input.replaceAll('-', '+').replaceAll('_', '/');
     // Pad out with standard base64 required padding characters
     const pad = input.length % 4;
@@ -901,24 +920,14 @@ class SBCrypto {
      * Verify signature.
      */
     verify(verifyKey, sign, contents) {
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             try {
-                // const _sign = base64ToArrayBuffer(decodeURIComponent(sign));
-                const _sign = base64ToArrayBuffer(sign);
-                // const encoder = new TextEncoder();
-                // const encoded = encoder.encode(contents);
-                const encoded = sbCrypto.str2ab(contents);
-                try {
-                    crypto.subtle.verify('HMAC', verifyKey, _sign, encoded).then((verified) => {
-                        resolve(verified);
-                    });
-                }
-                catch (e) {
-                    reject(e);
-                }
+                crypto.subtle
+                    .verify('HMAC', verifyKey, base64ToArrayBuffer(sign), sbCrypto.str2ab(contents))
+                    .then((verified) => { resolve(verified); });
             }
             catch (e) {
-                reject(e);
+                reject(WrapError(e));
             }
         });
     }
@@ -1115,7 +1124,7 @@ class SB384 {
         this.sb384Ready = this.ready;
     }
     #generateRoomHash(channelBytes) {
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
                 const k = encodeB64Url(arrayBufferToBase64(channelBytesHash));
                 if (k.includes('-')) {
@@ -1130,7 +1139,7 @@ class SB384 {
         });
     }
     #generateRoomId(x, y) {
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             const xBytes = base64ToArrayBuffer(decodeB64Url(x));
             const yBytes = base64ToArrayBuffer(decodeB64Url(y));
             const channelBytes = _appendBuffer(xBytes, yBytes);
@@ -1215,7 +1224,7 @@ class SBMessage {
                 const sign = sbCrypto.sign(signKey, body);
                 const image_sign = sbCrypto.sign(signKey, this.contents.image);
                 const imageMetadata_sign = sbCrypto.sign(signKey, JSON.stringify(this.contents.imageMetaData));
-                Promise.all([sign, image_sign, imageMetadata_sign]).then(async (values) => {
+                Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
                     this.contents.sign = values[0];
                     this.contents.image_sign = values[1];
                     this.contents.imageMetadata_sign = values[2];
@@ -1258,7 +1267,7 @@ class SBMessage {
  * @constructor
  * @public
  */
-class SBFile extends SBMessage {
+export class SBFile extends SBMessage {
     // encrypted = false
     // contents: string = ''
     // senderPubKey: CryptoKey
@@ -1274,6 +1283,7 @@ class SBFile extends SBMessage {
     // file is an instance of File
     constructor(channel, file /* signKey: CryptoKey, key: CryptoKey */) {
         throw new Error('working on SBFile()!');
+        super(channel, '');
         // all is TODO with new image code
         // this.senderPubKey = key;
         // ... done by SBMessage parent?
@@ -1491,7 +1501,7 @@ function deCryptChannelMessage(m00, m01, keys) {
  *
  *  Class managing connections
  */
-class ChannelSocket extends Channel {
+export class ChannelSocket extends Channel {
     ready;
     #ChannelSocketReadyFlag = false; // must be named <class>ReadyFlag
     // #channelId: string
@@ -1641,6 +1651,8 @@ class ChannelSocket extends Channel {
         let processingKeys = false;
         return new Promise((resolve, reject) => {
             try {
+                console.log("++++++++ readyPromise() has url:");
+                console.log(url);
                 this.api.isLocked().then(() => {
                     // if (this.#ws.websocket) this.#ws.websocket.close() // keep clean
                     if (!this.#ws.websocket)
@@ -1776,8 +1788,8 @@ class ChannelSocket extends Channel {
             }
             catch (e) {
                 this.#ws.closed = true;
-                console.error(e);
-                reject('failed to create ChannelSocket, see log');
+                // console.error(e)
+                reject(`failed to create ChannelSocket, see log ${WrapError(e)}`);
             }
         });
     }
@@ -2162,7 +2174,7 @@ class StorageApi {
     /**
      * StorageApi.saveFile()
      */
-    async saveFile(channel, sbFile) {
+    saveFile(channel, sbFile) {
         console.log("saveFile()");
         // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
         const metaData = sbFile.imageMetaData;
@@ -2512,14 +2524,16 @@ class ChannelApi {
     getAdminData() {
         return new Promise(async (resolve, reject) => {
             const token_data = new Date().getTime().toString();
-            const token_sign = await sbCrypto.sign(this.#channel.keys.channelSignKey, token_data);
-            return this.#callApi('/getAdminData', {
-                method: 'GET',
-                credentials: 'include',
-                headers: {
-                    'authorization': token_data + '.' + token_sign,
-                    'Content-Type': 'application/json'
-                }
+            sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
+                .then((token_sign) => {
+                return this.#callApi('/getAdminData', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'authorization': token_data + '.' + token_sign,
+                        'Content-Type': 'application/json'
+                    }
+                });
             });
         });
     }
@@ -2628,23 +2642,19 @@ class ChannelApi {
                     name: 'AES-GCM', length: 256
                 }, true, ['encrypt', 'decrypt']);
                 const _exportable_locked_key = await crypto.subtle.exportKey('jwk', _locked_key);
-                SBFetch(this.#channelServer + this.#channel.channelId + '/lockRoom', {
-                    method: 'GET'
-                })
-                    .then((response) => {
-                    if (!response.ok) {
-                        reject(new Error('Network response was not OK'));
-                    }
-                    return response.json();
-                })
-                    .then(async (data) => {
+                this.#callApi('lockRoom')
+                    .then((data) => {
                     if (data.locked) {
-                        await this.acceptVisitor(JSON.stringify(this.#channel.exportable_pubKey));
+                        this.acceptVisitor(JSON.stringify(this.#channel.exportable_pubKey))
+                            .then(() => {
+                            resolve({ locked: data.locked, lockedKey: _exportable_locked_key });
+                        });
                     }
-                    resolve({ locked: data.locked, lockedKey: _exportable_locked_key });
-                }).catch((error) => {
-                    reject(error);
-                });
+                })
+                    .catch((error) => { reject(error); });
+            }
+            else {
+                reject(new Error('no lock key or not admin'));
             }
         });
     }
@@ -2755,16 +2765,19 @@ class Snackabra {
      */
     connect(onMessage, key, channelId /*, identity?: SB384 */) {
         // if there's a 'preferred' (only) server then we we can return a promise right away
-        // return new Promise<ChannelSocket>((resolve, reject) =>
-        //   Promise.any(this.#preferredServer
-        //     ? [new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)]
-        //     : SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready))
-        //     .then((c) => resolve(c))
-        //     .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
-        return this.#preferredServer
-            ? new Promise((resolve) => resolve(new ChannelSocket(this.#preferredServer, onMessage, key, channelId)))
-            : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready));
+        return new Promise((resolve, reject) => {
+            Promise.any(this.#preferredServer
+                ? [new ChannelSocket(this.#preferredServer, onMessage, key, channelId)]
+                : SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
+                .then((c) => { console.log("Got channel:"); console.log(c); resolve(c); })
+                .catch((e) => { console.log("No known servers responding to channel"); reject(e); });
+        });
     }
+    // return this.#preferredServer
+    //   ? new Promise<ChannelSocket>((resolve, reject) => resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)))
+    //   : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
+    //   .then((c) => resolve(c.ready))
+    //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
     /**
      * Creates a new channel. Currently uses trivial authentication.
      * Returns the :term:`Channel Name`. Note that this does not
@@ -2846,11 +2859,11 @@ class Snackabra {
 __decorate([
     Online
 ], Snackabra.prototype, "connect", null);
-var SB = {
+export { Channel, SBMessage, Snackabra, SBCrypto, };
+export var SB = {
     Snackabra: Snackabra,
     SBMessage: SBMessage,
     Channel: Channel,
     SBCrypto: SBCrypto,
 };
-
-export { Channel, ChannelSocket, MessageBus, SB, SBCrypto, SBFile, SBMessage, Snackabra, _appendBuffer, _assertBase64, _sb_assert, _sb_exception, _sb_resolve, arrayBufferToBase64, assemblePayload, base64ToArrayBuffer, cleanBase32mi, compareBuffers, decodeB64Url, encodeB64Url, encryptedContentsMakeBinary, extractPayload, extractPayloadV1, getRandomValues, jsonParseWrapper, partition, simpleRand256, simpleRandomString };
+//# sourceMappingURL=snackabra.js.map

@@ -653,7 +653,7 @@ declare class StorageApi {
     /**
      * StorageApi.saveFile()
      */
-    saveFile(channel: Channel, sbFile: SBFile): Promise<void>;
+    saveFile(channel: Channel, sbFile: SBFile): void;
     /**
      * StorageApi().storeRequest
      */

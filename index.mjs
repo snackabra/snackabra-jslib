@@ -149,6 +149,9 @@ class MessageBus {
 /******************************************************************************************************/
 //#region - SB internal utility functions
 function SBFetch(input, init) {
+    console.log("SBFetch()");
+    console.log(input);
+    console.log(init);
     if (navigator.onLine === false)
         return Promise.reject(new Error("you are offline"));
     else if (init)
@@ -901,24 +904,14 @@ class SBCrypto {
      * Verify signature.
      */
     verify(verifyKey, sign, contents) {
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             try {
-                // const _sign = base64ToArrayBuffer(decodeURIComponent(sign));
-                const _sign = base64ToArrayBuffer(sign);
-                // const encoder = new TextEncoder();
-                // const encoded = encoder.encode(contents);
-                const encoded = sbCrypto.str2ab(contents);
-                try {
-                    crypto.subtle.verify('HMAC', verifyKey, _sign, encoded).then((verified) => {
-                        resolve(verified);
-                    });
-                }
-                catch (e) {
-                    reject(e);
-                }
+                crypto.subtle
+                    .verify('HMAC', verifyKey, base64ToArrayBuffer(sign), sbCrypto.str2ab(contents))
+                    .then((verified) => { resolve(verified); });
             }
             catch (e) {
-                reject(e);
+                reject(WrapError(e));
             }
         });
     }
@@ -1115,7 +1108,7 @@ class SB384 {
         this.sb384Ready = this.ready;
     }
     #generateRoomHash(channelBytes) {
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
                 const k = encodeB64Url(arrayBufferToBase64(channelBytesHash));
                 if (k.includes('-')) {
@@ -1130,7 +1123,7 @@ class SB384 {
         });
     }
     #generateRoomId(x, y) {
-        return new Promise(async (resolve, reject) => {
+        return new Promise((resolve, reject) => {
             const xBytes = base64ToArrayBuffer(decodeB64Url(x));
             const yBytes = base64ToArrayBuffer(decodeB64Url(y));
             const channelBytes = _appendBuffer(xBytes, yBytes);
@@ -1215,7 +1208,7 @@ class SBMessage {
                 const sign = sbCrypto.sign(signKey, body);
                 const image_sign = sbCrypto.sign(signKey, this.contents.image);
                 const imageMetadata_sign = sbCrypto.sign(signKey, JSON.stringify(this.contents.imageMetaData));
-                Promise.all([sign, image_sign, imageMetadata_sign]).then(async (values) => {
+                Promise.all([sign, image_sign, imageMetadata_sign]).then((values) => {
                     this.contents.sign = values[0];
                     this.contents.image_sign = values[1];
                     this.contents.imageMetadata_sign = values[2];
@@ -1641,6 +1634,8 @@ class ChannelSocket extends Channel {
         let processingKeys = false;
         return new Promise((resolve, reject) => {
             try {
+                console.log("++++++++ readyPromise() has url:");
+                console.log(url);
                 this.api.isLocked().then(() => {
                     // if (this.#ws.websocket) this.#ws.websocket.close() // keep clean
                     if (!this.#ws.websocket)
@@ -1776,8 +1771,8 @@ class ChannelSocket extends Channel {
             }
             catch (e) {
                 this.#ws.closed = true;
-                console.error(e);
-                reject('failed to create ChannelSocket, see log');
+                // console.error(e)
+                reject(`failed to create ChannelSocket, see log ${WrapError(e)}`);
             }
         });
     }
@@ -2162,7 +2157,7 @@ class StorageApi {
     /**
      * StorageApi.saveFile()
      */
-    async saveFile(channel, sbFile) {
+    saveFile(channel, sbFile) {
         console.log("saveFile()");
         // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
         const metaData = sbFile.imageMetaData;
@@ -2512,14 +2507,16 @@ class ChannelApi {
     getAdminData() {
         return new Promise(async (resolve, reject) => {
             const token_data = new Date().getTime().toString();
-            const token_sign = await sbCrypto.sign(this.#channel.keys.channelSignKey, token_data);
-            return this.#callApi('/getAdminData', {
-                method: 'GET',
-                credentials: 'include',
-                headers: {
-                    'authorization': token_data + '.' + token_sign,
-                    'Content-Type': 'application/json'
-                }
+            sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
+                .then((token_sign) => {
+                return this.#callApi('/getAdminData', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'authorization': token_data + '.' + token_sign,
+                        'Content-Type': 'application/json'
+                    }
+                });
             });
         });
     }
@@ -2628,23 +2625,19 @@ class ChannelApi {
                     name: 'AES-GCM', length: 256
                 }, true, ['encrypt', 'decrypt']);
                 const _exportable_locked_key = await crypto.subtle.exportKey('jwk', _locked_key);
-                SBFetch(this.#channelServer + this.#channel.channelId + '/lockRoom', {
-                    method: 'GET'
-                })
-                    .then((response) => {
-                    if (!response.ok) {
-                        reject(new Error('Network response was not OK'));
-                    }
-                    return response.json();
-                })
-                    .then(async (data) => {
+                this.#callApi('lockRoom')
+                    .then((data) => {
                     if (data.locked) {
-                        await this.acceptVisitor(JSON.stringify(this.#channel.exportable_pubKey));
+                        this.acceptVisitor(JSON.stringify(this.#channel.exportable_pubKey))
+                            .then(() => {
+                            resolve({ locked: data.locked, lockedKey: _exportable_locked_key });
+                        });
                     }
-                    resolve({ locked: data.locked, lockedKey: _exportable_locked_key });
-                }).catch((error) => {
-                    reject(error);
-                });
+                })
+                    .catch((error) => { reject(error); });
+            }
+            else {
+                reject(new Error('no lock key or not admin'));
             }
         });
     }
@@ -2755,16 +2748,19 @@ class Snackabra {
      */
     connect(onMessage, key, channelId /*, identity?: SB384 */) {
         // if there's a 'preferred' (only) server then we we can return a promise right away
-        // return new Promise<ChannelSocket>((resolve, reject) =>
-        //   Promise.any(this.#preferredServer
-        //     ? [new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)]
-        //     : SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready))
-        //     .then((c) => resolve(c))
-        //     .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
-        return this.#preferredServer
-            ? new Promise((resolve) => resolve(new ChannelSocket(this.#preferredServer, onMessage, key, channelId)))
-            : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready));
+        return new Promise((resolve, reject) => {
+            Promise.any(this.#preferredServer
+                ? [new ChannelSocket(this.#preferredServer, onMessage, key, channelId)]
+                : SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
+                .then((c) => { console.log("Got channel:"); console.log(c); resolve(c); })
+                .catch((e) => { console.log("No known servers responding to channel"); reject(e); });
+        });
     }
+    // return this.#preferredServer
+    //   ? new Promise<ChannelSocket>((resolve, reject) => resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)))
+    //   : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
+    //   .then((c) => resolve(c.ready))
+    //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
     /**
      * Creates a new channel. Currently uses trivial authentication.
      * Returns the :term:`Channel Name`. Note that this does not

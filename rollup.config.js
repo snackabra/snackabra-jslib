@@ -1,7 +1,7 @@
 import replace from '@rollup/plugin-replace';
 
 export default {
-  input: 'src/main.js',
+  input: 'snackabra.js',
   plugins: [
     replace({
       'preventAssignment': true,

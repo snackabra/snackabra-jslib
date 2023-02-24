@@ -1,18 +1,18 @@
 {
     "name": "snackabra060",
     "//": "Pre-relase of 0.6.0 (version numbers will be 0.5.x)",
-    "version": "0.5.163",
+    "version": "0.5.165",
     "description": "Snackabra Core Library 0.5.x/0.6.0 ('jslib')",
     "type": "module",
     "main": "index.mjs",
-    "types": "index.d.ts",
+    "types": "snackabra.d.ts",
     "scripts": {
-        "prepare": "tsc -p src/tsconfig.json && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
+        "prepare": "tsc -p tsconfig.json && rollup -c > index.mjs && BROWSER=true rollup -c > snackabra.mjs",
         "start": "npm run build && npm run watch",
-        "build": "tsc -p src/tsconfig.json && rollup -c > index.mjs && BROWSER=true rollup -c > browser.mjs",
-        "nodemon": "nodemon --watch ./src/snackabra.ts -L -e ts --ignore node_modules/ --exec \"npm run build\"",
+        "build": "tsc -p tsconfig.json && rollup -c > index.mjs && BROWSER=true rollup -c > snackabra.mjs",
+        "nodemon": "nodemon --watch snackabra.ts -L -e ts --ignore node_modules/ --exec \"npm run build\"",
         "watch": "concurrently -k -p \"[{name}]\" -n \"TypeScript, Pack\" -c \"green.bold,cyan.bold,magenta.bold,white.bold\"  \"npm run watch-ts\" \"npm run nodemon\"",
-        "watch-ts": "tsc -p src/tsconfig.json -w"
+        "watch-ts": "tsc -p tsconfig.json -w"
     },
     "repository": {
         "type": "git",
@@ -33,12 +33,12 @@
     },
     "homepage": "https://snackabra-050-docs.readthedocs.io/en/latest/",
     "browser": {
-        "./index.mjs": "./browser.mjs"
+        "./index.mjs": "./snackabra.mjs"
     },
     "files": [
         "index.mjs",
-        "index.d.ts",
-        "browser.mjs"
+        "snackabra.d.ts",
+        "snackabra.mjs"
     ],
     "sideEffects": false,
     "devDependencies": {
