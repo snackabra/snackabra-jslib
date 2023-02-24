@@ -1,49 +1,48 @@
 {
-    "name": "snackabra060",
-    "//": "Pre-relase of 0.6.0 (version numbers will be 0.5.x)",
-    "version": "0.5.166",
-    "description": "Snackabra Core Library 0.5.x/0.6.0 ('jslib')",
-    "type": "module",
-    "main": "snackabra.js",
-    "types": "snackabra.d.ts",
-    "scripts": {
-      "start": "npm run build && npm run watch",
-      "build": "tsc -p tsconfig.json > snackabra.js",
-      "watch": "concurrently -k -p \"[{name}]\" -n \"TypeScript, Pack\" -c \"green.bold,cyan.bold,magenta.bold,white.bold\"  \"npm run watch-ts\" \"npm run nodemon\"",
-      "nodemon": "nodemon --watch snackabra.ts -L -e ts --ignore node_modules/ --exec \"npm run build\"",
-      "watch-ts": "tsc -p tsconfig.json -w",
-      "minify": "rollup -c rollup.config.js --environment production > snackabra.min.js",
-      "publish": "npm run build && npm run minify && npm run pack && npm publish"
+  "name": "snackabra060",
+  "//": "Pre-relase of 0.6.0 (version numbers will be 0.5.x)",
+  "version": "0.5.174",
+  "description": "Snackabra Core Library 0.5.x/0.6.0 ('jslib')",
+  "type": "module",
+  "main": "snackabra.js",
+  "types": "snackabra.d.ts",
+  "scripts": {
+    "start": "npm run build && npm run watch",
+    "build": "tsc -p tsconfig.json > snackabra.js",
+    "watch": "concurrently -k -p \"[{name}]\" -n \"TypeScript, Pack\" -c \"green.bold,cyan.bold,magenta.bold,white.bold\"  \"npm run watch-ts\" \"npm run nodemon\"",
+    "nodemon": "nodemon --watch snackabra.ts -L -e ts --ignore node_modules/ --exec \"npm run build\"",
+    "watch-ts": "tsc -p tsconfig.json -w",
+    "minify": "rollup -c rollup.config.js --environment production > snackabra.min.js"
     },
-    "repository": {
-      "type": "git",
-      "url": "git+https://github.com/snackabra/snackabra-jslib.git"
-    },
-    "keywords": [
-      "snackabra",
-      "chat",
-      "messaging",
-      "photo",
-      "file",
-      "share"
-    ],
-    "author": "384, Inc",
-    "license": "GPL-3.0-only",
-    "bugs": {
-      "url": "https://github.com/snackabra/snackabra-jslib/issues"
-    },
-    "homepage": "https://snackabra-050-docs.readthedocs.io/en/latest/",
-    "files": [
-      "snackabra.d.ts",
-      "snackabra.js.map",
-      "snackabra.js",
-      "snackabra.min.js"
-    ],
-    "sideEffects": false,
-    "devDependencies": {
-      "concurrently": "^6.0.0",
-      "nodemon": "^2.0.14",
-      "@rollup/plugin-terser": "^4.0.0"
-    }
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snackabra/snackabra-jslib.git"
+  },
+  "keywords": [
+    "typescript",
+    "snackabra",
+    "chat",
+    "messaging",
+    "photo",
+    "file",
+    "share"
+  ],
+  "author": "384, Inc",
+  "license": "GPL-3.0-only",
+  "bugs": {
+    "url": "https://github.com/snackabra/snackabra-jslib/issues"
+  },
+  "homepage": "https://snackabra-050-docs.readthedocs.io/en/latest/",
+  "files": [
+    "snackabra.d.ts",
+    "snackabra.js.map",
+    "snackabra.js",
+    "snackabra.min.js"
+  ],
+  "sideEffects": false,
+  "devDependencies": {
+    "@rollup/plugin-terser": "^4.0.0",
+    "concurrently": "^6.0.0",
+    "nodemon": "^2.0.14"
   }
-  
+}
