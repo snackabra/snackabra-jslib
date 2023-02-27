@@ -10,7 +10,7 @@
  * an 'owner' key.
  */
 export interface SBChannelHandle {
-    channelId: string;
+    channelId: SBChannelId;
     key: JsonWebKey;
 }
 export interface SBServer {
@@ -24,7 +24,7 @@ interface Dictionary<T> {
 export type SBChannelId = string;
 interface ChannelData {
     roomId?: SBChannelId;
-    channelId?: string;
+    channelId?: SBChannelId;
     ownerKey: string;
     encryptionKey: string;
     signKey: string;
@@ -62,7 +62,7 @@ export interface ChannelMessage {
     id?: string;
     timestamp?: number;
     timestampPrefix?: string;
-    channelID?: string;
+    channelID?: SBChannelId;
     control?: boolean;
     encrypted_contents?: EncryptedContents;
     contents?: string;
@@ -303,13 +303,17 @@ export declare function encodeB64Url(input: string): string;
  */
 export declare function decodeB64Url(input: string): string;
 /******************************************************************************************************
+   ******************************************************************************************************/
+/**
+ * SBCrypto
+ *
  * SBCrypto contains all the SB specific crypto functions,
  * as well as some general utility functions.
  *
  * @class
  * @constructor
  * @public
- ******************************************************************************************************/
+ */
 declare class SBCrypto {
     /**
      * Extracts (generates) public key from a private key.
@@ -365,12 +369,12 @@ declare class SBCrypto {
      */
     verify(verifyKey: CryptoKey, sign: string, contents: string): Promise<boolean>;
     /**
-   * Standardized 'str2ab()' function, string to array buffer.
-   * This assumes on byte per character.
-   *
-   * @param {string} string
-   * @return {Uint8Array} buffer
-   */
+     * Standardized 'str2ab()' function, string to array buffer.
+     * This assumes on byte per character.
+     *
+     * @param {string} string
+     * @return {Uint8Array} buffer
+     */
     str2ab(string: string): Uint8Array;
     /**
      * Standardized 'ab2str()' function, array buffer to string.
@@ -475,6 +479,13 @@ export declare class SBFile extends SBMessage {
     constructor(channel: Channel, file: File);
 }
 /** SB384 */
+/**
+ * Channel
+ *
+ * @class
+ * @constructor
+ * @public
+ */
 declare abstract class Channel extends SB384 {
     #private;
     ready: Promise<Channel>;
@@ -577,6 +588,7 @@ export declare class ChannelSocket extends Channel {
      * */
     constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string);
     close: () => void;
+    checkServerStatus(url: string, timeout: number, callback: (online: boolean) => void): void;
     get status(): "CLOSED" | "CONNECTING" | "OPEN" | "CLOSING";
     set onMessage(f: (m: ChannelMessage) => void);
     get onMessage(): (m: ChannelMessage) => void;
@@ -643,15 +655,18 @@ declare class StorageApi {
      */
     getObjectMetadata(buf: ArrayBuffer, type: SBObjectType): Promise<SBObjectMetadata>;
     /**
-     *
+     * StorageApi.storeObject
      * @param buf
      * @param type
      * @param roomId
      *
      */
-    storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: string, metadata?: SBObjectMetadata): Promise<SBObjectHandle>;
+    storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: SBChannelId, metadata?: SBObjectMetadata): Promise<SBObjectHandle>;
     /**
      * StorageApi.saveFile()
+     *
+     * @param channel
+     * @param sbFile
      */
     saveFile(channel: Channel, sbFile: SBFile): void;
     /**
@@ -709,7 +724,7 @@ declare class ChannelApi {
     /**
      * getCapacity
      */
-    getCapacity(): any;
+    getCapacity(): Promise<any>;
     /**
      * getJoinRequests
      */
@@ -717,7 +732,7 @@ declare class ChannelApi {
     /**
      * isLocked
      */
-    isLocked(): any;
+    isLocked(): Promise<boolean>;
     /**
      * Set message of the day
      */
@@ -763,15 +778,21 @@ declare class Snackabra {
     constructor(args?: SBServer);
     /**
      * Connects to :term:`Channel Name` on this SB config.
-     * Returns a (promise to the) channel (socket) object.
-     * It will throw an ``AggregateError`` if it fails
-     * to find the room anywhere.
+     * Returns a channel object right away, but the channel
+     * will not be ready until the ``ready`` promise is resolved.
+     * Note that if you have a preferred server then the channel
+     * object will be returned right away, but the ``ready`` promise
+     * will still be pending. If you do not have a preferred server,
+     * then the ``ready`` promise will be resolved when a least
+     * one of the known servers is ready.
      */
     connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string): Promise<ChannelSocket>;
     /**
      * Creates a new channel. Currently uses trivial authentication.
-     * Returns the :term:`Channel Name`. Note that this does not
-     * create a channel object, e.g. does not make a connection.
+     * Returns a promise to a ''SBChannelHandle'' object
+     * (which includes the :term:`Channel Name`).
+     * Note that this method does not connect to the channel,
+     * it just creates (authorizes) it.
      */
     create(sbServer: SBServer, serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle>;
     get channel(): Channel;
@@ -779,10 +800,11 @@ declare class Snackabra {
     get crypto(): SBCrypto;
     sendFile(file: SBFile): void;
 }
-export { Channel, SBMessage, Snackabra, SBCrypto, };
+export { Channel, SBMessage, Snackabra, SBCrypto, SB384 };
 export declare var SB: {
     Snackabra: typeof Snackabra;
     SBMessage: typeof SBMessage;
     Channel: typeof Channel;
     SBCrypto: typeof SBCrypto;
+    SB384: typeof SB384;
 };
