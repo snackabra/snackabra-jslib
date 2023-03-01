@@ -2059,11 +2059,15 @@ class StorageApi {
     #getObjectKey(fileHash, _salt) {
         // was: getFileKey(fileHash: string, _salt: ArrayBuffer) 
         // also (?): getImageKey(imageHash, _salt) {
-        // console.log('getObjectKey with hash and salt:')
-        // console.log(fileHash)
-        // console.log(_salt)
+        console.log('getObjectKey with hash and salt:');
+        console.log(fileHash);
+        console.log(_salt);
         return new Promise((resolve, reject) => {
             try {
+                console.log("Using key: ");
+                console.log(fileHash);
+                console.log(decodeURIComponent(fileHash));
+                console.log(base64ToArrayBuffer(decodeURIComponent(fileHash)));
                 // const keyMaterial: CryptoKey = await sbCrypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
                 sbCrypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']).then((keyMaterial) => {
                     // @psm TODO - Support deriving from PBKDF2 in sbCrypto.eriveKey function
@@ -2073,7 +2077,7 @@ class StorageApi {
                         'iterations': 100000,
                         'hash': 'SHA-256'
                     }, keyMaterial, { 'name': 'AES-GCM', 'length': 256 }, true, ['encrypt', 'decrypt']).then((key) => {
-                        // return key;
+                        console.log(key);
                         resolve(key);
                     });
                 });
@@ -2339,6 +2343,8 @@ class StorageApi {
                 // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
                 this.#getObjectKey(h.key, salt).then((image_key) => {
                     const encrypted_image = data.image;
+                    console.log("image_key: ");
+                    console.log(image_key);
                     // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
                     sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer').then((padded_img) => {
                         const img = this.#unpadData(padded_img);
@@ -2374,13 +2380,13 @@ class StorageApi {
                 //   console.log("Found object in _localStorage")
                 //   resolve(this.#processData(base64ToArrayBuffer(payload), h))
                 // } else {
-                console.log("Object not cached, fetching from server. SBObjectHandle is:");
-                console.log(h);
+                // console.log("Object not cached, fetching from server. SBObjectHandle is:")
+                // console.log(h)
                 if (typeof h.verification === 'string')
                     h.verification = new Promise((resolve) => { resolve(h.verification); });
                 h.verification.then((verificationToken) => {
-                    console.log("verification token:");
-                    console.log(verificationToken);
+                    // console.log("verification token:")
+                    // console.log(verificationToken)
                     _sb_assert(verificationToken, "fetchData(): missing verification token (?)");
                     SBFetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
                         .then((response) => {

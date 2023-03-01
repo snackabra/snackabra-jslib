@@ -1,9 +1,8 @@
 {
   "name": "snackabra060",
   "//": "Pre-relase of 0.6.0 (version numbers will be 0.5.x)",
-  "version": "0.5.176",
+  "version": "0.5.177",
   "description": "Snackabra Core Library 0.5.x/0.6.0 ('jslib')",
-  "type": "module",
   "main": "snackabra.js",
   "types": "snackabra.d.ts",
   "scripts": {
@@ -12,8 +11,9 @@
     "watch": "concurrently -k -p \"[{name}]\" -n \"TypeScript, Pack\" -c \"green.bold,cyan.bold,magenta.bold,white.bold\"  \"npm run watch-ts\" \"npm run nodemon\"",
     "nodemon": "nodemon --watch snackabra.ts -L -e ts --ignore node_modules/ --exec \"npm run build\"",
     "watch-ts": "tsc -p tsconfig.json -w",
-    "minify": "rollup -c rollup.config.js --environment production > snackabra.min.js"
-    },
+    "minify": "rollup -c rollup.config.js --environment production > snackabra.min.js",
+    "webpack": "webpack --config webpack.config.js"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/snackabra/snackabra-jslib.git"
@@ -37,12 +37,17 @@
     "snackabra.d.ts",
     "snackabra.js.map",
     "snackabra.js",
+    "snackabra.ts",
     "snackabra.min.js"
   ],
   "sideEffects": false,
   "devDependencies": {
-    "@rollup/plugin-terser": "^4.0.0",
+    "@rollup/plugin-terser": "^0.4.0",
     "concurrently": "^6.0.0",
-    "nodemon": "^2.0.14"
+    "nodemon": "^2.0.14",
+    "webpack-cli": "^5.0.1"
+  },
+  "dependencies": {
+    "webpack": "^5.75.0"
   }
 }
