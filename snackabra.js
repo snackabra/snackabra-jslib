@@ -2052,7 +2052,12 @@ class StorageApi {
      * all the padding and returns the actual object.
      */
     #unpadData(data_buffer) {
-        const _size = new Uint32Array(data_buffer.slice(-4))[0];
+        // psm: ... wait has this ever worked?
+        // const _size = new Uint32Array(data_buffer.slice(-4))[0]
+        // fixing with:
+        const _size = new DataView(data_buffer.slice(-4)).getUint32(0);
+        // .. interesting, we didn't notice until we started doing things
+        //    like sharding javascript files and then injecting them ...
         // console.log(`#unpadData - size of object is ${_size}`)
         return data_buffer.slice(0, _size);
     }
