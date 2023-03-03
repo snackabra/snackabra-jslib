@@ -501,7 +501,7 @@ const messageIdRegex = /([A-Za-z0-9+/_\-=]{64})([01]{42})/
 // But we will go (very) lenient:
 const b64_regex = /^([A-Za-z0-9+/_\-=]*)$/
 // stricter - only accepts URI friendly:
-const url_regex = /^([A-Za-z0-9_\-=]*)$/
+// const url_regex = /^([A-Za-z0-9_\-=]*)$/
 
 /**
  * Returns 'true' if (and only if) string is well-formed base64.
