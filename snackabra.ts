@@ -520,19 +520,19 @@ function ensureSafe(base64: string): string {
   return base64
 }
 
-function typedArrayToBuffer(array: Uint8Array): ArrayBuffer {
-  console.log('typedArrayToBuffer')
-  console.log(typeof array)
-  console.log(Object.assign({}, array))
-  console.log(Object.assign({}, array.buffer))
-  try {
-    return array.buffer.slice(array.byteOffset, array.byteLength + array.byteOffset)
-  } catch (e) {
-    console.log('ERROR in typedArrayTo Buffer')
-    console.log(e)
-    return array
-  }
-}
+// function typedArrayToBuffer(array: Uint8Array): ArrayBuffer {
+//   console.log('typedArrayToBuffer')
+//   console.log(typeof array)
+//   console.log(Object.assign({}, array))
+//   console.log(Object.assign({}, array.buffer))
+//   try {
+//     return array.buffer.slice(array.byteOffset, array.byteLength + array.byteOffset)
+//   } catch (e) {
+//     console.log('ERROR in typedArrayTo Buffer')
+//     console.log(e)
+//     return array
+//   }
+// }
 
 /*
   we use URI/URL 'safe' characters in our b64 encoding to avoid having

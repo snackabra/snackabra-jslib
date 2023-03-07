@@ -286,20 +286,6 @@ function ensureSafe(base64) {
     _sb_assert((z) && (z[0] === base64), 'ensureSafe() tripped: something is not URI safe');
     return base64;
 }
-function typedArrayToBuffer(array) {
-    console.log('typedArrayToBuffer');
-    console.log(typeof array);
-    console.log(Object.assign({}, array));
-    console.log(Object.assign({}, array.buffer));
-    try {
-        return array.buffer.slice(array.byteOffset, array.byteLength + array.byteOffset);
-    }
-    catch (e) {
-        console.log('ERROR in typedArrayTo Buffer');
-        console.log(e);
-        return array;
-    }
-}
 /**
  * based on https://github.com/qwtel/base64-encoding/blob/master/base64-js.ts
  */

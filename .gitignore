@@ -14,3 +14,4 @@ yarn.lock
 src/snackabra.ts.html
 scratch
 scratch/
+.DS_Store
