@@ -7,12 +7,11 @@
   "types": "snackabra.d.ts",
   "scripts": {
     "start": "npm run build && npm run watch",
-    "build": "tsc -p tsconfig.json > snackabra.js",
+    "build": "tsc -p tsconfig.json > snackabra.js && webpack --config webpack.config.js",
     "watch": "concurrently -k -p \"[{name}]\" -n \"TypeScript, Pack\" -c \"green.bold,cyan.bold,magenta.bold,white.bold\"  \"npm run watch-ts\" \"npm run nodemon\"",
     "nodemon": "nodemon --watch snackabra.ts -L -e ts --ignore node_modules/ --exec \"npm run build\"",
     "watch-ts": "tsc -p tsconfig.json -w",
-    "minify": "rollup -c rollup.config.js --environment production > snackabra.min.js",
-    "webpack": "webpack --config webpack.config.js"
+    "minify": "webpack --config webpack.config.js"
   },
   "repository": {
     "type": "git",
