@@ -280,20 +280,23 @@ export declare function partition(str: string, n: number): void;
  * in the code; one approach is the line number in the file (at some point).
  */
 export declare function jsonParseWrapper(str: string, loc: string): any;
+export interface SBPayload {
+    [index: string]: ArrayBuffer;
+}
 /**
  * Deprecated (older version of payloads, for older channels)
  */
-export declare function extractPayloadV1(payload: ArrayBuffer): Dictionary<any>;
+export declare function extractPayloadV1(payload: ArrayBuffer): SBPayload;
 /**
  * Assemble payload
  */
-export declare function assemblePayload(data: Dictionary<any>): BodyInit | null;
+export declare function assemblePayload(data: SBPayload): BodyInit | null;
 /**
  * Extract payload - this decodes from our binary (wire) format
  * to a JS object. This provides a binary encoding of any JSON,
  * and it allows some elements of the JSON to be raw (binary).
  */
-export declare function extractPayload(payload: ArrayBuffer): Dictionary<any>;
+export declare function extractPayload(payload: ArrayBuffer): SBPayload;
 /**
  * Encode into b64 URL
  */
@@ -616,7 +619,7 @@ export declare class ChannelSocket extends Channel {
 }
 export type SBObjectType = 'f' | 'p' | 'b';
 export interface SBObjectHandle {
-    [SB_OBJECT_HANDLE_SYMBOL]: boolean;
+    [SB_OBJECT_HANDLE_SYMBOL]?: boolean;
     version: '1';
     type: SBObjectType;
     id: string;
@@ -624,6 +627,11 @@ export interface SBObjectHandle {
     verification: Promise<string> | string;
     iv?: Uint8Array;
     salt?: Uint8Array;
+    fileName?: string;
+    dateAndTime?: string;
+    shardServer?: string;
+    fileType?: string;
+    lastModified?: number;
 }
 export interface SBObjectMetadata {
     [SB_OBJECT_HANDLE_SYMBOL]: boolean;
@@ -661,7 +669,7 @@ declare class StorageApi {
      * @param roomId
      *
      */
-    storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: SBChannelId, metadata?: SBObjectMetadata): Promise<SBObjectHandle>;
+    storeObject(buf: BodyInit, type: SBObjectType, roomId: SBChannelId, metadata?: SBObjectMetadata): Promise<SBObjectHandle>;
     /**
      * StorageApi.saveFile()
      *

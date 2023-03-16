@@ -2088,7 +2088,7 @@ class StorageApi {
                 // console.log(`object ID: ${image_id}`)
                 // console.log(`     salt: ${arrayBufferToBase64(par.salt)}`)
                 // console.log(`       iv:  ${arrayBufferToBase64(par.iv)}`)
-                resolve({ salt: par.salt, iv: par.iv });
+                resolve({ salt: new Uint8Array(par.salt), iv: new Uint8Array(par.iv) });
             })
                 .catch((e) => {
                 console.log(`ERROR: ${e}`);
@@ -2176,6 +2176,8 @@ class StorageApi {
     storeObject(buf, type, roomId, metadata) {
         // export async function saveImage(sbImage, roomId, sendSystemMessage)
         return new Promise((resolve, reject) => {
+            if (!(buf instanceof ArrayBuffer))
+                reject('buf must be an ArrayBuffer');
             if (!metadata) {
                 console.warn('No metadata');
                 const paddedBuf = this.#padBuf(buf);
@@ -2317,7 +2319,7 @@ class StorageApi {
             finally {
                 const data = extractPayload(payload);
                 console.log(data);
-                const iv = data.iv;
+                const iv = new Uint8Array(data.iv);
                 // if (h.iv) _sb_assert(compareBuffers(iv, h.iv), 'nonce (iv) differs')
                 if ((h.iv) && (!compareBuffers(iv, h.iv))) {
                     console.error("WARNING: nonce from server differs from local copy");
@@ -2325,7 +2327,7 @@ class StorageApi {
                     console.log(` local iv: ${arrayBufferToBase64(h.iv)}`);
                     console.log(`server iv: ${arrayBufferToBase64(data.iv)}`);
                 }
-                const salt = data.salt;
+                const salt = new Uint8Array(data.salt);
                 if (h.salt)
                     _sb_assert(compareBuffers(salt, h.salt), 'salt differs');
                 console.log("will use nonce and salt of:");
@@ -2333,7 +2335,7 @@ class StorageApi {
                 console.log(`salt : ${arrayBufferToBase64(salt)}`);
                 // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
                 this.#getObjectKey(h.key, salt).then((image_key) => {
-                    const encrypted_image = data.image;
+                    const encrypted_image = sbCrypto.ab2str(new Uint8Array(data.image));
                     console.log("image_key: ");
                     console.log(image_key);
                     // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
@@ -2428,7 +2430,12 @@ class StorageApi {
                 type: type,
                 id: control_msg.id,
                 key: key,
-                verification: typeof control_msg.verificationToken === 'string' ? new Promise((res) => res(control_msg.verificationToken)) : control_msg.verificationToken
+                verification: new Promise((res, rej) => {
+                    if (control_msg.verificationToken)
+                        res(control_msg.verificationToken);
+                    else
+                        rej("retrieveImage(): verificationToken missing (?)");
+                })
             };
             const img = await this.fetchData(obj);
             console.log(img);

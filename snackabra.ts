@@ -864,16 +864,20 @@ export function jsonParseWrapper(str: string, loc: string) {
   }
 }
 
+export interface SBPayload {
+  [index: string]: ArrayBuffer;
+}
+
 /**
  * Deprecated (older version of payloads, for older channels)
  */
-export function extractPayloadV1(payload: ArrayBuffer) {
+export function extractPayloadV1(payload: ArrayBuffer): SBPayload {
   try {
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
     const decoder = new TextDecoder();
     const metadata: Dictionary<any> = jsonParseWrapper(decoder.decode(payload.slice(4, 4 + metadataSize)), 'L476');
     let startIndex = 4 + metadataSize;
-    const data: Dictionary<any> = {};
+    const data: SBPayload = {};
     for (const key in metadata) {
       if (data.key) {
         data[key] = payload.slice(startIndex, startIndex + metadata[key]);
@@ -890,7 +894,7 @@ export function extractPayloadV1(payload: ArrayBuffer) {
 /**
  * Assemble payload
  */
-export function assemblePayload(data: Dictionary<any>): BodyInit | null {
+export function assemblePayload(data: SBPayload): BodyInit | null {
   try {
     // console.log("assemblePayload():")
     // console.log(data)
@@ -927,7 +931,7 @@ export function assemblePayload(data: Dictionary<any>): BodyInit | null {
  * to a JS object. This provides a binary encoding of any JSON,
  * and it allows some elements of the JSON to be raw (binary).
  */
-export function extractPayload(payload: ArrayBuffer): Dictionary<any> {
+export function extractPayload(payload: ArrayBuffer): SBPayload {
   try {
     // number of bytes of meta data (encoded as a 32-bit Uint)
     const metadataSize = new Uint32Array(payload.slice(0, 4))[0];
@@ -2299,7 +2303,7 @@ export class ChannelSocket extends Channel {
 export type SBObjectType = 'f' | 'p' | 'b'
 
 export interface SBObjectHandle {
-  [SB_OBJECT_HANDLE_SYMBOL]: boolean,
+  [SB_OBJECT_HANDLE_SYMBOL]?: boolean,
   version: '1', 
   type: SBObjectType,
   // for long-term storage you only need these:
@@ -2313,7 +2317,14 @@ export interface SBObjectHandle {
   // across future (storage) servers, but as long as you
   // are within the same SB servers you can request them.
   iv?: Uint8Array, 
-  salt?: Uint8Array
+  salt?: Uint8Array,
+  // the following are optional and not tracked by
+  // shard servers etc, but facilitates app usage
+  fileName?: string, // by convention will be "PAYLOAD" if it's a set of objects
+  dateAndTime?: string, // optional: time of shard creation
+  shardServer?: string, // optionally direct a shard to a specific server
+  fileType?: string, // optional: file type (mime)
+  lastModified?: number, // optional: last modified time (of underlying file, if any)
 }
 
 export interface SBObjectMetadata {
@@ -2449,7 +2460,7 @@ class StorageApi {
           // console.log(`object ID: ${image_id}`)
           // console.log(`     salt: ${arrayBufferToBase64(par.salt)}`)
           // console.log(`       iv:  ${arrayBufferToBase64(par.iv)}`)
-          resolve({ salt: par.salt, iv: par.iv })
+          resolve({ salt: new Uint8Array(par.salt), iv: new Uint8Array(par.iv) })
         })
         .catch((e) => {
           console.log(`ERROR: ${e}`)
@@ -2542,12 +2553,13 @@ class StorageApi {
    * @param roomId
    *
    */
-  storeObject(buf: ArrayBuffer, type: SBObjectType, roomId: SBChannelId, metadata?: SBObjectMetadata): Promise<SBObjectHandle> {
+  storeObject(buf: BodyInit, type: SBObjectType, roomId: SBChannelId, metadata?: SBObjectMetadata): Promise<SBObjectHandle> {
     // export async function saveImage(sbImage, roomId, sendSystemMessage)
     return new Promise((resolve, reject) => {
+      if (!(buf instanceof ArrayBuffer)) reject('buf must be an ArrayBuffer')
       if (!metadata) {
         console.warn('No metadata')
-        const paddedBuf = this.#padBuf(buf)
+        const paddedBuf = this.#padBuf(buf as ArrayBuffer)
         this.#generateIdKey(paddedBuf).then((fullHash: { id: string, key: string }) => {
           // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
           this.#_allocateObject(fullHash.id, type)
@@ -2684,7 +2696,7 @@ class StorageApi {
       } finally {
         const data = extractPayload(payload)
         console.log(data)
-        const iv: Uint8Array = data.iv
+        const iv = new Uint8Array(data.iv)
         // if (h.iv) _sb_assert(compareBuffers(iv, h.iv), 'nonce (iv) differs')
         if ((h.iv) && (!compareBuffers(iv, h.iv))) {
           console.error("WARNING: nonce from server differs from local copy")
@@ -2692,14 +2704,14 @@ class StorageApi {
           console.log(` local iv: ${arrayBufferToBase64(h.iv)}`)
           console.log(`server iv: ${arrayBufferToBase64(data.iv)}`)
         }
-        const salt: Uint8Array = data.salt
+        const salt = new Uint8Array(data.salt)
         if (h.salt) _sb_assert(compareBuffers(salt, h.salt), 'salt differs')
         console.log("will use nonce and salt of:")
         console.log(`iv: ${arrayBufferToBase64(iv)}`)
         console.log(`salt : ${arrayBufferToBase64(salt)}`)
         // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
         this.#getObjectKey(h.key, salt).then((image_key) => {
-          const encrypted_image: string = data.image;
+          const encrypted_image = sbCrypto.ab2str(new Uint8Array(data.image))
           console.log("image_key: "); console.log(image_key)
           // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
           sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer').then((padded_img: ArrayBuffer) => {
@@ -2794,7 +2806,11 @@ class StorageApi {
         type: type,
         id: control_msg.id!,
         key: key!,
-        verification: typeof control_msg.verificationToken === 'string' ? new Promise((res) => res(control_msg.verificationToken!)) : control_msg.verificationToken!
+        verification: new Promise((res, rej) => {
+          if (control_msg.verificationToken) res(control_msg.verificationToken)
+          else
+            rej("retrieveImage(): verificationToken missing (?)")
+        })
       }
       const img = await this.fetchData(obj)
       console.log(img)
