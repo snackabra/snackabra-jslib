@@ -632,6 +632,8 @@ export interface SBObjectHandle {
     shardServer?: string;
     fileType?: string;
     lastModified?: number;
+    actualSize?: number;
+    savedSize?: number;
 }
 export interface SBObjectMetadata {
     [SB_OBJECT_HANDLE_SYMBOL]: boolean;

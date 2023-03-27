@@ -163,9 +163,7 @@ export class MessageBus {
  * @returns
  */
 function SBFetch(input, init) {
-    console.log("SBFetch()");
-    console.log(input);
-    console.log(init);
+    // console.log("SBFetch()"); console.log(input); console.log(init);
     if (navigator.onLine === false)
         console.info("Note: you are offline, according to the browser"); /* return Promise.reject(new Error("you are offline")) */
     if (init)
@@ -2050,15 +2048,15 @@ class StorageApi {
     #getObjectKey(fileHash, _salt) {
         // was: getFileKey(fileHash: string, _salt: ArrayBuffer) 
         // also (?): getImageKey(imageHash, _salt) {
-        console.log('getObjectKey with hash and salt:');
-        console.log(fileHash);
-        console.log(_salt);
+        // console.log('getObjectKey with hash and salt:')
+        // console.log(fileHash)
+        // console.log(_salt)
         return new Promise((resolve, reject) => {
             try {
-                console.log("Using key: ");
-                console.log(fileHash);
-                console.log(decodeURIComponent(fileHash));
-                console.log(base64ToArrayBuffer(decodeURIComponent(fileHash)));
+                // console.log("Using key: ");
+                // console.log(fileHash)
+                // console.log(decodeURIComponent(fileHash))
+                // console.log(base64ToArrayBuffer(decodeURIComponent(fileHash)))
                 // const keyMaterial: CryptoKey = await sbCrypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']);
                 sbCrypto.importKey('raw', base64ToArrayBuffer(decodeURIComponent(fileHash)), 'PBKDF2', false, ['deriveBits', 'deriveKey']).then((keyMaterial) => {
                     // @psm TODO - Support deriving from PBKDF2 in sbCrypto.eriveKey function
@@ -2113,8 +2111,8 @@ class StorageApi {
                         // console.log(image_id)
                         this.storeData(type, image_id, iv, salt, storageToken, data)
                             .then((resp_json) => {
-                            console.log("storeData() returned:");
-                            console.log(resp_json);
+                            // console.log("storeData() returned:")
+                            // console.log(resp_json)
                             if (resp_json.error)
                                 reject(`storeObject() failed: ${resp_json.error}`);
                             if (resp_json.image_id != image_id)
@@ -2178,8 +2176,9 @@ class StorageApi {
         return new Promise((resolve, reject) => {
             if (!(buf instanceof ArrayBuffer))
                 reject('buf must be an ArrayBuffer');
+            const bufSize = buf.byteLength;
             if (!metadata) {
-                console.warn('No metadata');
+                // console.warn('No metadata')
                 const paddedBuf = this.#padBuf(buf);
                 this.#generateIdKey(paddedBuf).then((fullHash) => {
                     // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
@@ -2196,6 +2195,7 @@ class StorageApi {
                             key: fullHash.key,
                             iv: p.iv,
                             salt: p.salt,
+                            actualSize: bufSize,
                             verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId, p.iv, p.salt)
                         };
                         // console.log("SBObj is:")
@@ -2214,6 +2214,7 @@ class StorageApi {
                     key: metadata.key,
                     iv: metadata.iv,
                     salt: metadata.salt,
+                    actualSize: bufSize,
                     verification: this.#_storeObject(metadata.paddedBuffer, metadata.id, metadata.key, type, roomId, metadata.iv, metadata.salt)
                 };
                 // console.log("SBObj is:")
