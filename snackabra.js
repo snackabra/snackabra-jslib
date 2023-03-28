@@ -2305,9 +2305,9 @@ class StorageApi {
     }
     #processData(payload, h) {
         return new Promise((resolve, reject) => {
-            console.log('#processData()');
-            console.log(payload);
-            console.log(h);
+            // console.log('#processData()')
+            // console.log(payload)
+            // console.log(h)
             try {
                 let j = JSON.parse(sbCrypto.ab2str(new Uint8Array(payload)));
                 // normal operation is to break on the JSON.parse() and continue to finally clause
@@ -2319,7 +2319,7 @@ class StorageApi {
             }
             finally {
                 const data = extractPayload(payload);
-                console.log(data);
+                // console.log(data)
                 const iv = new Uint8Array(data.iv);
                 // if (h.iv) _sb_assert(compareBuffers(iv, h.iv), 'nonce (iv) differs')
                 if ((h.iv) && (!compareBuffers(iv, h.iv))) {
@@ -2331,14 +2331,13 @@ class StorageApi {
                 const salt = new Uint8Array(data.salt);
                 if (h.salt)
                     _sb_assert(compareBuffers(salt, h.salt), 'salt differs');
-                console.log("will use nonce and salt of:");
-                console.log(`iv: ${arrayBufferToBase64(iv)}`);
-                console.log(`salt : ${arrayBufferToBase64(salt)}`);
+                // console.log("will use nonce and salt of:")
+                // console.log(`iv: ${arrayBufferToBase64(iv)}`)
+                // console.log(`salt : ${arrayBufferToBase64(salt)}`)
                 // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
                 this.#getObjectKey(h.key, salt).then((image_key) => {
                     const encrypted_image = sbCrypto.ab2str(new Uint8Array(data.image));
-                    console.log("image_key: ");
-                    console.log(image_key);
+                    // console.log("image_key: "); console.log(image_key)
                     // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
                     sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer').then((padded_img) => {
                         const img = this.#unpadData(padded_img);
