@@ -56,44 +56,54 @@ const SBKnownServers = [
  * supports either string or arrays)
  */
 export function encryptedContentsMakeBinary(o) {
-    let t;
-    let iv;
-    if (typeof o.content === 'string') {
-        t = base64ToArrayBuffer(decodeURIComponent(o.content));
-    }
-    else {
-        // console.log(structuredClone(o))
-        const ocn = o.content.constructor.name;
-        _sb_assert((ocn === 'ArrayBuffer') || (ocn === 'Uint8Array'), 'undetermined content type in EncryptedContents object');
-        t = o.content;
-    }
-    // console.log("=+=+=+=+ processing nonce")
-    if (typeof o.iv === 'string') {
-        // console.log("got iv as string:")
-        // console.log(structuredClone(o.iv))
-        iv = base64ToArrayBuffer(decodeURIComponent(o.iv));
-        // console.log("this was turned into array:")
-        // console.log(structuredClone(iv))
-    }
-    else if ((o.iv.constructor.name === 'Uint8Array') || (o.iv.constructor.name === 'ArrayBuffer')) {
-        // console.log("it's an array already")
-        iv = new Uint8Array(o.iv);
-    }
-    else {
-        // probably a dictionary
-        try {
-            iv = new Uint8Array(Object.values(o.iv));
+    try {
+        let t;
+        let iv;
+        console.log("=+=+=+=+ processing content");
+        console.log(o.content.constructor.name);
+        if (typeof o.content === 'string') {
+            t = base64ToArrayBuffer(decodeURIComponent(o.content));
         }
-        catch (e) {
-            // console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:")
-            // console.error(o.iv)
-            _sb_assert(false, "undetermined iv (nonce) type, see console");
+        else {
+            // console.log(structuredClone(o))
+            const ocn = o.content.constructor.name;
+            _sb_assert((ocn === 'ArrayBuffer') || (ocn === 'Uint8Array'), 'undetermined content type in EncryptedContents object');
+            t = o.content;
         }
+        // console.log("=+=+=+=+ processing nonce")
+        if (typeof o.iv === 'string') {
+            // console.log("got iv as string:")
+            // console.log(structuredClone(o.iv))
+            iv = base64ToArrayBuffer(decodeURIComponent(o.iv));
+            // console.log("this was turned into array:")
+            // console.log(structuredClone(iv))
+        }
+        else if ((o.iv.constructor.name === 'Uint8Array') || (o.iv.constructor.name === 'ArrayBuffer')) {
+            // console.log("it's an array already")
+            iv = new Uint8Array(o.iv);
+        }
+        else {
+            // probably a dictionary
+            try {
+                iv = new Uint8Array(Object.values(o.iv));
+            }
+            catch (e) {
+                // console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:")
+                // console.error(o.iv)
+                _sb_assert(false, "undetermined iv (nonce) type, see console");
+            }
+        }
+        // console.log("decided on nonce as:")
+        // console.log(iv!)
+        _sb_assert(iv.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv.length})`);
+        return { content: t, iv: iv };
     }
-    // console.log("decided on nonce as:")
-    // console.log(iv!)
-    _sb_assert(iv.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv.length})`);
-    return { content: t, iv: iv };
+    catch (e) {
+        console.error('encryptedContentsMakeBinary() failed:');
+        console.error(e);
+        console.log(e.stack);
+        throw e;
+    }
 }
 //#endregion
 /******************************************************************************************************/
@@ -859,17 +869,17 @@ class SBCrypto {
         });
     }
     unwrap(k, o, returnType) {
-        // console.log("SBCrypto.unwrap(), got k/o:")
-        // console.log(k)
-        // console.log(o)
+        console.log("SBCrypto.unwrap(), got k/o:");
+        console.log(k);
+        console.log(o);
         return new Promise(async (resolve, reject) => {
             try {
                 const { content: t, iv: iv } = encryptedContentsMakeBinary(o);
-                // console.log("======== calling subtle.decrypt with iv, k, t (AES-GCM):")
-                // console.log(iv)
-                // console.log(k)
-                // console.log(t)
-                // console.log("======== (end of subtle.decrypt parameters)")
+                console.log("======== calling subtle.decrypt with iv, k, t (AES-GCM):");
+                console.log(iv);
+                console.log(k);
+                console.log(t);
+                console.log("======== (end of subtle.decrypt parameters)");
                 crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, k, t).then((d) => {
                     if (returnType === 'string') {
                         resolve(new TextDecoder().decode(d));
@@ -2336,8 +2346,12 @@ class StorageApi {
                 // console.log(`salt : ${arrayBufferToBase64(salt)}`)
                 // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
                 this.#getObjectKey(h.key, salt).then((image_key) => {
-                    const encrypted_image = sbCrypto.ab2str(new Uint8Array(data.image));
-                    // console.log("image_key: "); console.log(image_key)
+                    // const encrypted_image = sbCrypto.ab2str(new Uint8Array(data.image))
+                    const encrypted_image = data.image; // why wasn't it this way?
+                    console.log("image_key: ");
+                    console.log(image_key);
+                    console.log("encrypted_image: ");
+                    console.log(encrypted_image);
                     // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
                     sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer').then((padded_img) => {
                         const img = this.#unpadData(padded_img);
