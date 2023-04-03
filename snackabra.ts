@@ -264,8 +264,10 @@ export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedCont
   try {
     let t: ArrayBuffer
     let iv: Uint8Array
-    console.log("=+=+=+=+ processing content")
-    console.log(o.content.constructor.name)
+    if (DBG) {
+      console.log("=+=+=+=+ processing content")
+      console.log(o.content.constructor.name)
+    }
     if (typeof o.content === 'string') {
       t = base64ToArrayBuffer(decodeURIComponent(o.content))
     } else {
@@ -1178,17 +1180,21 @@ class SBCrypto {  /*************************************************************
   unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'string'): Promise<string>
   unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'arrayBuffer'): Promise<ArrayBuffer>
   unwrap(k: CryptoKey, o: EncryptedContents, returnType: 'string' | 'arrayBuffer') {
-    console.log("SBCrypto.unwrap(), got k/o:")
-    console.log(k)
-    console.log(o)
+    if (DBG) {
+      console.log("SBCrypto.unwrap(), got k/o:")
+      console.log(k)
+      console.log(o)
+    }
     return new Promise(async (resolve, reject) => {
       try {
         const { content: t, iv: iv } = encryptedContentsMakeBinary(o)
-        console.log("======== calling subtle.decrypt with iv, k, t (AES-GCM):")
-        console.log(iv)
-        console.log(k)
-        console.log(t)
-        console.log("======== (end of subtle.decrypt parameters)")
+        if (DBG) {
+          console.log("======== calling subtle.decrypt with iv, k, t (AES-GCM):")
+          console.log(iv)
+          console.log(k)
+          console.log(t)
+          console.log("======== (end of subtle.decrypt parameters)")
+        }
         crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, k, t).then((d) => {
           if (returnType === 'string') {
             resolve(new TextDecoder().decode(d))
@@ -2325,8 +2331,8 @@ export interface SBObjectHandle {
   // you'll need these in case you want to track an object
   // across future (storage) servers, but as long as you
   // are within the same SB servers you can request them.
-  iv?: Uint8Array, 
-  salt?: Uint8Array,
+  iv?: Uint8Array | string, 
+  salt?: Uint8Array | string,
   // the following are optional and not tracked by
   // shard servers etc, but facilitates app usage
   fileName?: string, // by convention will be "PAYLOAD" if it's a set of objects
@@ -2451,7 +2457,7 @@ class StorageApi {
               'iterations': 100000, // small is fine, we want it snappy
               'hash': 'SHA-256'
             }, keyMaterial, { 'name': 'AES-GCM', 'length': 256 }, true, ['encrypt', 'decrypt']).then((key) => {
-              console.log(key)
+              // console.log(key)
               resolve(key)
             })
           })
@@ -2564,10 +2570,17 @@ class StorageApi {
    * @param roomId
    *
    */
-  storeObject(buf: BodyInit, type: SBObjectType, roomId: SBChannelId, metadata?: SBObjectMetadata): Promise<SBObjectHandle> {
+  storeObject(buf: BodyInit | Uint8Array, type: SBObjectType, roomId: SBChannelId, metadata?: SBObjectMetadata): Promise<SBObjectHandle> {
     // export async function saveImage(sbImage, roomId, sendSystemMessage)
     return new Promise((resolve, reject) => {
-      if (!(buf instanceof ArrayBuffer)) reject('buf must be an ArrayBuffer')
+      if (buf instanceof Uint8Array) {
+        if (DBG) console.log('converting Uint8Array to ArrayBuffer')
+        buf = new Uint8Array(buf).buffer
+      }
+      if (!(buf instanceof ArrayBuffer)) {
+        if (DBG) console.log('buf must be an ArrayBuffer:'); console.log(buf);
+        reject('buf must be an ArrayBuffer')
+      }
       const bufSize = (buf as ArrayBuffer).byteLength
       if (!metadata) {
         // console.warn('No metadata')
@@ -2673,7 +2686,7 @@ class StorageApi {
           image: data,
           storageToken: (new TextEncoder()).encode(storageToken),
           vid: crypto.getRandomValues(new Uint8Array(48))
-        })
+      })
       })
         .then((response: Response) => {
           if (!response.ok) { reject('response from storage server was not OK') }
@@ -2709,26 +2722,38 @@ class StorageApi {
         // do nothing - this is expected
       } finally {
         const data = extractPayload(payload)
-        // console.log(data)
+        // payload includes nonce and salt
         const iv = new Uint8Array(data.iv)
-        // if (h.iv) _sb_assert(compareBuffers(iv, h.iv), 'nonce (iv) differs')
-        if ((h.iv) && (!compareBuffers(iv, h.iv))) {
+        const salt = new Uint8Array(data.salt)
+        // we accept b64 versions
+        const handleIV: Uint8Array | undefined = (!h.iv) ? undefined : (typeof h.iv === 'string') ? base64ToArrayBuffer(h.iv) : h.iv
+        const handleSalt: Uint8Array | undefined = (!h.salt) ? undefined : (typeof h.salt === 'string') ? base64ToArrayBuffer(h.salt) : h.salt
+
+        if ((handleIV) && (!compareBuffers(iv, handleIV))) {
           console.error("WARNING: nonce from server differs from local copy")
           console.log(`object ID: ${h.id}`)
-          console.log(` local iv: ${arrayBufferToBase64(h.iv)}`)
+          console.log(` local iv: ${arrayBufferToBase64(handleIV)}`)
           console.log(`server iv: ${arrayBufferToBase64(data.iv)}`)
         }
-        const salt = new Uint8Array(data.salt)
-        if (h.salt) _sb_assert(compareBuffers(salt, h.salt), 'salt differs')
-        // console.log("will use nonce and salt of:")
-        // console.log(`iv: ${arrayBufferToBase64(iv)}`)
-        // console.log(`salt : ${arrayBufferToBase64(salt)}`)
-        // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt);
+        if ((handleSalt) && (!compareBuffers(salt, handleSalt))) {
+          console.error("WARNING: salt from server differs from local copy (will use server salt)")
+          console.log(`object ID: ${h.id}`)
+          console.log(` local salt: ${arrayBufferToBase64(handleSalt)}`)
+          console.log(`server salt: ${arrayBufferToBase64(data.salt)}`)
+        }
+        if (DBG) {
+          console.log("will use nonce and salt of:")
+          console.log(`iv: ${arrayBufferToBase64(iv)}`)
+          console.log(`salt : ${arrayBufferToBase64(salt)}`)
+        }
+        // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt)
         this.#getObjectKey(h.key, salt).then((image_key) => {
           // const encrypted_image = sbCrypto.ab2str(new Uint8Array(data.image))
           const encrypted_image = data.image // why wasn't it this way?
-          console.log("image_key: "); console.log(image_key)
-          console.log("encrypted_image: "); console.log(encrypted_image)
+          if (DBG) {
+            console.log("image_key: "); console.log(image_key)
+            console.log("encrypted_image: "); console.log(encrypted_image)
+          }
           // const padded_img: ArrayBuffer = await sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer')
           sbCrypto.unwrap(image_key, { content: encrypted_image, iv: iv }, 'arrayBuffer').then((padded_img: ArrayBuffer) => {
             const img: ArrayBuffer = this.#unpadData(padded_img)
@@ -2751,9 +2776,15 @@ class StorageApi {
    * if you only have the 'id' and 'verification' fields, you
    * can reconstruct / request the rest. The current interface
    * will return both nonce, salt, and encrypted data.
+   * 
+   * @param h SBObjectHandle - the object to fetch
+   * @param returnType 'string' | 'arrayBuffer' - the type of data to return (default: 'arrayBuffer')
+   * @returns Promise<ArrayBuffer | string> - the shard data
    */
+  fetchData(h: SBObjectHandle, returnType: 'string' ): Promise<string>
+  fetchData(h: SBObjectHandle, returnType?: 'arrayBuffer'): Promise<ArrayBuffer>
   @VerifyParameters
-  fetchData(h: SBObjectHandle): Promise<ArrayBuffer> {
+  fetchData(h: SBObjectHandle, returnType: 'string' | 'arrayBuffer' = 'arrayBuffer'): Promise<ArrayBuffer | string> {
     // TODO: change SBObjectHandle from being an interface to being a class
     // _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
     return new Promise((resolve, reject) => {
@@ -2779,7 +2810,12 @@ class StorageApi {
               return response.arrayBuffer()
             })
             .then((payload: ArrayBuffer) => {
-              resolve(this.#processData(payload, h))
+              return this.#processData(payload, h)
+            })
+            .then((payload) => {
+              // _localStorage.setItem(`${h.id}_cache`, arrayBufferToBase64(payload))
+              if (returnType === 'string') resolve(sbCrypto.ab2str(new Uint8Array(payload)))
+              else resolve(payload)
             })
         })
         // fetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + h.verification, { method: 'GET' })
@@ -3212,6 +3248,8 @@ class ChannelApi {
 
 //#region - class ChannelAPI - TODO implement these methods
 
+let DBG = false;
+
 class Snackabra {
   #storage!: StorageApi
   #channel!: Channel
@@ -3234,13 +3272,15 @@ class Snackabra {
    *     }
    *
    * @param args {SBServer} server names (optional)
+   * @param args {DEBUG} if set to true, will make ALL jslib calls verbose in the console
    * 
    * 
    */
-  constructor(args?: SBServer) {
+  constructor(args?: SBServer, DEBUG: boolean = false) {
     if (args) {
       this.#preferredServer = Object.assign({}, args)
       this.#storage = new StorageApi(args.storage_server, args.channel_server)
+      if (DEBUG) DBG = true
     }
 
   }

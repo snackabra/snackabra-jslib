@@ -625,8 +625,8 @@ export interface SBObjectHandle {
     id: string;
     key: string;
     verification: Promise<string> | string;
-    iv?: Uint8Array;
-    salt?: Uint8Array;
+    iv?: Uint8Array | string;
+    salt?: Uint8Array | string;
     fileName?: string;
     dateAndTime?: string;
     shardServer?: string;
@@ -671,7 +671,7 @@ declare class StorageApi {
      * @param roomId
      *
      */
-    storeObject(buf: BodyInit, type: SBObjectType, roomId: SBChannelId, metadata?: SBObjectMetadata): Promise<SBObjectHandle>;
+    storeObject(buf: BodyInit | Uint8Array, type: SBObjectType, roomId: SBChannelId, metadata?: SBObjectMetadata): Promise<SBObjectHandle>;
     /**
      * StorageApi.saveFile()
      *
@@ -698,8 +698,13 @@ declare class StorageApi {
      * if you only have the 'id' and 'verification' fields, you
      * can reconstruct / request the rest. The current interface
      * will return both nonce, salt, and encrypted data.
+     *
+     * @param h SBObjectHandle - the object to fetch
+     * @param returnType 'string' | 'arrayBuffer' - the type of data to return (default: 'arrayBuffer')
+     * @returns Promise<ArrayBuffer | string> - the shard data
      */
-    fetchData(h: SBObjectHandle): Promise<ArrayBuffer>;
+    fetchData(h: SBObjectHandle, returnType: 'string'): Promise<string>;
+    fetchData(h: SBObjectHandle, returnType?: 'arrayBuffer'): Promise<ArrayBuffer>;
     /**
      * StorageApi().retrieveData()
      * retrieves an object from storage
@@ -782,10 +787,11 @@ declare class Snackabra {
      *     }
      *
      * @param args {SBServer} server names (optional)
+     * @param args {DEBUG} if set to true, will make ALL jslib calls verbose in the console
      *
      *
      */
-    constructor(args?: SBServer);
+    constructor(args?: SBServer, DEBUG?: boolean);
     /**
      * Connects to :term:`Channel Name` on this SB config.
      * Returns a channel object right away, but the channel
