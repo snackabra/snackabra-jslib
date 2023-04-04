@@ -128,7 +128,7 @@ export interface ChannelKeys {
 
     SB standard wrapping encrypted messages.
 
-    Encryption is done with AES-GCM, 16 bytes of salt (iv), The
+    Encryption is done with AES-GCM, 16 bytes of salt, The
     ``contents`` are url-safe base64, same thing with the nonce (iv),
     depending on if it's internal or over wire.
  */
@@ -145,7 +145,8 @@ export interface EncryptedContentsBin {
 }
 /**
  * Force EncryptedContents object to binary (interface
- * supports either string or arrays)
+ * supports either string or arrays). String contents
+ * implies base64 encoding.
  */
 export declare function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedContentsBin;
 export type ChannelMessageTypes = 'ack' | 'keys' | 'invalid' | 'ready' | 'encypted';

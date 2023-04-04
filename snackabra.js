@@ -53,7 +53,8 @@ const SBKnownServers = [
 ];
 /**
  * Force EncryptedContents object to binary (interface
- * supports either string or arrays)
+ * supports either string or arrays). String contents
+ * implies base64 encoding.
  */
 export function encryptedContentsMakeBinary(o) {
     try {
@@ -64,7 +65,12 @@ export function encryptedContentsMakeBinary(o) {
             console.log(o.content.constructor.name);
         }
         if (typeof o.content === 'string') {
-            t = base64ToArrayBuffer(decodeURIComponent(o.content));
+            try {
+                t = base64ToArrayBuffer(decodeURIComponent(o.content));
+            }
+            catch (e) {
+                throw new Error("EncryptedContents is string format but not base64 (?)");
+            }
         }
         else {
             // console.log(structuredClone(o))
@@ -72,37 +78,50 @@ export function encryptedContentsMakeBinary(o) {
             _sb_assert((ocn === 'ArrayBuffer') || (ocn === 'Uint8Array'), 'undetermined content type in EncryptedContents object');
             t = o.content;
         }
-        // console.log("=+=+=+=+ processing nonce")
+        if (DBG)
+            console.log("=+=+=+=+ processing nonce");
         if (typeof o.iv === 'string') {
-            // console.log("got iv as string:")
-            // console.log(structuredClone(o.iv))
+            if (DBG) {
+                console.log("got iv as string:");
+                console.log(structuredClone(o.iv));
+            }
             iv = base64ToArrayBuffer(decodeURIComponent(o.iv));
-            // console.log("this was turned into array:")
-            // console.log(structuredClone(iv))
+            if (DBG) {
+                console.log("this was turned into array:");
+                console.log(structuredClone(iv));
+            }
         }
         else if ((o.iv.constructor.name === 'Uint8Array') || (o.iv.constructor.name === 'ArrayBuffer')) {
-            // console.log("it's an array already")
+            if (DBG) {
+                console.log("it's an array already");
+            }
             iv = new Uint8Array(o.iv);
         }
         else {
-            // probably a dictionary
+            if (DBG)
+                console.log("probably a dictionary");
             try {
                 iv = new Uint8Array(Object.values(o.iv));
             }
             catch (e) {
-                // console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:")
-                // console.error(o.iv)
+                if (DBG) {
+                    console.error("ERROR: cannot figure out format of iv (nonce), here's the input object:");
+                    console.error(o.iv);
+                }
                 _sb_assert(false, "undetermined iv (nonce) type, see console");
             }
         }
-        // console.log("decided on nonce as:")
-        // console.log(iv!)
+        if (DBG) {
+            console.log("decided on nonce as:");
+            console.log(iv);
+        }
         _sb_assert(iv.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv.length})`);
         return { content: t, iv: iv };
     }
     catch (e) {
         console.error('encryptedContentsMakeBinary() failed:');
         console.error(e);
+        console.trace();
         console.log(e.stack);
         throw e;
     }
@@ -2338,12 +2357,25 @@ class StorageApi {
                 // normal operation is to break on the JSON.parse() and continue to finally clause
                 if (j.error)
                     reject(`#processData() error: ${j.error}`);
+                if (DBG) {
+                    console.log(`#processData() JSON.parse() returned:`);
+                    console.log(j);
+                    console.warn("should this happen?");
+                }
             }
             catch (e) {
                 // do nothing - this is expected
+                if (DBG) {
+                    console.log(`#processData() JSON.parse() failed as expected:`);
+                    console.log(e);
+                }
             }
             finally {
                 const data = extractPayload(payload);
+                if (DBG) {
+                    console.log("Payload is:");
+                    console.log(data);
+                }
                 // payload includes nonce and salt
                 const iv = new Uint8Array(data.iv);
                 const salt = new Uint8Array(data.salt);
@@ -2357,10 +2389,36 @@ class StorageApi {
                     console.log(`server iv: ${arrayBufferToBase64(data.iv)}`);
                 }
                 if ((handleSalt) && (!compareBuffers(salt, handleSalt))) {
-                    console.error("WARNING: salt from server differs from local copy (will use server salt)");
-                    console.log(`object ID: ${h.id}`);
-                    console.log(` local salt: ${arrayBufferToBase64(handleSalt)}`);
-                    console.log(`server salt: ${arrayBufferToBase64(data.salt)}`);
+                    console.error("WARNING: salt from server differs from local copy (will use server)");
+                    console.log(` object ID: ${h.id}`);
+                    console.log("server salt:");
+                    console.log("data.salt as b64:");
+                    console.log(arrayBufferToBase64(data.salt));
+                    console.log("data.salt unprocessed:");
+                    console.log(data.salt);
+                    console.log("'salt' as b64:");
+                    console.log(arrayBufferToBase64(salt));
+                    console.log("salt unprocessed:");
+                    console.log(salt);
+                    console.log("local salt:");
+                    if (!h.salt) {
+                        console.log("h.salt is undefined");
+                    }
+                    else if (typeof h.salt === 'string') {
+                        console.log("h.salt is in string form (unprocessed):");
+                        console.log(h.salt);
+                    }
+                    else {
+                        console.log("h.salt is in arrayBuffer or Uint8Array");
+                        console.log("h.salt as b64:");
+                        console.log(arrayBufferToBase64(h.salt));
+                        console.log("h.salt unprocessed:");
+                        console.log(h.salt);
+                    }
+                    console.log("handleSalt as b64:");
+                    console.log(arrayBufferToBase64(handleSalt));
+                    console.log("handleSalt unprocessed:");
+                    console.log(handleSalt);
                 }
                 if (DBG) {
                     console.log("will use nonce and salt of:");
@@ -2369,11 +2427,12 @@ class StorageApi {
                 }
                 // const image_key: CryptoKey = await this.#getObjectKey(imageMetaData!.previewKey!, salt)
                 this.#getObjectKey(h.key, salt).then((image_key) => {
+                    // TODO: test this, it used to call ab2str()? how could that work?
                     // const encrypted_image = sbCrypto.ab2str(new Uint8Array(data.image))
-                    const encrypted_image = data.image; // why wasn't it this way?
+                    const encrypted_image = new Uint8Array(data.image);
                     if (DBG) {
-                        console.log("image_key: ");
-                        console.log(image_key);
+                        console.log("data.image:      ");
+                        console.log(data.image);
                         console.log("encrypted_image: ");
                         console.log(encrypted_image);
                     }
@@ -2396,6 +2455,11 @@ class StorageApi {
         // _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
         return new Promise((resolve, reject) => {
             try {
+                if (DBG) {
+                    console.log("Calling fetchData():");
+                    console.log(h);
+                    console.log(returnType);
+                }
                 if (!h)
                     reject('invalid');
                 // TODO: haven't tested this caching stuff .. moving from the refactored web client
