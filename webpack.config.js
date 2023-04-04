@@ -1,6 +1,7 @@
 module.exports = {
     entry: './snackabra.js', // the entry point of your application
     mode: 'production',
+    watch: true,
     optimization: {
         minimize: true
     },
