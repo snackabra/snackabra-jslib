@@ -2694,18 +2694,23 @@ class ChannelApi {
      */
     getAdminData() {
         return new Promise(async (resolve, reject) => {
-            const token_data = new Date().getTime().toString();
-            sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
-                .then((token_sign) => {
-                return this.#callApi('/getAdminData', {
-                    method: 'GET',
-                    credentials: 'include',
-                    headers: {
-                        'authorization': token_data + '.' + token_sign,
-                        'Content-Type': 'application/json'
-                    }
+            try {
+                const token_data = new Date().getTime().toString();
+                sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
+                    .then((token_sign) => {
+                    resolve(this.#callApi('/getAdminData', {
+                        method: 'GET',
+                        credentials: 'include',
+                        headers: {
+                            'authorization': token_data + '.' + token_sign,
+                            'Content-Type': 'application/json'
+                        }
+                    }));
                 });
-            });
+            }
+            catch (e) {
+                reject("ChannelApi Error [3]: " + WrapError(e));
+            }
         });
     }
     /**

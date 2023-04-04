@@ -299,7 +299,7 @@ export function encryptedContentsMakeBinary(o: EncryptedContents): EncryptedCont
         _sb_assert(false, "undetermined iv (nonce) type, see console")
       }
     }
-    if (DBG) { console.log("decided on nonce as:"); console.log(iv!)}
+    if (DBG) { console.log("decided on nonce as:"); console.log(iv!) }
     _sb_assert(iv!.length == 12, `unwrap(): nonce should be 12 bytes but is not (${iv!.length})`)
     return { content: t, iv: iv! }
   } catch (e: any) {
@@ -2028,8 +2028,8 @@ export class ChannelSocket extends Channel {
     xhr.timeout = timeout;
     xhr.send();
   }
-  
-  
+
+
   /* ChannelSocket */
   #readyPromise() {
     const url = this.#ws.url
@@ -2322,7 +2322,7 @@ export type SBObjectType = 'f' | 'p' | 'b'
 
 export interface SBObjectHandle {
   [SB_OBJECT_HANDLE_SYMBOL]?: boolean,
-  version: '1', 
+  version: '1',
   type: SBObjectType,
   // for long-term storage you only need these:
   id: string, key: string,
@@ -2334,7 +2334,7 @@ export interface SBObjectHandle {
   // you'll need these in case you want to track an object
   // across future (storage) servers, but as long as you
   // are within the same SB servers you can request them.
-  iv?: Uint8Array | string, 
+  iv?: Uint8Array | string,
   salt?: Uint8Array | string,
   // the following are optional and not tracked by
   // shard servers etc, but facilitates app usage
@@ -2689,7 +2689,7 @@ class StorageApi {
           image: data,
           storageToken: (new TextEncoder()).encode(storageToken),
           vid: crypto.getRandomValues(new Uint8Array(48))
-      })
+        })
       })
         .then((response: Response) => {
           if (!response.ok) { reject('response from storage server was not OK') }
@@ -2822,7 +2822,7 @@ class StorageApi {
    * @param returnType 'string' | 'arrayBuffer' - the type of data to return (default: 'arrayBuffer')
    * @returns Promise<ArrayBuffer | string> - the shard data
    */
-  fetchData(h: SBObjectHandle, returnType: 'string' ): Promise<string>
+  fetchData(h: SBObjectHandle, returnType: 'string'): Promise<string>
   fetchData(h: SBObjectHandle, returnType?: 'arrayBuffer'): Promise<ArrayBuffer>
   @VerifyParameters
   fetchData(h: SBObjectHandle, returnType: 'string' | 'arrayBuffer' = 'arrayBuffer'): Promise<ArrayBuffer | string> {
@@ -3014,19 +3014,19 @@ class ChannelApi {
     if (init) console.log(init)
     return new Promise((resolve, reject) => {
       try {
-      SBFetch(this.#channelServer + this.#channel.channelId + path, init)
-        .then((response: Response) => {
-          if (!response.ok) reject(new Error('Network response was not OK'))
-          return response.json()
-        })
-        .then((data: Dictionary<any>) => {
-          if (data.error) reject(new Error(data.error))
-          resolve(data)
-        })
-        .catch((e: Error) => { reject("ChannelApi Error [1]: " + WrapError(e)) })
+        SBFetch(this.#channelServer + this.#channel.channelId + path, init)
+          .then((response: Response) => {
+            if (!response.ok) reject(new Error('Network response was not OK'))
+            return response.json()
+          })
+          .then((data: Dictionary<any>) => {
+            if (data.error) reject(new Error(data.error))
+            resolve(data)
+          })
+          .catch((e: Error) => { reject("ChannelApi Error [1]: " + WrapError(e)) })
       } catch (e) {
         reject("ChannelApi Error [2]: " + WrapError(e))
-      } 
+      }
     })
   }
 
@@ -3056,7 +3056,7 @@ class ChannelApi {
    */
   @ExceptionReject
   isLocked() {
-    return new Promise<boolean>((resolve) => (this.#callApi('/roomLocked')).then((d) => { console.log(d); resolve(d.locked === true);}))
+    return new Promise<boolean>((resolve) => (this.#callApi('/roomLocked')).then((d) => { console.log(d); resolve(d.locked === true); }))
   }
 
   /**
@@ -3077,18 +3077,22 @@ class ChannelApi {
    */
   getAdminData() {
     return new Promise(async (resolve, reject) => {
-      const token_data: string = new Date().getTime().toString()
-      sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
-        .then((token_sign: string) => {
-          return this.#callApi('/getAdminData', {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-              'authorization': token_data + '.' + token_sign,
-              'Content-Type': 'application/json'
-            }
+      try {
+        const token_data: string = new Date().getTime().toString()
+        sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
+          .then((token_sign: string) => {
+            resolve(this.#callApi('/getAdminData', {
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                'authorization': token_data + '.' + token_sign,
+                'Content-Type': 'application/json'
+              }
+            }))
           })
-        })
+      } catch (e) {
+        reject("ChannelApi Error [3]: " + WrapError(e))
+      }
     })
   }
 
@@ -3352,28 +3356,28 @@ class Snackabra {
       else return Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready))
     })
   }
-   
-    // if there's a 'preferred' (only) server then we we can return a promise right away
-    // return new Promise<ChannelSocket>((resolve, reject) => {
-      
-      // else Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
-      //   .then((c) => { console.log("Got channel:"); console.log(c); resolve(c.ready); })
-      //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
 
-      // Promise.any(this.#preferredServer
-      //   ? [new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)]
-      //   : SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
-      //   .then((c) => { console.log("Got channel:"); console.log(c); resolve(c); })
-      //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
-    /// })
-     // }
+  // if there's a 'preferred' (only) server then we we can return a promise right away
+  // return new Promise<ChannelSocket>((resolve, reject) => {
 
-    // return this.#preferredServer
-    //   ? new Promise<ChannelSocket>((resolve, reject) => resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)))
-    //   : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
-    //   .then((c) => resolve(c.ready))
-    //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
-  
+  // else Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
+  //   .then((c) => { console.log("Got channel:"); console.log(c); resolve(c.ready); })
+  //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
+
+  // Promise.any(this.#preferredServer
+  //   ? [new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)]
+  //   : SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
+  //   .then((c) => { console.log("Got channel:"); console.log(c); resolve(c); })
+  //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
+  /// })
+  // }
+
+  // return this.#preferredServer
+  //   ? new Promise<ChannelSocket>((resolve, reject) => resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)))
+  //   : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
+  //   .then((c) => resolve(c.ready))
+  //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
+
 
   /** 
    * Creates a new channel. Currently uses trivial authentication.
