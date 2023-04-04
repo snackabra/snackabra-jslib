@@ -2063,6 +2063,10 @@ class StorageApi {
         let finalArray = _appendBuffer(buf, (new Uint8Array(_target - image_size)).buffer);
         // set the (original) size in the last 4 bytes
         (new DataView(finalArray)).setUint32(_target - 4, image_size);
+        if (DBG) {
+            console.log("#padBuf bytes:");
+            console.log(finalArray.slice(-4));
+        }
         return finalArray;
     }
     /**
@@ -2071,13 +2075,18 @@ class StorageApi {
      * all the padding and returns the actual object.
      */
     #unpadData(data_buffer) {
-        // psm: ... wait has this ever worked?
-        // const _size = new Uint32Array(data_buffer.slice(-4))[0]
-        // fixing with:
-        const _size = new DataView(data_buffer.slice(-4)).getUint32(0);
-        // .. interesting, we didn't notice until we started doing things
-        //    like sharding javascript files and then injecting them ...
-        // console.log(`#unpadData - size of object is ${_size}`)
+        const tail = data_buffer.slice(-4);
+        var _size = new DataView(tail).getUint32(0);
+        const _little_endian = new DataView(tail).getUint32(0, true);
+        if (_little_endian < _size) {
+            if (DBG)
+                console.warn("#unpadData - size of shard encoded as little endian (fixed upon read)");
+            _size = _little_endian;
+        }
+        if (DBG) {
+            console.log(`#unpadData - size of object is ${_size}`);
+            // console.log(tail)
+        }
         return data_buffer.slice(0, _size);
     }
     #getObjectKey(fileHash, _salt) {
@@ -2365,10 +2374,10 @@ class StorageApi {
             }
             catch (e) {
                 // do nothing - this is expected
-                if (DBG) {
-                    console.log(`#processData() JSON.parse() failed as expected:`);
-                    console.log(e);
-                }
+                // if (DBG) {
+                //   console.log(`#processData() JSON.parse() failed as expected:`)
+                //   console.log(e)
+                // }
             }
             finally {
                 const data = extractPayload(payload);
@@ -2429,7 +2438,8 @@ class StorageApi {
                 this.#getObjectKey(h.key, salt).then((image_key) => {
                     // TODO: test this, it used to call ab2str()? how could that work?
                     // const encrypted_image = sbCrypto.ab2str(new Uint8Array(data.image))
-                    const encrypted_image = new Uint8Array(data.image);
+                    // const encrypted_image = new Uint8Array(data.image)
+                    const encrypted_image = data.image;
                     if (DBG) {
                         console.log("data.image:      ");
                         console.log(data.image);
@@ -2444,6 +2454,10 @@ class StorageApi {
                         //   console.error('(Image error: ' + img.error + ')');
                         //   throw new Error('Failed to fetch data - authentication or formatting error');
                         // }
+                        if (DBG) {
+                            console.log(" unwrapped img: ");
+                            console.log(img);
+                        }
                         resolve(img);
                     });
                 });
