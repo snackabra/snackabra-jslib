@@ -1154,7 +1154,7 @@ class SB384 {
                             this.#exportable_privateKey = v[1];
                             this.#generateRoomId(this.#exportable_pubKey.x, this.#exportable_pubKey.y).then((channelId) => {
                                 // console.log('******** setting ownerChannelId')
-                                // console.log(channelId)  
+                                // console.log(channelId)
                                 this.#ownerChannelId = channelId;
                                 this.#SB384ReadyFlag = true;
                                 resolve(this);
@@ -1439,7 +1439,7 @@ class Channel extends SB384 {
             console.log(\`test message sent! (${c})\`) })
         })
       })
-    
+  
   
      *
      * @param {Snackabra} sbServer server to join
@@ -1580,7 +1580,7 @@ export class ChannelSocket extends Channel {
         // console.log("----ChannelSocket.constructor() start:")
         // console.log(sbServer)
         // console.log("----ChannelSocket.constructor() ... end")
-        super(sbServer, key, channelId /*, identity ? identity : new Identity() */); // initialize 'channel' parent    
+        super(sbServer, key, channelId /*, identity ? identity : new Identity() */); // initialize 'channel' parent
         _sb_assert(sbServer.channel_ws, 'ChannelSocket(): no websocket server name provided');
         const url = sbServer.channel_ws + '/api/room/' + channelId + '/websocket';
         this.#onMessage = onMessage;
@@ -1676,7 +1676,7 @@ export class ChannelSocket extends Channel {
                     }
                 }
                 else {
-                    // 
+                    //
                     // TODO: other message types (low level?) are parsed here ...
                     //
                     console.log("++++++++ #processMessage: can't decipher message, passing along unchanged:");
@@ -1924,7 +1924,7 @@ export class ChannelSocket extends Channel {
         if (this.#ws.closed) {
             if (this.#traceSocket)
                 console.info("send() triggered reset of #readyPromise() (normal)");
-            this.ready = this.#readyPromise(); // possible reset of ready 
+            this.ready = this.#readyPromise(); // possible reset of ready
         }
         return new Promise((resolve, reject) => {
             message.ready.then((message) => {
@@ -2010,10 +2010,15 @@ __decorate([
  */
 class StorageApi {
     server;
+    shardServer;
     channelServer; // approves budget, TODO this needs some thought
-    constructor(server, channelServer) {
+    constructor(server, channelServer, shardServer) {
         this.server = server + '/api/v1';
         this.channelServer = channelServer + '/api/room/';
+        if (shardServer)
+            this.shardServer = shardServer + '/api/v1';
+        else
+            this.shardServer = 'https://shard.3.8.4.land/api/v1';
     }
     /**
      * Hashes and splits into two (h1 and h1) signature of data, h1
@@ -2090,7 +2095,7 @@ class StorageApi {
         return data_buffer.slice(0, _size);
     }
     #getObjectKey(fileHash, _salt) {
-        // was: getFileKey(fileHash: string, _salt: ArrayBuffer) 
+        // was: getFileKey(fileHash: string, _salt: ArrayBuffer)
         // also (?): getImageKey(imageHash, _salt) {
         // console.log('getObjectKey with hash and salt:')
         // console.log(fileHash)
@@ -2143,7 +2148,7 @@ class StorageApi {
         return new Promise((resolve, reject) => {
             this.#getObjectKey(keyData, salt).then((key) => {
                 sbCrypto.encrypt(image, key, iv, 'arrayBuffer').then((data) => {
-                    // const storageTokenReq = await(await 
+                    // const storageTokenReq = await(await
                     SBFetch(this.channelServer + roomId + '/storageRequest?size=' + data.byteLength)
                         .then((r) => r.json())
                         .then((storageTokenReq) => {
@@ -2490,7 +2495,10 @@ class StorageApi {
                     // console.log("verification token:")
                     // console.log(verificationToken)
                     _sb_assert(verificationToken, "fetchData(): missing verification token (?)");
-                    SBFetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
+                    const useServer = h.shardServer ? h.shardServer + '/api/v1' : (this.shardServer ? this.shardServer : this.server);
+                    if (DBG)
+                        console.log("fetching from server: " + useServer);
+                    SBFetch(useServer + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
                         .then((response) => {
                         if (!response.ok)
                             reject(new Error('Network response was not OK'));
@@ -2644,8 +2652,9 @@ class ChannelApi {
         });
     }
     #callApi(path, init) {
-        console.log(path);
-        if (init)
+        if (DBG)
+            console.log(path);
+        if ((DBG) && (init))
             console.log(init);
         return new Promise((resolve, reject) => {
             try {
@@ -2708,23 +2717,18 @@ class ChannelApi {
      */
     getAdminData() {
         return new Promise(async (resolve, reject) => {
-            try {
-                const token_data = new Date().getTime().toString();
-                sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
-                    .then((token_sign) => {
-                    resolve(this.#callApi('/getAdminData', {
-                        method: 'GET',
-                        credentials: 'include',
-                        headers: {
-                            'authorization': token_data + '.' + token_sign,
-                            'Content-Type': 'application/json'
-                        }
-                    }));
+            const token_data = new Date().getTime().toString();
+            sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
+                .then((token_sign) => {
+                return this.#callApi('/getAdminData', {
+                    method: 'GET',
+                    credentials: 'include',
+                    headers: {
+                        'authorization': token_data + '.' + token_sign,
+                        'Content-Type': 'application/json'
+                    }
                 });
-            }
-            catch (e) {
-                reject("ChannelApi Error [3]: " + WrapError(e));
-            }
+            });
         });
     }
     /**
@@ -2754,14 +2758,16 @@ class ChannelApi {
                     if (v.match(regex)) {
                         const message = jsonParseWrapper(data[v], "L3318");
                         if (message.hasOwnProperty('encrypted_contents')) {
-                            console.log(message);
+                            if (DBG)
+                                console.log(message);
                             return message;
                         }
                     }
                 })
                     .map((v) => {
                     const message = jsonParseWrapper(data[v], "L3327");
-                    console.log(v, message.encrypted_contents, this.#channel.keys);
+                    if (DBG)
+                        console.log(v, message.encrypted_contents, this.#channel.keys);
                     return deCryptChannelMessage(v, message.encrypted_contents, this.#channel.keys);
                 }))
                     .then((decryptedMessageArray) => {
@@ -2931,7 +2937,7 @@ class Snackabra {
     constructor(args, DEBUG = false) {
         if (args) {
             this.#preferredServer = Object.assign({}, args);
-            this.#storage = new StorageApi(args.storage_server, args.channel_server);
+            this.#storage = new StorageApi(args.storage_server, args.channel_server, args.shard_server ? args.shard_server : undefined);
             if (DEBUG)
                 DBG = true;
         }
@@ -2948,9 +2954,9 @@ class Snackabra {
      */
     /* @Online */
     connect(onMessage, key, channelId /*, identity?: SB384 */) {
-        if (key)
+        if ((DBG) && (key))
             console.log(key);
-        if (channelId)
+        if ((DBG) && (channelId))
             console.log(channelId);
         return new Promise((resolve, reject) => {
             // if we have a preferred server then we do not have to wait for 'ready'

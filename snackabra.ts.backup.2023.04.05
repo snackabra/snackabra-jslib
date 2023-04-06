@@ -29,7 +29,7 @@
 
 /**
  * SBChannelHandle
- *
+ * 
  * Complete descriptor of a channel. 'key' is stringified 'jwk' key.
  * The key is always private. If it matches the channelId, then it's
  * an 'owner' key.
@@ -42,8 +42,7 @@ export interface SBChannelHandle {
 export interface SBServer {
   channel_server: string,
   channel_ws: string,
-  storage_server: string,
-  shard_server?: string
+  storage_server: string
 }
 
 /**
@@ -142,7 +141,7 @@ interface ImageMetaData {
    "sender_username":"TestBot",
    "image_sign":"3O0AYKthtWWYUX3AWDmdU4kTR49UyNyaA937CfKtcQw",
    "imageMetadata_sign":"4LmewpsH6TcRhHYQLivd4Ce87SI1AJIaezhJB5sdD7M"
-  }
+  } 
   */
 export interface ChannelMessage {
   type?: ChannelMessageTypes,
@@ -183,9 +182,9 @@ interface ChannelAckMessage {
 }
 
 /** sample channelKeys contents
- *
+ * 
  * ::
- *
+ * 
  * { "ready": true,
  *    "keys": {
  *            "ownerKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",
@@ -397,17 +396,17 @@ export class MessageBus {
 
 /**
  * SBFetch()
- *
+ * 
  * A "safe" fetch() that over time integrates with SB mesh.
- *
+ * 
  * See also :ref:`design note 5 <DN005>` for issues of connectivity.
- *
+ * 
  * TODO: this will be integrated with SB (Snackabra) object and exposed
  *       to platform API for possible app use.
- *
+ * 
  * @param input
- * @param init
- * @returns
+ * @param init 
+ * @returns 
  */
 function SBFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   // console.log("SBFetch()"); console.log(input); console.log(init);
@@ -743,10 +742,10 @@ export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, var
 
 /**
  * Appends two buffers and returns a new buffer
- *
- * @param buffer1
- * @param buffer2
- * @returns
+ * 
+ * @param buffer1 
+ * @param buffer2 
+ * @returns 
  */
 export function _appendBuffer(buffer1: Uint8Array | ArrayBuffer, buffer2: Uint8Array | ArrayBuffer): ArrayBuffer {
   const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
@@ -796,7 +795,7 @@ export function simpleRandomString(n: number, code: string): string {
  *     'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
  *
  * This is the base32mi disambiguation table
- *
+ * 
  *  ::
  *
  *     [OoQD] -> '0'
@@ -818,7 +817,7 @@ export function simpleRandomString(n: number, code: string): string {
  *     [w] -> 'W'
  *
  * Another way to think of it is this transform ('.' means no change):
- *
+ * 
  * ::
  *
  *     0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
@@ -1029,10 +1028,10 @@ export function decodeB64Url(input: string) {
 
 /**
  * SBCrypto
- *
+ * 
  * SBCrypto contains all the SB specific crypto functions,
  * as well as some general utility functions.
- *
+ * 
  * @class
  * @constructor
  * @public
@@ -1276,7 +1275,7 @@ class SBCrypto {  /*************************************************************
    * Standardized 'ab2str()' function, array buffer to string.
    * This assumes one byte per character.
    *
-   * @param {Uint8Array} buffer
+   * @param {Uint8Array} buffer 
    * @return {string} string
    */
   ab2str(buffer: Uint8Array): string {
@@ -1391,7 +1390,7 @@ function ExceptionReject(target: any, _propertyKey: string, descriptor: Property
 //#endregion - local decorators
 
 /**
- *
+ * 
  * @class
  * @constructor
  * @public
@@ -1410,19 +1409,19 @@ class SB384 {
 
   /**
    * Basic (core) capability object in SB.
-   *
+   * 
    * Note that all the getters below will throw an exception if the
    * corresponding information is not ready.
-   *
+   *  
    * Like most SB classes, SB384 follows the "ready template" design
    * pattern: the object is immediately available upon creation,
    * but isn't "ready" until it says it's ready. See `Channel Class`_
    * example below.
-   *
-   * @param key a jwk with which to create identity; if not provided,
+   * 
+   * @param key a jwk with which to create identity; if not provided, 
    * it will 'mint' (generate) them randomly, in other words it will
    * default to creating a new identity ("384").
-   *
+   * 
    */
   constructor(key?: JsonWebKey) {
     // console.log("setting SB384.ready")
@@ -1458,7 +1457,7 @@ class SB384 {
               this.#exportable_privateKey = v[1]
               this.#generateRoomId(this.#exportable_pubKey.x!, this.#exportable_pubKey.y!).then((channelId) => {
                 // console.log('******** setting ownerChannelId')
-                // console.log(channelId)
+                // console.log(channelId)  
                 this.#ownerChannelId = channelId
                 this.#SB384ReadyFlag = true
                 resolve(this)
@@ -1546,9 +1545,9 @@ function SBValidateObject(obj: SB_CLASSES | any, type: SB_CLASS_TYPES): boolean 
 
 /**
  * SBMessage
- *
+ * 
  * Body should be below 32KiB, though it tolerates up to 64KiB
- *
+ * 
  * @class
  * @constructor
  * @public
@@ -1676,7 +1675,7 @@ export class SBFile extends SBMessage {
 
 /**
  * Channel
- *
+ * 
  * @class
  * @constructor
  * @public
@@ -1706,14 +1705,14 @@ abstract class Channel extends SB384 {
 
   /**
    * Join a channel, returns channel object.
-   *
+   * 
    * Currently, you must have an identity when connecting, because every single
    * message is signed by sender. TODO is to look at how to provide a 'listening'
    * mode on channels.
-   *
+   * 
    * Most classes in SB follow the "ready" template: objects can be used
    * right away, but they decide for themselves if they're ready or not.
-   *
+   * 
    * Below is a (complete) example for reference:
 
   .. parsed-literal::
@@ -1757,11 +1756,11 @@ abstract class Channel extends SB384 {
         //
         // We can now send messages
         //
-        (new `SBMessage`_ (c, "Hello from TestBot!")).send().then((c) => {
+        (new `SBMessage`_ (c, "Hello from TestBot!")).send().then((c) => { 
           console.log(\`test message sent! (${c})\`) })
       })
     })
-
+  
 
    *
    * @param {Snackabra} sbServer server to join
@@ -1894,15 +1893,15 @@ export class ChannelSocket extends Channel {
 
   /**
    * ChannelSocket
-   *
+   * 
    * @param sbServer: {SBServer}
-   *
+   * 
    * */
   constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string) {
     // console.log("----ChannelSocket.constructor() start:")
     // console.log(sbServer)
     // console.log("----ChannelSocket.constructor() ... end")
-    super(sbServer, key, channelId /*, identity ? identity : new Identity() */) // initialize 'channel' parent
+    super(sbServer, key, channelId /*, identity ? identity : new Identity() */) // initialize 'channel' parent    
     _sb_assert(sbServer.channel_ws, 'ChannelSocket(): no websocket server name provided')
     const url = sbServer.channel_ws + '/api/room/' + channelId + '/websocket'
     this.#onMessage = onMessage
@@ -1990,7 +1989,7 @@ export class ChannelSocket extends Channel {
             console.info(`WARNING: did not find matching ack for id ${ack_id}`)
           }
         } else {
-          //
+          // 
           // TODO: other message types (low level?) are parsed here ...
           //
           console.log("++++++++ #processMessage: can't decipher message, passing along unchanged:")
@@ -2208,7 +2207,7 @@ export class ChannelSocket extends Channel {
 
   /**
    * ChannelSocket.keys
-   *
+   * 
    * Will throw an exception if keys are unknown or not yet loaded
    */
   get keys(): ChannelKeys {
@@ -2234,7 +2233,7 @@ export class ChannelSocket extends Channel {
 
   /**
     * ChannelSocket.send()
-    *
+    * 
     * Returns a promise that resolves to "success" when sent,
     * or an error message if it fails.
     */
@@ -2244,7 +2243,7 @@ export class ChannelSocket extends Channel {
     _sb_assert(this.#ws.websocket, "ChannelSocket.send() called before ready")
     if (this.#ws.closed) {
       if (this.#traceSocket) console.info("send() triggered reset of #readyPromise() (normal)")
-      this.ready = this.#readyPromise() // possible reset of ready
+      this.ready = this.#readyPromise() // possible reset of ready 
     }
     return new Promise((resolve, reject) => {
       message.ready.then((message) => {
@@ -2328,7 +2327,7 @@ export interface SBObjectHandle {
   // for long-term storage you only need these:
   id: string, key: string,
   // and currently you also need to keep track of this,
-  // but you can start sharing / communicating the
+  // but you can start sharing / communicating the 
   // object before it's resolved: among other things it
   // serves as a 'write-through' verification
   verification: Promise<string> | string,
@@ -2341,7 +2340,7 @@ export interface SBObjectHandle {
   // shard servers etc, but facilitates app usage
   fileName?: string, // by convention will be "PAYLOAD" if it's a set of objects
   dateAndTime?: string, // optional: time of shard creation
-  shardServer?: string, // optionally direct a shard to a specific server (especially for reads)
+  shardServer?: string, // optionally direct a shard to a specific server
   fileType?: string, // optional: file type (mime)
   lastModified?: number, // optional: last modified time (of underlying file, if any)
   actualSize?: number, // optional: actual size of underlying file, if any
@@ -2369,16 +2368,11 @@ export interface SBObjectMetadata {
  */
 class StorageApi {
   server: string;
-  shardServer?: string;
   channelServer: string; // approves budget, TODO this needs some thought
 
-  constructor(server: string, channelServer: string, shardServer?: string) {
+  constructor(server: string, channelServer: string) {
     this.server = server + '/api/v1';
     this.channelServer = channelServer + '/api/room/'
-    if (shardServer)
-      this.shardServer = shardServer + '/api/v1'
-    else
-      this.shardServer = 'https://shard.3.8.4.land/api/v1'
   }
 
   /**
@@ -2435,7 +2429,7 @@ class StorageApi {
   /**
    * The actual size of the object is encoded in the
    * last 4 bytes of the buffer. This function removes
-   * all the padding and returns the actual object.
+   * all the padding and returns the actual object. 
    */
   #unpadData(data_buffer: ArrayBuffer): ArrayBuffer {
     const tail = data_buffer.slice(-4)
@@ -2453,7 +2447,7 @@ class StorageApi {
   }
 
   #getObjectKey(fileHash: string, _salt: ArrayBuffer): Promise<CryptoKey> {
-    // was: getFileKey(fileHash: string, _salt: ArrayBuffer)
+    // was: getFileKey(fileHash: string, _salt: ArrayBuffer) 
     // also (?): getImageKey(imageHash, _salt) {
     // console.log('getObjectKey with hash and salt:')
     // console.log(fileHash)
@@ -2516,7 +2510,7 @@ class StorageApi {
     return new Promise((resolve, reject) => {
       this.#getObjectKey(keyData, salt).then((key) => {
         sbCrypto.encrypt(image, key, iv, 'arrayBuffer').then((data) => {
-          // const storageTokenReq = await(await
+          // const storageTokenReq = await(await 
           SBFetch(this.channelServer + roomId + '/storageRequest?size=' + data.byteLength)
             .then((r) => r.json())
             .then((storageTokenReq) => {
@@ -2544,8 +2538,8 @@ class StorageApi {
   }
 
   /**
-   *
-   * @param buf
+   * 
+   * @param buf 
    * @param type
    * @param roomId
    *
@@ -2582,7 +2576,7 @@ class StorageApi {
 
   /**
    * StorageApi.storeObject
-   * @param buf
+   * @param buf 
    * @param type
    * @param roomId
    *
@@ -2648,7 +2642,7 @@ class StorageApi {
 
   /**
    * StorageApi.saveFile()
-   *
+   * 
    * @param channel
    * @param sbFile
    */
@@ -2828,12 +2822,12 @@ class StorageApi {
 
   /**
    * StorageApi().fetchData()
-   *
+   * 
    * This assumes you have a complete SBObjectHandle. Note that
    * if you only have the 'id' and 'verification' fields, you
    * can reconstruct / request the rest. The current interface
    * will return both nonce, salt, and encrypted data.
-   *
+   * 
    * @param h SBObjectHandle - the object to fetch
    * @param returnType 'string' | 'arrayBuffer' - the type of data to return (default: 'arrayBuffer')
    * @returns Promise<ArrayBuffer | string> - the shard data
@@ -2865,9 +2859,7 @@ class StorageApi {
           // console.log("verification token:")
           // console.log(verificationToken)
           _sb_assert(verificationToken, "fetchData(): missing verification token (?)")
-          const useServer = h.shardServer ? h.shardServer + '/api/v1' : (this.shardServer ? this.shardServer : this.server)
-          if (DBG) console.log("fetching from server: " + useServer)
-          SBFetch(useServer + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
+          SBFetch(this.server + '/fetchData?id=' + ensureSafe(h.id) + '&type=' + h.type + '&verification_token=' + verificationToken, { method: 'GET' })
             .then((response: Response) => {
               if (!response.ok) reject(new Error('Network response was not OK'))
               // console.log(response)
@@ -2993,7 +2985,7 @@ class ChannelApi {
 
   /**
    * getOldMessages
-   *
+   * 
    * TODO: this needs to be able to check that the channel socket
    *       is ready, otherwise the keys might not be ... currently
    *       before calling this, make a ready check on the socket
@@ -3028,8 +3020,8 @@ class ChannelApi {
   }
 
   #callApi(path: string, init?: RequestInit): Promise<any> {
-    if (DBG) console.log(path)
-    if ((DBG) && (init)) console.log(init)
+    console.log(path)
+    if (init) console.log(init)
     return new Promise((resolve, reject) => {
       try {
         SBFetch(this.#channelServer + this.#channel.channelId + path, init)
@@ -3095,18 +3087,22 @@ class ChannelApi {
    */
   getAdminData() {
     return new Promise(async (resolve, reject) => {
-      const token_data: string = new Date().getTime().toString()
-      sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
-        .then((token_sign: string) => {
-          return this.#callApi('/getAdminData', {
-            method: 'GET',
-            credentials: 'include',
-            headers: {
-              'authorization': token_data + '.' + token_sign,
-              'Content-Type': 'application/json'
-            }
+      try {
+        const token_data: string = new Date().getTime().toString()
+        sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
+          .then((token_sign: string) => {
+            resolve(this.#callApi('/getAdminData', {
+              method: 'GET',
+              credentials: 'include',
+              headers: {
+                'authorization': token_data + '.' + token_sign,
+                'Content-Type': 'application/json'
+              }
+            }))
           })
-        })
+      } catch (e) {
+        reject("ChannelApi Error [3]: " + WrapError(e))
+      }
     })
   }
 
@@ -3137,14 +3133,14 @@ class ChannelApi {
               if (v.match(regex)) {
                 const message = jsonParseWrapper(data[v], "L3318")
                 if (message.hasOwnProperty('encrypted_contents')) {
-                  if (DBG) console.log(message)
+                  console.log(message)
                   return message;
                 }
               }
             })
             .map((v) => {
               const message = jsonParseWrapper(data[v], "L3327")
-              if (DBG) console.log(v, message.encrypted_contents, this.#channel.keys)
+              console.log(v, message.encrypted_contents, this.#channel.keys)
               return deCryptChannelMessage(v, message.encrypted_contents, this.#channel.keys)
             }))
             .then((decryptedMessageArray) => {
@@ -3337,13 +3333,13 @@ class Snackabra {
    *
    * @param args {SBServer} server names (optional)
    * @param args {DEBUG} if set to true, will make ALL jslib calls verbose in the console
-   *
-   *
+   * 
+   * 
    */
   constructor(args?: SBServer, DEBUG: boolean = false) {
     if (args) {
       this.#preferredServer = Object.assign({}, args)
-      this.#storage = new StorageApi(args.storage_server, args.channel_server, args.shard_server ? args.shard_server : undefined)
+      this.#storage = new StorageApi(args.storage_server, args.channel_server)
       if (DEBUG) DBG = true
     }
 
@@ -3361,8 +3357,8 @@ class Snackabra {
    */
   /* @Online */
   connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
-    if ((DBG) && (key)) console.log(key)
-    if ((DBG) && (channelId)) console.log(channelId)
+    if (key) console.log(key)
+    if (channelId) console.log(channelId)
     return new Promise<ChannelSocket>((resolve, reject) => {
       // if we have a preferred server then we do not have to wait for 'ready'
       if (this.#preferredServer) resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId))
@@ -3393,7 +3389,7 @@ class Snackabra {
   //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
 
 
-  /**
+  /** 
    * Creates a new channel. Currently uses trivial authentication.
    * Returns a promise to a ''SBChannelHandle'' object
    * (which includes the :term:`Channel Name`).

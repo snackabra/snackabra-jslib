@@ -17,6 +17,7 @@ export interface SBServer {
     channel_server: string;
     channel_ws: string;
     storage_server: string;
+    shard_server?: string;
 }
 interface Dictionary<T> {
     [index: string]: T;
@@ -561,7 +562,7 @@ declare abstract class Channel extends SB384 {
             console.log(\`test message sent! (${c})\`) })
         })
       })
-    
+  
   
      *
      * @param {Snackabra} sbServer server to join
@@ -655,8 +656,9 @@ export interface SBObjectMetadata {
 declare class StorageApi {
     #private;
     server: string;
+    shardServer?: string;
     channelServer: string;
-    constructor(server: string, channelServer: string);
+    constructor(server: string, channelServer: string, shardServer?: string);
     /**
      *
      * @param buf
