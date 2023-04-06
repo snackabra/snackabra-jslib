@@ -694,7 +694,7 @@ export function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Uint8Array
  * @param {bufferSource} ArrayBuffer buffer
  * @return {string} base64 string
  */
-export function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant: 'b64' | 'url' = 'url'): string {
+function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant: 'b64' | 'url' = 'url'): string {
   if (buffer == null) {
     _sb_exception('L509', 'arrayBufferToBase64() -> null paramater')
     return ''
@@ -2594,7 +2594,7 @@ class StorageApi {
         if (DBG) console.log('converting Uint8Array to ArrayBuffer')
         buf = new Uint8Array(buf).buffer
       }
-      if (!(buf instanceof ArrayBuffer)) {
+      if (!(buf instanceof ArrayBuffer) && buf.constructor.name != 'ArrayBuffer') {
         if (DBG) console.log('buf must be an ArrayBuffer:'); console.log(buf);
         reject('buf must be an ArrayBuffer')
       }
@@ -3484,7 +3484,8 @@ export {
   SBMessage,
   Snackabra,
   SBCrypto,
-  SB384
+  SB384,
+  arrayBufferToBase64
 };
 
 export var SB = {
@@ -3492,5 +3493,6 @@ export var SB = {
   SBMessage: SBMessage,
   Channel: Channel,
   SBCrypto: SBCrypto,
-  SB384: SB384
+  SB384: SB384,
+  arrayBufferToBase64: arrayBufferToBase64
 };

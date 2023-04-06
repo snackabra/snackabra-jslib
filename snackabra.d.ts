@@ -208,7 +208,7 @@ export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Ui
  * @param {bufferSource} ArrayBuffer buffer
  * @return {string} base64 string
  */
-export declare function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant?: 'b64' | 'url'): string;
+declare function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant?: 'b64' | 'url'): string;
 /**
  * Appends two buffers and returns a new buffer
  *
@@ -819,11 +819,12 @@ declare class Snackabra {
     get crypto(): SBCrypto;
     sendFile(file: SBFile): void;
 }
-export { Channel, SBMessage, Snackabra, SBCrypto, SB384 };
+export { Channel, SBMessage, Snackabra, SBCrypto, SB384, arrayBufferToBase64 };
 export declare var SB: {
     Snackabra: typeof Snackabra;
     SBMessage: typeof SBMessage;
     Channel: typeof Channel;
     SBCrypto: typeof SBCrypto;
     SB384: typeof SB384;
+    arrayBufferToBase64: typeof arrayBufferToBase64;
 };

@@ -442,7 +442,7 @@ export function compareBuffers(a, b) {
  * @param {bufferSource} ArrayBuffer buffer
  * @return {string} base64 string
  */
-export function arrayBufferToBase64(buffer, variant = 'url') {
+function arrayBufferToBase64(buffer, variant = 'url') {
     if (buffer == null) {
         _sb_exception('L509', 'arrayBufferToBase64() -> null paramater');
         return '';
@@ -2228,7 +2228,7 @@ class StorageApi {
                     console.log('converting Uint8Array to ArrayBuffer');
                 buf = new Uint8Array(buf).buffer;
             }
-            if (!(buf instanceof ArrayBuffer)) {
+            if (!(buf instanceof ArrayBuffer) && buf.constructor.name != 'ArrayBuffer') {
                 if (DBG)
                     console.log('buf must be an ArrayBuffer:');
                 console.log(buf);
@@ -3064,12 +3064,13 @@ class Snackabra {
         this.storage.saveFile(this.#channel, file);
     }
 } /* class Snackabra */
-export { Channel, SBMessage, Snackabra, SBCrypto, SB384 };
+export { Channel, SBMessage, Snackabra, SBCrypto, SB384, arrayBufferToBase64 };
 export var SB = {
     Snackabra: Snackabra,
     SBMessage: SBMessage,
     Channel: Channel,
     SBCrypto: SBCrypto,
-    SB384: SB384
+    SB384: SB384,
+    arrayBufferToBase64: arrayBufferToBase64
 };
 //# sourceMappingURL=snackabra.js.map
