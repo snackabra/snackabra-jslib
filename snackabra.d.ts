@@ -209,6 +209,10 @@ export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Ui
  * @return {string} base64 string
  */
 declare function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant?: 'b64' | 'url'): string;
+export declare function base62ToArrayBuffer32(s: string): ArrayBuffer;
+export declare function arrayBuffer32ToBase62(buffer: ArrayBuffer): string;
+export declare function base62ToBase64(s: string): string;
+export declare function base64ToBase62(s: string): string;
 /**
  * Appends two buffers and returns a new buffer
  *
@@ -320,6 +324,18 @@ export declare function decodeB64Url(input: string): string;
  * @public
  */
 declare class SBCrypto {
+    /**
+     * Hashes and splits into two (h1 and h1) signature of data, h1
+     * is used to request (salt, iv) pair and then h2 is used for
+     * encryption (h2, salt, iv)
+     *
+     * @param buf blob of data to be stored
+     *
+     */
+    generateIdKey(buf: ArrayBuffer): Promise<{
+        id: string;
+        key: string;
+    }>;
     /**
      * Extracts (generates) public key from a private key.
      */

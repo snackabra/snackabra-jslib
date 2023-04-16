@@ -258,6 +258,7 @@ export function _sb_assert(val, msg) {
 /******************************************************************************************************/
 //#region - SBCryptoUtils - crypto and translation stuff used by SBCrypto etc
 /******************************************************************************************************/
+// TODO: should probably move into SBCrypto
 /**
  * Fills buffer with random data
  */
@@ -478,6 +479,55 @@ function arrayBufferToBase64(buffer, variant = 'url') {
         }
         return parts.join('');
     }
+}
+// "ArrayBuffer32" is a 256-bit array buffer. We use this
+// as the ASCII representation of binary objects that are
+// designed to be multiples of 256 bits. This has a number
+// of advantages, and leverages the facts that 43 characters
+// of base62 is slightly more than 256 bits (99.99% efficient),
+// and the availability of "bigint" in modern JS.
+// Define the base62 dictionary
+// We want the same sorting order as ASCII, so we use 0-9A-Za-z
+const base62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+export function base62ToArrayBuffer32(s) {
+    if (s.length !== 43)
+        throw new Error('base62ToArrayBuffer32: string must be exactly 43 characters long (256 bits).');
+    let n = 0n;
+    for (let i = 0; i < s.length; i++) {
+        const digit = BigInt(base62.indexOf(s[i]));
+        n = n * 62n + digit;
+    }
+    // base62 x 43 is slightly more than 256 bits, so we need to check for overflow
+    if (n > 2n ** 256n - 1n)
+        throw new Error(`base62ToArrayBuffer32: value exceeds 256 bits.`);
+    const buffer = new ArrayBuffer(32);
+    const view = new DataView(buffer);
+    for (let i = 0; i < 8; i++) {
+        const uint32 = Number(BigInt.asUintN(32, n));
+        view.setUint32((8 - i - 1) * 4, uint32);
+        n = n >> 32n;
+    }
+    return buffer;
+}
+export function arrayBuffer32ToBase62(buffer) {
+    if (buffer.byteLength !== 32)
+        throw new Error('arrayBuffer32ToBase62: buffer must be exactly 32 bytes (256 bits).');
+    let result = '';
+    for (let n = BigInt('0x' + Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('')); n > 0n; n = n / 62n)
+        result = base62[Number(n % 62n)] + result;
+    return result.padStart(43, '0');
+}
+// convenience functions
+export function base62ToBase64(s) {
+    if (s.length !== 43)
+        throw new Error('base62ToBase64: base62 string must be exactly 43 characters long (256 bits).');
+    return arrayBufferToBase64(base62ToArrayBuffer32(s));
+}
+export function base64ToBase62(s) {
+    const b = base64ToArrayBuffer(s);
+    if (b.byteLength !== 32)
+        throw new Error('base64ToBase62: base64 string must encode precisely 256 bits');
+    return arrayBuffer32ToBase62(b);
 }
 /**
  * Appends two buffers and returns a new buffer
@@ -765,6 +815,31 @@ export function decodeB64Url(input) {
  * @public
  */
 class SBCrypto {
+    /**
+     * Hashes and splits into two (h1 and h1) signature of data, h1
+     * is used to request (salt, iv) pair and then h2 is used for
+     * encryption (h2, salt, iv)
+     *
+     * @param buf blob of data to be stored
+     *
+     */
+    generateIdKey(buf) {
+        return new Promise((resolve, reject) => {
+            try {
+                crypto.subtle.digest('SHA-512', buf).then((digest) => {
+                    const _id = digest.slice(0, 32);
+                    const _key = digest.slice(32);
+                    resolve({
+                        id: arrayBufferToBase64(_id),
+                        key: arrayBufferToBase64(_key)
+                    });
+                });
+            }
+            catch (e) {
+                reject(e);
+            }
+        });
+    }
     /**
      * Extracts (generates) public key from a private key.
      */
@@ -2021,33 +2096,6 @@ class StorageApi {
             this.shardServer = 'https://shard.3.8.4.land/api/v1';
     }
     /**
-     * Hashes and splits into two (h1 and h1) signature of data, h1
-     * is used to request (salt, iv) pair and then h2 is used for
-     * encryption (h2, salt, iv)
-     *
-     * @param buf blob of data to be stored
-     *
-     */
-    #generateIdKey(buf) {
-        return new Promise((resolve, reject) => {
-            try {
-                crypto.subtle.digest('SHA-512', buf).then((digest) => {
-                    const _id = digest.slice(0, 32);
-                    const _key = digest.slice(32);
-                    resolve({
-                        id: ensureSafe(arrayBufferToBase64(_id)),
-                        key: ensureSafe(arrayBufferToBase64(_key))
-                        // id: arrayBufferToBase64(_id),
-                        // key: arrayBufferToBase64(_key)
-                    });
-                });
-            }
-            catch (e) {
-                reject(e);
-            }
-        });
-    }
-    /**
      * Pads object up to closest permitted size boundaries;
      * currently that means a minimum of 4KB and a maximum of
      * of 1 MB, after which it rounds up to closest MB.
@@ -2188,7 +2236,7 @@ class StorageApi {
         // export async function saveImage(sbImage, roomId, sendSystemMessage)
         return new Promise((resolve, reject) => {
             const paddedBuf = this.#padBuf(buf);
-            this.#generateIdKey(paddedBuf).then((fullHash) => {
+            sbCrypto.generateIdKey(paddedBuf).then((fullHash) => {
                 // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
                 this.#_allocateObject(fullHash.id, type)
                     .then((p) => {
@@ -2238,7 +2286,7 @@ class StorageApi {
             if (!metadata) {
                 // console.warn('No metadata')
                 const paddedBuf = this.#padBuf(buf);
-                this.#generateIdKey(paddedBuf).then((fullHash) => {
+                sbCrypto.generateIdKey(paddedBuf).then((fullHash) => {
                     // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
                     this.#_allocateObject(fullHash.id, type)
                         .then((p) => {
