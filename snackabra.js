@@ -189,9 +189,8 @@ export class MessageBus {
  * TODO: this will be integrated with SB (Snackabra) object and exposed
  *       to platform API for possible app use.
  *
- * @param input
- * @param init
- * @returns
+ * @param input - the URL to fetch
+ * @param init - the options for the request
  */
 function SBFetch(input, init) {
     // console.log("SBFetch()"); console.log(input); console.log(init);
@@ -213,7 +212,7 @@ function WrapError(e) {
 // the below general exception handler might be improved to
 // retain the error stack, per:
 // https://stackoverflow.com/a/42755876
-// class RethrownError extends Error {
+// class RethrownError ext ends Error {
 //   constructor(message, error){
 //     super(message)
 //     this.name = this.constructor.name
@@ -351,8 +350,8 @@ function _byteLength(validLen, placeHoldersLen) {
  * Accepts both regular Base64 and the URL-friendly variant,
  * where `+` => `-`, `/` => `_`, and the padding character is omitted.
  *
- * @param {str} base64 string in either regular or URL-friendly representation.
- * @return {Uint8Array} returns decoded binary result
+ * @param str - string in either regular or URL-friendly representation.
+ * @return - returns decoded binary result
  */
 export function base64ToArrayBuffer(str) {
     if (!_assertBase64(str))
@@ -440,8 +439,9 @@ export function compareBuffers(a, b) {
  * ('b') and returns a Base64 encoded version ('a' used to be short
  * for 'ascii').
  *
- * @param {bufferSource} ArrayBuffer buffer
- * @return {string} base64 string
+ * @param buffer - binary string
+ * @param variant - 'b64' or 'url'
+ * @return - returns Base64 encoded string
  */
 function arrayBufferToBase64(buffer, variant = 'url') {
     if (buffer == null) {
@@ -480,18 +480,23 @@ function arrayBufferToBase64(buffer, variant = 'url') {
         return parts.join('');
     }
 }
-// "ArrayBuffer32" is a 256-bit array buffer. We use this
-// as the ASCII representation of binary objects that are
-// designed to be multiples of 256 bits. This has a number
-// of advantages, and leverages the facts that 43 characters
-// of base62 is slightly more than 256 bits (99.99% efficient),
-// and the availability of "bigint" in modern JS.
 // Define the base62 dictionary
-// We want the same sorting order as ASCII, so we use 0-9A-Za-z
+// We want the same sorting order as ASCII, so we go with 0-9A-Za-z
 const base62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+const base62Regex = /^(a32\.)?[0-9A-Za-z]{43}$/;
+// monkey hack for BigInt JSON serialization ... 
+BigInt.prototype.toJSON = function () {
+    return this.toString() + 'n';
+};
+/**
+ * base62ToArrayBuffer32 converts a base62 encoded string to an ArrayBuffer32.
+ *
+ * @param s base62 encoded string
+ * @returns ArrayBuffer32
+ */
 export function base62ToArrayBuffer32(s) {
-    if (s.length !== 43)
-        throw new Error('base62ToArrayBuffer32: string must be exactly 43 characters long (256 bits).');
+    if (!base62Regex.test(s))
+        throw new Error(`base62ToArrayBuffer32: string must match: ${base62Regex}`);
     let n = 0n;
     for (let i = 0; i < s.length; i++) {
         const digit = BigInt(base62.indexOf(s[i]));
@@ -509,32 +514,53 @@ export function base62ToArrayBuffer32(s) {
     }
     return buffer;
 }
+/**
+ * arrayBuffer32ToBase62 converts an ArrayBuffer32 to a base62 encoded string.
+ *
+ * @param buffer ArrayBuffer32
+ * @returns base62 encoded string
+ */
 export function arrayBuffer32ToBase62(buffer) {
     if (buffer.byteLength !== 32)
         throw new Error('arrayBuffer32ToBase62: buffer must be exactly 32 bytes (256 bits).');
     let result = '';
     for (let n = BigInt('0x' + Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('')); n > 0n; n = n / 62n)
         result = base62[Number(n % 62n)] + result;
-    return result.padStart(43, '0');
+    return 'b62.' + result.padStart(43, '0');
 }
-// convenience functions
+/**
+ * base62ToBase64 converts a base62 encoded string to a base64 encoded string.
+ *
+ * @param s base62 encoded string
+ * @returns base64 encoded string
+ *
+ * @throws Error if the string is not a valid base62 encoded string
+ */
 export function base62ToBase64(s) {
-    if (s.length !== 43)
-        throw new Error('base62ToBase64: base62 string must be exactly 43 characters long (256 bits).');
     return arrayBufferToBase64(base62ToArrayBuffer32(s));
 }
+/**
+ * base64ToBase62 converts a base64 encoded string to a base62 encoded string.
+ *
+ * @param s base64 encoded string
+ * @returns base62 encoded string
+ *
+ * @throws Error if the string is not a valid base64 encoded string
+ */
 export function base64ToBase62(s) {
-    const b = base64ToArrayBuffer(s);
-    if (b.byteLength !== 32)
-        throw new Error('base64ToBase62: base64 string must encode precisely 256 bits');
-    return arrayBuffer32ToBase62(b);
+    return arrayBuffer32ToBase62(base64ToArrayBuffer(s));
+}
+// and a type guard
+function isBase62Encoded(value) {
+    return base62Regex.test(value);
 }
 /**
  * Appends two buffers and returns a new buffer
  *
- * @param buffer1
- * @param buffer2
- * @returns
+ * @param {Uint8Array | ArrayBuffer} buffer1
+ * @param {Uint8Array | ArrayBuffer} buffer2
+ * @return {ArrayBuffer} new buffer
+ *
  */
 export function _appendBuffer(buffer1, buffer2) {
     const tmp = new Uint8Array(buffer1.byteLength + buffer2.byteLength);
@@ -1152,6 +1178,20 @@ function ExceptionReject(target, _propertyKey, descriptor) {
         }
     };
 }
+// variation of "ready" pattern: an object is ready whenever it's validated,
+// and any setter that might impact this needs to be decorated. 
+// Decorator
+function Validate(_target, _propertyKey, descriptor) {
+    const operation = descriptor.value;
+    descriptor.value = function (...args) {
+        for (let x of args) {
+            const m = x.constructor.name;
+            if (isSBClass(m))
+                _sb_assert(SBValidateObject(x, m), `invalid parameter: ${x} (expecting ${m})`);
+        }
+        return operation.call(this, ...args);
+    };
+}
 // Decorator
 // TODO: (see design note [5]_)
 // function Online(_target: any, _propertyKey: string, descriptor: PropertyDescriptor): void {
@@ -1438,13 +1478,23 @@ export class SBFile extends SBMessage {
 } /* class SBFile */
 /** SB384 */
 /**
- * Channel
+ * Channel Class
  *
- * @class
- * @constructor
- * @public
+ * Join a channel, returns channel object.
+ *
+ * Currently, you must have an identity when connecting, because every single
+ * message is signed by sender. TODO is to look at how to provide a 'listening'
+ * mode on channels.
+ *
+ * Most classes in SB follow the "ready" template: objects can be used
+ * right away, but they decide for themselves if they're ready or not.
  */
 class Channel extends SB384 {
+    /**
+     * @param Snackabra - server to join
+     * @param JsonWebKey - key to use to join (optional)
+     * @param string - (the :term:`Channel Name`) to find on that server (optional)
+     */
     ready;
     channelReady;
     #ChannelReadyFlag = false; // must be named <class>ReadyFlag
@@ -1457,70 +1507,6 @@ class Channel extends SB384 {
     userName = '';
     #channelId;
     #api;
-    /**
-     * Join a channel, returns channel object.
-     *
-     * Currently, you must have an identity when connecting, because every single
-     * message is signed by sender. TODO is to look at how to provide a 'listening'
-     * mode on channels.
-     *
-     * Most classes in SB follow the "ready" template: objects can be used
-     * right away, but they decide for themselves if they're ready or not.
-     *
-     * Below is a (complete) example for reference:
-  
-    .. parsed-literal::
-      //
-      // Here we create a new channel; for this we need to be specific
-      // about what servers to use. This example references local dev
-      // (miniflare) servers
-      //
-      const sb_config = {
-        channel_server: \'http\:\/\/localhost\:4001\',
-        channel_ws: \'ws://localhost:4001\',
-        storage_server: \'http://localhost:4000\'
-      }
-      //
-      // Next we create the orchestrator object, for above endpoints
-      //
-      const SB = new `Snackabra`_ (sb_config)
-      //
-      // On these servers, we create a new channel (trivial auth)
-      //
-      SB.create(sb_config, \'<SECRET>\').then((handle) => {
-        //
-        // This will return a 'handle', a type that contains all
-        // the information you need to keep reference a channel.
-        //
-        SB.connect(
-          //
-          // Above we've created a channel, but not connected.
-          // Besides some information in the handle, to connect we
-          // must provide a message handler for all (new) messages
-          //
-          (m: ChannelMessage) => { console.log(\`got message: ${m}\`) },
-          handle.key,
-          handle.channelId
-        ).then((c) => c.ready).then((c) => {
-          //
-          // We are now connected, \'c\' is a `Channel Socket Class`_
-          // and can (optionally) pick a name (alias) for ourselves
-          //
-          c.userName = "TestBot"
-          //
-          // We can now send messages
-          //
-          (new `SBMessage`_ (c, "Hello from TestBot!")).send().then((c) => {
-            console.log(\`test message sent! (${c})\`) })
-        })
-      })
-  
-  
-     *
-     * @param {Snackabra} sbServer server to join
-     * @param {JsonWebKey} key? key to use to join (optional)
-     * @param {string} channelId (the :term:`Channel Name`) to find on that server (optional)
-     */
     constructor(sbServer, key, channelId) {
         super(key);
         this.#sbServer = sbServer;
@@ -1647,8 +1633,6 @@ export class ChannelSocket extends Channel {
     #traceSocket = false;
     /**
      * ChannelSocket
-     *
-     * @param sbServer: {SBServer}
      *
      * */
     constructor(sbServer, onMessage, key, channelId) {
@@ -2077,6 +2061,169 @@ __decorate([
     Memoize,
     Ready
 ], ChannelSocket.prototype, "exportable_owner_pubKey", null);
+// export interface SBObjectMetadata {
+//   [SB_OBJECT_HANDLE_SYMBOL]: boolean,
+//   version: '1', type: SBObjectType,
+//   // for long-term storage you only need these:
+//   id: string, key: string,
+//   paddedBuffer: ArrayBuffer
+//   // you'll need these in case you want to track an object
+//   // across future (storage) servers, but as long as you
+//   // are within the same SB servers you can request them.
+//   iv: Uint8Array,
+//   salt: Uint8Array
+// }
+/**
+ * Basic object handle for a shard (all storage).
+ *
+ * To RETRIEVE a shard, you need id and verification.
+ * Next generation shard servers will only require id32.
+ * Same goes for shard mirrors.
+ *
+ * To DECRYPT a shard, you need key, iv, and salt. Current
+ * generation of shard servers will provide (iv, salt) upon
+ * request if (and only if) you have id and verification.
+ *
+ * Note that id32/key32 are array32 encoded (b62). (Both
+ * id and key are 256-bit entities).
+ *
+ * 'verification' is a 64-bit integer, encoded as a string
+ * of up 23 characters: it is four 16-bit integers, either
+ * joined by '.' or simply concatenated. Currently all four
+ * values are random, future generation only first three
+ * are guaranteed to be random, the fourth may be "designed".
+ *
+ *
+ * @typedef {Object} SBObjectHandleClass
+ * @property {boolean} [SB_OBJECT_HANDLE_SYMBOL] - flag to indicate this is an SBObjectHandle
+ * @property {string} version - version of this object
+ * @property {SBObjectType} type - type of object
+ * @property {string} id - id of object
+ * @property {string} key - key of object
+ * @property {Base62Encoded} [id32] - optional: array32 format of id
+ * @property {Base62Encoded} [key32] - optional: array32 format of key
+ * @property {Promise<string>|string} verification - and currently you also need to keep track of this,
+ * but you can start sharing / communicating the
+ * object before it's resolved: among other things it
+ * serves as a 'write-through' verification
+ * @property {Uint8Array|string} [iv] - you'll need these in case you want to track an object
+ * across future (storage) servers, but as long as you
+ * are within the same SB servers you can request them.
+ * @property {Uint8Array|string} [salt] - you'll need these in case you want to track an object
+ * across future (storage) servers, but as long as you
+ * are within the same SB servers you can request them.
+ * @property {string} [fileName] - by convention will be "PAYLOAD" if it's a set of objects
+ * @property {string} [dateAndTime] - optional: time of shard creation
+ * @property {string} [shardServer] - optionally direct a shard to a specific server (especially for reads)
+ * @property {string} [fileType] - optional: file type (mime)
+ * @property {number} [lastModified] - optional: last modified time (of underlying file, if any)
+ * @property {number} [actualSize] - optional: actual size of underlying file, if any
+ * @property {number} [savedSize] - optional: size of shard (may be different from actualSize)
+ *
+ */
+export class SBObjectHandleClass {
+    version = '1';
+    #type = 'b';
+    #id;
+    #key;
+    #id32;
+    #key32;
+    #verification;
+    iv;
+    salt;
+    fileName;
+    dateAndTime;
+    shardServer;
+    fileType;
+    lastModified;
+    actualSize;
+    savedSize;
+    constructor(options
+    //   options: {
+    //   version?: '1';
+    //   type?: SBObjectType;
+    //   id: string;
+    //   key: string;
+    //   id32?: Base62Encoded;
+    //   key32?: Base62Encoded;
+    //   verification: Promise<string> | string;
+    //   iv?: Uint8Array | string;
+    //   salt?: Uint8Array | string;
+    //   fileName?: string;
+    //   dateAndTime?: string;
+    //   shardServer?: string;
+    //   fileType?: string;
+    //   lastModified?: number;
+    //   actualSize?: number;
+    //   savedSize?: number;
+    // }
+    ) {
+        const { version, type, id, key, id32, key32, verification, iv, salt, fileName, dateAndTime, shardServer, fileType, lastModified, actualSize, savedSize, } = options;
+        // this.ready = new Promise<SBObjectHandle>((resolve) => {
+        // });
+        if (version)
+            this.version = version;
+        if (type)
+            this.#type = type;
+        this.id = id;
+        this.key = key;
+        if (id32)
+            this.id32 = id32;
+        if (key32)
+            this.key32 = key32;
+        if (verification)
+            this.#verification = verification;
+        this.iv = iv;
+        this.salt = salt;
+        this.fileName = fileName;
+        this.dateAndTime = dateAndTime;
+        this.shardServer = shardServer;
+        this.fileType = fileType;
+        this.lastModified = lastModified;
+        this.actualSize = actualSize;
+        this.savedSize = savedSize;
+    }
+    // create id32 - if (and when) we have enough info
+    #setId32() {
+        if (this.#id) {
+            const bindID = this.#id;
+            async () => {
+                const verification = await Promise.resolve(this.verification);
+                const fullID = this.#id + verification.split('.').join(''); // backwards compatible
+                crypto.subtle.digest('SHA-256', new TextEncoder().encode(fullID)).then((hash) => {
+                    if (bindID !== this.#id)
+                        return; // if id has changed, don't set
+                    this.#id32 = arrayBuffer32ToBase62(hash);
+                });
+            };
+        }
+    }
+    set id(value) { _assertBase64(value); this.#id = value; this.#id32 = base64ToBase62(value); }
+    get id() { _sb_assert(this.#id, 'object handle identifier is undefined'); return this.#id; }
+    set key(value) { _assertBase64(value); this.#key = value; this.#key32 = base64ToBase62(value); }
+    get key() { _sb_assert(this.#key, 'object handle identifier is undefined'); return this.#key; }
+    // possible TODO: if id32 is set directly, confirm/enforce consistency w base64 id
+    set id32(value) {
+        if (!isBase62Encoded(value))
+            throw new Error('Invalid base62 encoded ID');
+        this.#id32 = value;
+        this.#id = base62ToBase64(value);
+    }
+    set key32(value) {
+        if (!isBase62Encoded(value))
+            throw new Error('Invalid base62 encoded Key');
+        this.#key32 = value;
+        this.#key = base62ToBase64(value);
+    }
+    get id32() { _sb_assert(this.#id32, 'object handle id (32) is undefined'); return this.#id32; }
+    get key32() { _sb_assert(this.#key32, 'object handle key (32) is undefined'); return this.#key32; }
+    set verification(value) { this.#verification = value; this.#setId32(); }
+    get verification() {
+        _sb_assert(this.#verification, 'object handle verification is undefined');
+        return this.#verification;
+    }
+    get type() { return this.#type; }
+}
 /**
  * Storage API
  * @class
@@ -2304,6 +2451,15 @@ class StorageApi {
                             actualSize: bufSize,
                             verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId, p.iv, p.salt)
                         };
+                        // const r = new SBObjectHandleClass({
+                        //   type: type,
+                        //   id: fullHash.id,
+                        //   key: fullHash.key,
+                        //   iv: p.iv,
+                        //   salt: p.salt,
+                        //   actualSize: bufSize,
+                        //   verification: this.#_storeObject(paddedBuf, fullHash.id, fullHash.key, type, roomId, p.iv, p.salt)
+                        // })
                         // console.log("SBObj is:")
                         // console.log(r)
                         resolve(r);
@@ -2323,6 +2479,15 @@ class StorageApi {
                     actualSize: bufSize,
                     verification: this.#_storeObject(metadata.paddedBuffer, metadata.id, metadata.key, type, roomId, metadata.iv, metadata.salt)
                 };
+                // const r = new SBObjectHandleClass({
+                //   type: type,
+                //   id: metadata.id,
+                //   key: metadata.key,
+                //   iv: metadata.iv,
+                //   salt: metadata.salt,
+                //   actualSize: bufSize,
+                //   verification: this.#_storeObject(metadata.paddedBuffer, metadata.id, metadata.key, type, roomId, metadata.iv, metadata.salt)
+                // })
                 // console.log("SBObj is:")
                 // console.log(r)
                 resolve(r);
@@ -2596,9 +2761,19 @@ class StorageApi {
         if (control_msg) {
             _sb_assert(control_msg.verificationToken, "retrieveImage(): verificationToken missing (?)");
             _sb_assert(control_msg.id, "retrieveImage(): id missing (?)");
+            // const obj: SBObjectHandle = {
+            //   [SB_OBJECT_HANDLE_SYMBOL]: true,
+            //   version: '1',
+            //   type: type,
+            //   id: control_msg.id!,
+            //   key: key!,
+            //   verification: new Promise((res, rej) => {
+            //     if (control_msg.verificationToken) res(control_msg.verificationToken)
+            //     else
+            //       rej("retrieveImage(): verificationToken missing (?)")
+            //   })
+            // }
             const obj = {
-                [SB_OBJECT_HANDLE_SYMBOL]: true,
-                version: '1',
                 type: type,
                 id: control_msg.id,
                 key: key,
@@ -2957,6 +3132,29 @@ __decorate([
 ], ChannelApi.prototype, "isLocked", null);
 //#region - class ChannelAPI - TODO implement these methods
 let DBG = false;
+/**
+   * Snackabra is the main class for interacting with the Snackable backend.
+   *
+   * It is a singleton, so you can only have one instance of it.
+   * It is guaranteed to be synchronous, so you can use it right away.
+   * It is also guaranteed to be thread-safe, so you can use it from multiple
+   * threads.
+   *
+  * Constructor expects an object with the names of the matching servers, for example
+  * below shows the miniflare local dev config. Note that 'new Snackabra()' is
+  * guaranteed synchronous, so can be 'used' right away. You can optionally call
+  * without a parameter in which case SB will ping known servers.
+  *
+  * @example
+  * ```typescript
+  *     const sb = new Snackabra({
+  *       channel_server: 'http://127.0.0.1:4001',
+  *       channel_ws: 'ws://127.0.0.1:4001',
+  *       storage_server: 'http://127.0.0.1:4000'
+  *     })
+  * ```
+  *
+  */
 class Snackabra {
     #storage;
     #channel;
@@ -2964,32 +3162,21 @@ class Snackabra {
     // defaultIdentity?: Identity
     #preferredServer;
     /**
-     * Constructor expects an object with the names of the matching servers, for example
-     * below shows the miniflare local dev config. Note that 'new Snackabra()' is
-     * guaranteed synchronous, so can be 'used' right away. You can optionally call
-     * without a parameter in which case SB will ping known servers.
-     *
-     * ::
-     *
-     *     {
-     *       channel_server: 'http://127.0.0.1:4001',
-     *       channel_ws: 'ws://127.0.0.1:4001',
-     *       storage_server: 'http://127.0.0.1:4000'
-     *     }
-     *
-     * @param args {SBServer} server names (optional)
-     * @param args {DEBUG} if set to true, will make ALL jslib calls verbose in the console
-     *
-     *
-     */
-    constructor(args, DEBUG = false) {
-        if (args) {
-            this.#preferredServer = Object.assign({}, args);
-            this.#storage = new StorageApi(args.storage_server, args.channel_server, args.shard_server ? args.shard_server : undefined);
-            if (DEBUG)
-                DBG = true;
-        }
+    * @param args - optional object with the names of the matching servers, for example
+    * below shows the miniflare local dev config. Note that 'new Snackabra()' is
+    * guaranteed synchronous, so can be 'used' right away. You can optionally call
+    * without a parameter in which case SB will ping known servers.
+    * @param DEBUG - optional boolean to enable debug logging
+    *
+    constructor(args?: SBServer, DEBUG: boolean = false) {
+      if (args) {
+        this.#preferredServer = Object.assign({}, args)
+        this.#storage = new StorageApi(args.storage_server, args.channel_server, args.shard_server ? args.shard_server : undefined)
+        if (DEBUG) DBG = true
+      }
+  
     }
+  
     /**
      * Connects to :term:`Channel Name` on this SB config.
      * Returns a channel object right away, but the channel
@@ -2999,8 +3186,12 @@ class Snackabra {
      * will still be pending. If you do not have a preferred server,
      * then the ``ready`` promise will be resolved when a least
      * one of the known servers is ready.
+     *
+     * @param channelName - the name of the channel to connect to
+     * @param key - optional key to use for encryption/decryption
+     * @param channelId - optional channel id to use for encryption/decryption
+     * @returns a channel object
      */
-    /* @Online */
     connect(onMessage, key, channelId /*, identity?: SB384 */) {
         if ((DBG) && (key))
             console.log(key);
@@ -3038,6 +3229,10 @@ class Snackabra {
      * (which includes the :term:`Channel Name`).
      * Note that this method does not connect to the channel,
      * it just creates (authorizes) it.
+     *
+     * @param sbServer - the server to use
+     * @param serverSecret - the server secret
+     * @param keys - optional keys to use for encryption/decryption
      */
     create(sbServer, serverSecret, keys) {
         return new Promise(async (resolve, reject) => {
@@ -3088,12 +3283,21 @@ class Snackabra {
             }
         });
     }
+    /**
+     * Connects to a channel.
+     */
     get channel() {
         return this.#channel;
     }
+    /**
+     * Returns the storage API.
+     */
     get storage() {
         return this.#storage;
     }
+    /**
+     * Returns the crypto API.
+     */
     get crypto() {
         return sbCrypto;
     }
@@ -3108,6 +3312,11 @@ class Snackabra {
     // sendMessage(message: SBMessage) {
     //   this.channel.send(message);
     // }
+    /**
+     * Sends a file to the channel.
+     *
+     * @param file - the file to send
+     */
     sendFile(file) {
         this.storage.saveFile(this.#channel, file);
     }

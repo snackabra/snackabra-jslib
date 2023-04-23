@@ -209,16 +209,71 @@ export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Ui
  * @return {string} base64 string
  */
 declare function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant?: 'b64' | 'url'): string;
+/**
+   A branded string type for base62 encoded strings.
+   This is used to ensure that the string is a valid base62
+   encoded string.
+   
+   "ArrayBuffer32" is a 256-bit array buffer. We use this
+    as the ASCII representation of binary objects that are
+    designed to be multiples of 256 bits. This has a number
+    of advantages, and leverages the facts that 43 characters
+    of base62 is slightly more than 256 bits (99.99% efficient).
+
+    Note that this approach was not practical prior to es2020,
+    when BigInt was added to JavaScript. BigInt allows us to
+    work natively with 256-bit integers.
+
+    The 'a32.' prefix is used to distinguish these from
+    other base64 or other encodings. This is not strictly
+    necessary, but it makes it easier to distinguish.
+    Note that '.' is not a valid base62 nor base64 character.
+    'a32.' refers to 'ArrayBuffer32' (256 bits), which we use
+    as a basic type to represent 256-bit integers in 43
+    characters of base62 [0-9A-Za-z]
+ */
+type Base62Encoded = string & {
+    _brand?: 'Base62Encoded';
+};
+/**
+ * base62ToArrayBuffer32 converts a base62 encoded string to an ArrayBuffer32.
+ *
+ * @param s base62 encoded string
+ * @returns ArrayBuffer32
+ */
 export declare function base62ToArrayBuffer32(s: string): ArrayBuffer;
+/**
+ * arrayBuffer32ToBase62 converts an ArrayBuffer32 to a base62 encoded string.
+ *
+ * @param buffer ArrayBuffer32
+ * @returns base62 encoded string
+ */
 export declare function arrayBuffer32ToBase62(buffer: ArrayBuffer): string;
+/**
+ * base62ToBase64 converts a base62 encoded string to a base64 encoded string.
+ *
+ * @param s base62 encoded string
+ * @returns base64 encoded string
+ *
+ * @throws Error if the string is not a valid base62 encoded string
+ */
 export declare function base62ToBase64(s: string): string;
+/**
+ * base64ToBase62 converts a base64 encoded string to a base62 encoded string.
+ *
+ * @param s base64 encoded string
+ * @returns base62 encoded string
+ *
+ * @throws Error if the string is not a valid base64 encoded string
+ */
 export declare function base64ToBase62(s: string): string;
 /**
  * Appends two buffers and returns a new buffer
  *
- * @param buffer1
- * @param buffer2
- * @returns
+ * @param {Uint8Array | ArrayBuffer} buffer1
+ * @param {Uint8Array | ArrayBuffer} buffer2
+ * @return {ArrayBuffer} new buffer
+ *
  */
 export declare function _appendBuffer(buffer1: Uint8Array | ArrayBuffer, buffer2: Uint8Array | ArrayBuffer): ArrayBuffer;
 /**
@@ -501,11 +556,20 @@ export declare class SBFile extends SBMessage {
 }
 /** SB384 */
 /**
- * Channel
+ * Channel Class
  *
- * @class
- * @constructor
- * @public
+ * Join a channel, returns channel object.
+ *
+ * Currently, you must have an identity when connecting, because every single
+ * message is signed by sender. TODO is to look at how to provide a 'listening'
+ * mode on channels.
+ *
+ * Most classes in SB follow the "ready" template: objects can be used
+ * right away, but they decide for themselves if they're ready or not.
+ *
+ * @param {Snackabra} sbServer server to join
+ * @param {JsonWebKey} key? key to use to join (optional)
+ * @param {string} channelId (the :term:`Channel Name`) to find on that server (optional)
  */
 declare abstract class Channel extends SB384 {
     #private;
@@ -521,70 +585,6 @@ declare abstract class Channel extends SB384 {
     abstract send(m: SBMessage | string, messageType?: 'string' | 'SBMessage'): Promise<string>;
     abstract set onMessage(f: CallableFunction);
     abstract adminData?: Dictionary<any>;
-    /**
-     * Join a channel, returns channel object.
-     *
-     * Currently, you must have an identity when connecting, because every single
-     * message is signed by sender. TODO is to look at how to provide a 'listening'
-     * mode on channels.
-     *
-     * Most classes in SB follow the "ready" template: objects can be used
-     * right away, but they decide for themselves if they're ready or not.
-     *
-     * Below is a (complete) example for reference:
-  
-    .. parsed-literal::
-      //
-      // Here we create a new channel; for this we need to be specific
-      // about what servers to use. This example references local dev
-      // (miniflare) servers
-      //
-      const sb_config = {
-        channel_server: \'http\:\/\/localhost\:4001\',
-        channel_ws: \'ws://localhost:4001\',
-        storage_server: \'http://localhost:4000\'
-      }
-      //
-      // Next we create the orchestrator object, for above endpoints
-      //
-      const SB = new `Snackabra`_ (sb_config)
-      //
-      // On these servers, we create a new channel (trivial auth)
-      //
-      SB.create(sb_config, \'<SECRET>\').then((handle) => {
-        //
-        // This will return a 'handle', a type that contains all
-        // the information you need to keep reference a channel.
-        //
-        SB.connect(
-          //
-          // Above we've created a channel, but not connected.
-          // Besides some information in the handle, to connect we
-          // must provide a message handler for all (new) messages
-          //
-          (m: ChannelMessage) => { console.log(\`got message: ${m}\`) },
-          handle.key,
-          handle.channelId
-        ).then((c) => c.ready).then((c) => {
-          //
-          // We are now connected, \'c\' is a `Channel Socket Class`_
-          // and can (optionally) pick a name (alias) for ourselves
-          //
-          c.userName = "TestBot"
-          //
-          // We can now send messages
-          //
-          (new `SBMessage`_ (c, "Hello from TestBot!")).send().then((c) => {
-            console.log(\`test message sent! (${c})\`) })
-        })
-      })
-  
-  
-     *
-     * @param {Snackabra} sbServer server to join
-     * @param {JsonWebKey} key? key to use to join (optional)
-     * @param {string} channelId (the :term:`Channel Name`) to find on that server (optional)
-     */
     constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string);
     /** @type {ChannelApi} */ get api(): ChannelApi;
     /** @type {SBServer} */ get sbServer(): SBServer;
@@ -635,13 +635,15 @@ export declare class ChannelSocket extends Channel {
     send(msg: SBMessage | string): Promise<string>;
     /** @type {JsonWebKey} */ get exportable_owner_pubKey(): JsonWebKey | null;
 }
-export type SBObjectType = 'f' | 'p' | 'b';
+export type SBObjectType = 'f' | 'p' | 'b' | 't';
 export interface SBObjectHandle {
     [SB_OBJECT_HANDLE_SYMBOL]?: boolean;
-    version: '1';
+    version?: '1';
     type: SBObjectType;
     id: string;
     key: string;
+    id32?: Base62Encoded;
+    key32?: Base62Encoded;
     verification: Promise<string> | string;
     iv?: Uint8Array | string;
     salt?: Uint8Array | string;
@@ -652,6 +654,79 @@ export interface SBObjectHandle {
     lastModified?: number;
     actualSize?: number;
     savedSize?: number;
+}
+/**
+ * Basic object handle for a shard (all storage).
+ *
+ * To RETRIEVE a shard, you need id and verification.
+ * Next generation shard servers will only require id32.
+ * Same goes for shard mirrors.
+ *
+ * To DECRYPT a shard, you need key, iv, and salt. Current
+ * generation of shard servers will provide (iv, salt) upon
+ * request if (and only if) you have id and verification.
+ *
+ * Note that id32/key32 are array32 encoded (b62). (Both
+ * id and key are 256-bit entities).
+ *
+ * 'verification' is a 64-bit integer, encoded as a string
+ * of up 23 characters: it is four 16-bit integers, either
+ * joined by '.' or simply concatenated. Currently all four
+ * values are random, future generation only first three
+ * are guaranteed to be random, the fourth may be "designed".
+ *
+ *
+ * @typedef {Object} SBObjectHandleClass
+ * @property {boolean} [SB_OBJECT_HANDLE_SYMBOL] - flag to indicate this is an SBObjectHandle
+ * @property {string} version - version of this object
+ * @property {SBObjectType} type - type of object
+ * @property {string} id - id of object
+ * @property {string} key - key of object
+ * @property {Base62Encoded} [id32] - optional: array32 format of id
+ * @property {Base62Encoded} [key32] - optional: array32 format of key
+ * @property {Promise<string>|string} verification - and currently you also need to keep track of this,
+ * but you can start sharing / communicating the
+ * object before it's resolved: among other things it
+ * serves as a 'write-through' verification
+ * @property {Uint8Array|string} [iv] - you'll need these in case you want to track an object
+ * across future (storage) servers, but as long as you
+ * are within the same SB servers you can request them.
+ * @property {Uint8Array|string} [salt] - you'll need these in case you want to track an object
+ * across future (storage) servers, but as long as you
+ * are within the same SB servers you can request them.
+ * @property {string} [fileName] - by convention will be "PAYLOAD" if it's a set of objects
+ * @property {string} [dateAndTime] - optional: time of shard creation
+ * @property {string} [shardServer] - optionally direct a shard to a specific server (especially for reads)
+ * @property {string} [fileType] - optional: file type (mime)
+ * @property {number} [lastModified] - optional: last modified time (of underlying file, if any)
+ * @property {number} [actualSize] - optional: actual size of underlying file, if any
+ * @property {number} [savedSize] - optional: size of shard (may be different from actualSize)
+ *
+ */
+export declare class SBObjectHandleClass {
+    #private;
+    version: string;
+    iv?: Uint8Array | string;
+    salt?: Uint8Array | string;
+    fileName?: string;
+    dateAndTime?: string;
+    shardServer?: string;
+    fileType?: string;
+    lastModified?: number;
+    actualSize?: number;
+    savedSize?: number;
+    constructor(options: SBObjectHandle);
+    set id(value: string);
+    get id(): string;
+    set key(value: string);
+    get key(): string;
+    set id32(value: Base62Encoded);
+    set key32(value: Base62Encoded);
+    get id32(): Base62Encoded;
+    get key32(): Base62Encoded;
+    set verification(value: Promise<string> | string);
+    get verification(): Promise<string> | string;
+    get type(): SBObjectType;
 }
 export interface SBObjectMetadata {
     [SB_OBJECT_HANDLE_SYMBOL]: boolean;
