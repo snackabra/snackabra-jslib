@@ -3653,7 +3653,7 @@ class Snackabra {
   * guaranteed synchronous, so can be 'used' right away. You can optionally call
   * without a parameter in which case SB will ping known servers.
   * @param DEBUG - optional boolean to enable debug logging
-  *
+  */
   constructor(args?: SBServer, DEBUG: boolean = false) {
     if (args) {
       this.#preferredServer = Object.assign({}, args)

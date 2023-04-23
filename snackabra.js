@@ -3167,16 +3167,15 @@ class Snackabra {
     * guaranteed synchronous, so can be 'used' right away. You can optionally call
     * without a parameter in which case SB will ping known servers.
     * @param DEBUG - optional boolean to enable debug logging
-    *
-    constructor(args?: SBServer, DEBUG: boolean = false) {
-      if (args) {
-        this.#preferredServer = Object.assign({}, args)
-        this.#storage = new StorageApi(args.storage_server, args.channel_server, args.shard_server ? args.shard_server : undefined)
-        if (DEBUG) DBG = true
-      }
-  
+    */
+    constructor(args, DEBUG = false) {
+        if (args) {
+            this.#preferredServer = Object.assign({}, args);
+            this.#storage = new StorageApi(args.storage_server, args.channel_server, args.shard_server ? args.shard_server : undefined);
+            if (DEBUG)
+                DBG = true;
+        }
     }
-  
     /**
      * Connects to :term:`Channel Name` on this SB config.
      * Returns a channel object right away, but the channel
