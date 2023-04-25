@@ -797,10 +797,10 @@ const base62Regex = /^(a32\.)?[0-9A-Za-z]{43}$/;
  */
 type Base62Encoded = string & { _brand?: 'Base62Encoded' };
 
-// monkey hack for BigInt JSON serialization ... 
-(BigInt.prototype as any).toJSON = function () {
-  return this.toString() + 'n';
-}
+// // monkey hack for BigInt JSON serialization ... 
+// (BigInt.prototype as any).toJSON = function () {
+//   return this.toString() + 'n';
+// }
 
 /**
  * base62ToArrayBuffer32 converts a base62 encoded string to an ArrayBuffer32.
@@ -810,6 +810,7 @@ type Base62Encoded = string & { _brand?: 'Base62Encoded' };
  */
 export function base62ToArrayBuffer32(s: string): ArrayBuffer {
   if (!base62Regex.test(s)) throw new Error(`base62ToArrayBuffer32: string must match: ${base62Regex}`);
+  s = s.slice(4); // remove the 'a32.' prefix
   let n = 0n;
   for (let i = 0; i < s.length; i++) {
     const digit = BigInt(base62.indexOf(s[i]));
@@ -841,7 +842,7 @@ export function arrayBuffer32ToBase62(buffer: ArrayBuffer): string {
     n > 0n;
     n = n / 62n)
     result = base62[Number(n % 62n)] + result;
-  return 'b62.' + result.padStart(43, '0');
+  return 'a32.' + result.padStart(43, '0');
 }
 
 /**
@@ -869,7 +870,7 @@ export function base64ToBase62(s: string): string {
 }
 
 // and a type guard
-function isBase62Encoded(value: string): value is Base62Encoded {
+export function isBase62Encoded(value: string): value is Base62Encoded {
   return base62Regex.test(value);
 }
 
@@ -1863,7 +1864,7 @@ abstract class Channel extends SB384 {
   /**
    * @param Snackabra - server to join
    * @param JsonWebKey - key to use to join (optional)
-   * @param string - (the :term:`Channel Name`) to find on that server (optional)
+   * @param string - the [Channel Name](glossary.md#term-channel-name) to find on that server (optional)
    */
   ready: Promise<Channel>
   channelReady: Promise<Channel>
@@ -2494,7 +2495,7 @@ export interface SBObjectHandle {
  * generation of shard servers will provide (iv, salt) upon
  * request if (and only if) you have id and verification.
  * 
- * Note that id32/key32 are array32 encoded (b62). (Both 
+ * Note that id32/key32 are array32 encoded (a32). (Both 
  * id and key are 256-bit entities).
  * 
  * 'verification' is a 64-bit integer, encoded as a string
@@ -3639,6 +3640,9 @@ let DBG = false;
   *     })
   * ```
   *
+  * Testing glossary links:
+  * 
+  * * {@link glossary.html}
   */
 class Snackabra {
   #storage!: StorageApi

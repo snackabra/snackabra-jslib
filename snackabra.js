@@ -484,10 +484,10 @@ function arrayBufferToBase64(buffer, variant = 'url') {
 // We want the same sorting order as ASCII, so we go with 0-9A-Za-z
 const base62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 const base62Regex = /^(a32\.)?[0-9A-Za-z]{43}$/;
-// monkey hack for BigInt JSON serialization ... 
-BigInt.prototype.toJSON = function () {
-    return this.toString() + 'n';
-};
+// // monkey hack for BigInt JSON serialization ... 
+// (BigInt.prototype as any).toJSON = function () {
+//   return this.toString() + 'n';
+// }
 /**
  * base62ToArrayBuffer32 converts a base62 encoded string to an ArrayBuffer32.
  *
@@ -497,6 +497,7 @@ BigInt.prototype.toJSON = function () {
 export function base62ToArrayBuffer32(s) {
     if (!base62Regex.test(s))
         throw new Error(`base62ToArrayBuffer32: string must match: ${base62Regex}`);
+    s = s.slice(4); // remove the 'a32.' prefix
     let n = 0n;
     for (let i = 0; i < s.length; i++) {
         const digit = BigInt(base62.indexOf(s[i]));
@@ -526,7 +527,7 @@ export function arrayBuffer32ToBase62(buffer) {
     let result = '';
     for (let n = BigInt('0x' + Array.from(new Uint8Array(buffer)).map(b => b.toString(16).padStart(2, '0')).join('')); n > 0n; n = n / 62n)
         result = base62[Number(n % 62n)] + result;
-    return 'b62.' + result.padStart(43, '0');
+    return 'a32.' + result.padStart(43, '0');
 }
 /**
  * base62ToBase64 converts a base62 encoded string to a base64 encoded string.
@@ -551,7 +552,7 @@ export function base64ToBase62(s) {
     return arrayBuffer32ToBase62(base64ToArrayBuffer(s));
 }
 // and a type guard
-function isBase62Encoded(value) {
+export function isBase62Encoded(value) {
     return base62Regex.test(value);
 }
 /**
@@ -1493,7 +1494,7 @@ class Channel extends SB384 {
     /**
      * @param Snackabra - server to join
      * @param JsonWebKey - key to use to join (optional)
-     * @param string - (the :term:`Channel Name`) to find on that server (optional)
+     * @param string - the [Channel Name](glossary.md#term-channel-name) to find on that server (optional)
      */
     ready;
     channelReady;
@@ -2084,7 +2085,7 @@ __decorate([
  * generation of shard servers will provide (iv, salt) upon
  * request if (and only if) you have id and verification.
  *
- * Note that id32/key32 are array32 encoded (b62). (Both
+ * Note that id32/key32 are array32 encoded (a32). (Both
  * id and key are 256-bit entities).
  *
  * 'verification' is a 64-bit integer, encoded as a string
@@ -3154,6 +3155,9 @@ let DBG = false;
   *     })
   * ```
   *
+  * Testing glossary links:
+  *
+  * * {@link glossary.html}
   */
 class Snackabra {
     #storage;

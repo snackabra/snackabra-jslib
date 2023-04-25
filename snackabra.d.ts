@@ -14,9 +14,29 @@ export interface SBChannelHandle {
     key: JsonWebKey;
 }
 export interface SBServer {
+    /**
+     * The channel server is the server that handles channel creation,
+     * channel deletion, and channel access. It is also the server that
+     * handles channel messages.
+     */
     channel_server: string;
+    /**
+     * The channel websocket is the websocket that handles channel
+     * messages. It is the same as the channel server, but with a
+     * different protocol.
+     */
     channel_ws: string;
+    /**
+     * The storage server is the server that all "shard" (blob) storage
+     */
     storage_server: string;
+    /**
+     * "shard" server is a more modern version of the storage server,
+     * generally acting as a caching and/or mirroring layer. It proxies
+     * any new storage to one or more storage servers, and handles
+     * it's own caching behavior. Generally, this will be the fastest
+     * interface, in particular for reading.
+     */
     shard_server?: string;
 }
 interface Dictionary<T> {
@@ -45,16 +65,26 @@ interface ImageMetaData {
 /**
    for example the incoming message will look like this (after decryption)
 
-  { encrypted":false,
-   "contents":"Hello from test04d!",
-   "sign":"u7zAM-1fNLZjmuayOkwWvXTBGqMEimOuzp1DJGX4ECg",
-   "image":"",
-   "imageMetaData":{},
-   "sender_pubKey":{"crv":"P-384","ext":true,"key_ops":[],"kty":"EC","x":"edqHd4aUn7dGsuDMQxtvzuw-Q2N7l77HBW81KvWj9qtzU7ab-sFHUBqogg2PKihj","y":"Oqp27bXL4RUcAHpWUEFHZdyEuhTo8_8oyTsAKJDk1g_NQOA0FR5Sy_8ViTTWS9wT"},
-   "sender_username":"TestBot",
-   "image_sign":"3O0AYKthtWWYUX3AWDmdU4kTR49UyNyaA937CfKtcQw",
-   "imageMetadata_sign":"4LmewpsH6TcRhHYQLivd4Ce87SI1AJIaezhJB5sdD7M"
-  }
+   @example
+  ```ts
+    {
+      "encrypted":false,
+      "contents":"Hello from test04d!",
+      "sign":"u7zAM-1fNLZjmuayOkwWvXTBGqMEimOuzp1DJGX4ECg",
+      "image":"",
+      "imageMetaData":{},
+      "sender_pubKey":
+          {
+            "crv":"P-384","ext":true,"key_ops":[],"kty":"EC",
+            "x":"edqHd4aUn7dGsuDMQxtvzuw-Q2N7l77HBW81KvWj9qtzU7ab-sFHUBqogg2PKihj",
+            "y":"Oqp27bXL4RUcAHpWUEFHZdyEuhTo8_8oyTsAKJDk1g_NQOA0FR5Sy_8ViTTWS9wT"
+          },
+      "sender_username":"TestBot",
+      "image_sign":"3O0AYKthtWWYUX3AWDmdU4kTR49UyNyaA937CfKtcQw",
+      "imageMetadata_sign":"4LmewpsH6TcRhHYQLivd4Ce87SI1AJIaezhJB5sdD7M"
+    }
+    ```
+
   */
 export interface ChannelMessage {
     type?: ChannelMessageTypes;
@@ -192,8 +222,8 @@ export declare function _assertBase64(base64: string): boolean;
  * Accepts both regular Base64 and the URL-friendly variant,
  * where `+` => `-`, `/` => `_`, and the padding character is omitted.
  *
- * @param {str} base64 string in either regular or URL-friendly representation.
- * @return {Uint8Array} returns decoded binary result
+ * @param str - string in either regular or URL-friendly representation.
+ * @return - returns decoded binary result
  */
 export declare function base64ToArrayBuffer(str: string): Uint8Array;
 /**
@@ -205,8 +235,9 @@ export declare function compareBuffers(a: Uint8Array | ArrayBuffer | null, b: Ui
  * ('b') and returns a Base64 encoded version ('a' used to be short
  * for 'ascii').
  *
- * @param {bufferSource} ArrayBuffer buffer
- * @return {string} base64 string
+ * @param buffer - binary string
+ * @param variant - 'b64' or 'url'
+ * @return - returns Base64 encoded string
  */
 declare function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array | null, variant?: 'b64' | 'url'): string;
 /**
@@ -267,6 +298,7 @@ export declare function base62ToBase64(s: string): string;
  * @throws Error if the string is not a valid base64 encoded string
  */
 export declare function base64ToBase62(s: string): string;
+export declare function isBase62Encoded(value: string): value is Base62Encoded;
 /**
  * Appends two buffers and returns a new buffer
  *
@@ -566,13 +598,14 @@ export declare class SBFile extends SBMessage {
  *
  * Most classes in SB follow the "ready" template: objects can be used
  * right away, but they decide for themselves if they're ready or not.
- *
- * @param {Snackabra} sbServer server to join
- * @param {JsonWebKey} key? key to use to join (optional)
- * @param {string} channelId (the :term:`Channel Name`) to find on that server (optional)
  */
 declare abstract class Channel extends SB384 {
     #private;
+    /**
+     * @param Snackabra - server to join
+     * @param JsonWebKey - key to use to join (optional)
+     * @param string - the [Channel Name](glossary.md#term-channel-name) to find on that server (optional)
+     */
     ready: Promise<Channel>;
     channelReady: Promise<Channel>;
     motd?: string;
@@ -603,8 +636,6 @@ export declare class ChannelSocket extends Channel {
     adminData?: Dictionary<any>;
     /**
      * ChannelSocket
-     *
-     * @param sbServer: {SBServer}
      *
      * */
     constructor(sbServer: SBServer, onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string);
@@ -666,7 +697,7 @@ export interface SBObjectHandle {
  * generation of shard servers will provide (iv, salt) upon
  * request if (and only if) you have id and verification.
  *
- * Note that id32/key32 are array32 encoded (b62). (Both
+ * Note that id32/key32 are array32 encoded (a32). (Both
  * id and key are 256-bit entities).
  *
  * 'verification' is a 64-bit integer, encoded as a string
@@ -864,27 +895,41 @@ declare class ChannelApi {
     acceptVisitor(pubKey: string): Promise<unknown>;
     ownerKeyRotation(): Promise<unknown>;
 }
+/**
+   * Snackabra is the main class for interacting with the Snackable backend.
+   *
+   * It is a singleton, so you can only have one instance of it.
+   * It is guaranteed to be synchronous, so you can use it right away.
+   * It is also guaranteed to be thread-safe, so you can use it from multiple
+   * threads.
+   *
+  * Constructor expects an object with the names of the matching servers, for example
+  * below shows the miniflare local dev config. Note that 'new Snackabra()' is
+  * guaranteed synchronous, so can be 'used' right away. You can optionally call
+  * without a parameter in which case SB will ping known servers.
+  *
+  * @example
+  * ```typescript
+  *     const sb = new Snackabra({
+  *       channel_server: 'http://127.0.0.1:4001',
+  *       channel_ws: 'ws://127.0.0.1:4001',
+  *       storage_server: 'http://127.0.0.1:4000'
+  *     })
+  * ```
+  *
+  * Testing glossary links:
+  *
+  * * {@link glossary.html}
+  */
 declare class Snackabra {
     #private;
     /**
-     * Constructor expects an object with the names of the matching servers, for example
-     * below shows the miniflare local dev config. Note that 'new Snackabra()' is
-     * guaranteed synchronous, so can be 'used' right away. You can optionally call
-     * without a parameter in which case SB will ping known servers.
-     *
-     * ::
-     *
-     *     {
-     *       channel_server: 'http://127.0.0.1:4001',
-     *       channel_ws: 'ws://127.0.0.1:4001',
-     *       storage_server: 'http://127.0.0.1:4000'
-     *     }
-     *
-     * @param args {SBServer} server names (optional)
-     * @param args {DEBUG} if set to true, will make ALL jslib calls verbose in the console
-     *
-     *
-     */
+    * @param args - optional object with the names of the matching servers, for example
+    * below shows the miniflare local dev config. Note that 'new Snackabra()' is
+    * guaranteed synchronous, so can be 'used' right away. You can optionally call
+    * without a parameter in which case SB will ping known servers.
+    * @param DEBUG - optional boolean to enable debug logging
+    */
     constructor(args?: SBServer, DEBUG?: boolean);
     /**
      * Connects to :term:`Channel Name` on this SB config.
@@ -895,6 +940,11 @@ declare class Snackabra {
      * will still be pending. If you do not have a preferred server,
      * then the ``ready`` promise will be resolved when a least
      * one of the known servers is ready.
+     *
+     * @param channelName - the name of the channel to connect to
+     * @param key - optional key to use for encryption/decryption
+     * @param channelId - optional channel id to use for encryption/decryption
+     * @returns a channel object
      */
     connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string): Promise<ChannelSocket>;
     /**
@@ -903,11 +953,29 @@ declare class Snackabra {
      * (which includes the :term:`Channel Name`).
      * Note that this method does not connect to the channel,
      * it just creates (authorizes) it.
+     *
+     * @param sbServer - the server to use
+     * @param serverSecret - the server secret
+     * @param keys - optional keys to use for encryption/decryption
      */
     create(sbServer: SBServer, serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle>;
+    /**
+     * Connects to a channel.
+     */
     get channel(): Channel;
+    /**
+     * Returns the storage API.
+     */
     get storage(): StorageApi;
+    /**
+     * Returns the crypto API.
+     */
     get crypto(): SBCrypto;
+    /**
+     * Sends a file to the channel.
+     *
+     * @param file - the file to send
+     */
     sendFile(file: SBFile): void;
 }
 export { Channel, SBMessage, Snackabra, SBCrypto, SB384, arrayBufferToBase64 };
