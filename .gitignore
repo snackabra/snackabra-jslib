@@ -10,7 +10,10 @@ __tests__/cov_profile
 temp/
 .vscode/
 yarn.lock
-*.js.map
+
+# actually we DO want this committed
+#*.js.map
+
 src/snackabra.ts.html
 scratch
 scratch/
