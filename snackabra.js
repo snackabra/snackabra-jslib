@@ -2685,6 +2685,8 @@ class StorageApi {
     }
     fetchData(h, returnType = 'arrayBuffer') {
         // TODO: change SBObjectHandle from being an interface to being a class
+        // update: we have an object class, but still using interface; still a todo here
+        // how to nicely validate 'h'
         // _sb_assert(SBValidateObject(h, 'SBObjectHandle'), "fetchData() ERROR: parameter is not an SBOBjectHandle")
         return new Promise((resolve, reject) => {
             try {
@@ -2694,7 +2696,7 @@ class StorageApi {
                     console.log(returnType);
                 }
                 if (!h)
-                    reject('invalid');
+                    reject('SBObjectHandle is null or undefined');
                 // TODO: haven't tested this caching stuff .. moving from the refactored web client
                 // _localStorage.getItem(`${h.id}_cache`).then((payload) => {
                 // if (payload) {
@@ -2794,9 +2796,6 @@ class StorageApi {
         }
     }
 } /* class StorageApi */
-__decorate([
-    VerifyParameters
-], StorageApi.prototype, "fetchData", null);
 /**
  * Channel API
  * @class
