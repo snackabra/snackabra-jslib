@@ -49,7 +49,9 @@ interface ChannelData {
     ownerKey: string;
     encryptionKey: string;
     signKey: string;
-    SERVER_SECRET: string;
+    motherChannel?: SBChannelId;
+    SERVER_SECRET?: string;
+    size?: number;
 }
 interface ImageMetaData {
     imageId?: string;
@@ -626,6 +628,20 @@ declare abstract class Channel extends SB384 {
 }
 /**
  *
+ * ChannelEndpoint
+ *
+ * Gives access to a Channel API (without needing to connect to socket)
+ */
+export declare class ChannelEndpoint extends Channel {
+    #private;
+    adminData?: Dictionary<any>;
+    constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string);
+    get keys(): ChannelKeys;
+    send(_m: SBMessage | string, _messageType?: 'string' | 'SBMessage'): Promise<string>;
+    set onMessage(_f: CallableFunction);
+}
+/**
+ *
  * ChannelSocket
  *
  *  Class managing connections
@@ -838,13 +854,18 @@ declare class StorageApi {
 }
 /**
  * Channel API
+ *
+ * Requires a Channel object to initialize. That can be a ChannelSocket, for
+ * example, or if you just need access to send commands to the channel you
+ * can use ChannelEndpoint (since "Channel" is an abstract class)
+ *
  * @class
  * @constructor
  * @public
  */
 declare class ChannelApi {
     #private;
-    constructor(/* sbServer: Snackabra, */ channel: Channel);
+    constructor(channel: Channel);
     /**
      * getLastMessageTimes
      */
@@ -865,6 +886,17 @@ declare class ChannelApi {
      * getCapacity
      */
     getCapacity(): Promise<any>;
+    /**
+     * getStorageLimit (current storage budget)
+     */
+    getStorageLimit(): Promise<any>;
+    /**
+     * getMother
+     *
+     * Get the channelID from which this channel was budded. Note that
+     * this is only accessible by Owner (as well as hosting server)
+     */
+    getMother(): Promise<any>;
     /**
      * getJoinRequests
      */
@@ -894,6 +926,31 @@ declare class ChannelApi {
     lock(): Promise<unknown>;
     acceptVisitor(pubKey: string): Promise<unknown>;
     ownerKeyRotation(): Promise<unknown>;
+    /**
+     * "budd" will spin a channel off an existing one.
+     * You need to provide one of the following combinations of info:
+     *
+     * - nothing (special case, create new channel and transfer all storage budget)
+     * - just storage amount (creates new channel with that amount)
+     * - just a target channel (moves all storage budget to that channel)
+     * - just keys (creates new channel with those keys and transfers all storage budget)
+     * - keys and storage amount (creates new channel with those keys and that storage amount)
+     *
+     * In the first (special) case you can just call budd(), in the other
+     * cases you need to fill out the options object.
+     *
+     * Another way to remember the above: all combinations are valid except
+     * both a target channel and assigning keys.
+     *
+     * Note: if you're specifying the target channel, then the return values will
+     * not include the private key (that return value will be empty).
+     */
+    budd(): Promise<SBChannelHandle>;
+    budd(options: {
+        keys?: JsonWebKey;
+        storage?: number;
+        targetChannel?: SBChannelId;
+    }): Promise<SBChannelHandle>;
 }
 /**
    * Snackabra is the main class for interacting with the Snackable backend.
@@ -933,7 +990,7 @@ declare class Snackabra {
     constructor(args?: SBServer, DEBUG?: boolean);
     /**
      * Connects to :term:`Channel Name` on this SB config.
-     * Returns a channel object right away, but the channel
+     * Returns a channel socket promise right away, but it
      * will not be ready until the ``ready`` promise is resolved.
      * Note that if you have a preferred server then the channel
      * object will be returned right away, but the ``ready`` promise
@@ -978,7 +1035,7 @@ declare class Snackabra {
      */
     sendFile(file: SBFile): void;
 }
-export { Channel, SBMessage, Snackabra, SBCrypto, SB384, arrayBufferToBase64 };
+export { Channel, ChannelApi, SBMessage, Snackabra, SBCrypto, SB384, arrayBufferToBase64 };
 export declare var SB: {
     Snackabra: typeof Snackabra;
     SBMessage: typeof SBMessage;

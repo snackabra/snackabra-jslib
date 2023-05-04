@@ -126,7 +126,9 @@ interface ChannelData {
   ownerKey: string;
   encryptionKey: string;
   signKey: string;
-  SERVER_SECRET: string;
+  motherChannel?: SBChannelId;
+  SERVER_SECRET?: string; // used internally for storage budget authentication
+  size?: number; // used internally
 }
 
 interface ImageMetaData {
@@ -280,6 +282,9 @@ export interface EncryptedContentsBin {
   content: ArrayBuffer,
   iv: Uint8Array,
 }
+
+// set by creation of Snackabra object
+var DBG = false;
 
 /**
  * Force EncryptedContents object to binary (interface
@@ -493,6 +498,39 @@ export function _sb_assert(val: unknown, msg: string) {
     throw new Error(m);
   }
 }
+
+
+// return this.#preferredServer
+//   ? new Promise<ChannelSocket>((resolve, reject) => resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)))
+//   : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
+//   .then((c) => resolve(c.ready))
+//   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
+
+// used to create new channesl
+async function newChannelData(keys?: JsonWebKey): Promise<{ channelData: ChannelData, exportable_privateKey: Dictionary<any> }> {
+  const owner384 = new SB384(keys)
+  const ownerKeyPair = await owner384.ready.then((x) => x.keyPair!)
+  const exportable_privateKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
+  const exportable_pubKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
+  const channelId = owner384.ownerChannelId!
+  const encryptionKey: CryptoKey = await crypto.subtle.generateKey({
+    name: 'AES-GCM',
+    length: 256
+  }, true, ['encrypt', 'decrypt']);
+  const exportable_encryptionKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', encryptionKey);
+  const signKeyPair: CryptoKeyPair = await crypto.subtle.generateKey({
+    name: 'ECDH', namedCurve: 'P-384'
+  }, true, ['deriveKey']);
+  const exportable_signKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
+  const channelData: ChannelData = {
+    roomId: channelId,
+    ownerKey: JSON.stringify(exportable_pubKey),
+    encryptionKey: JSON.stringify(exportable_encryptionKey),
+    signKey: JSON.stringify(exportable_signKey),
+  };
+  return { channelData: channelData, exportable_privateKey: exportable_privateKey }
+}
+
 
 //#endregion
 
@@ -1939,7 +1977,7 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
         encrypted_contents: encryptedContentsMakeBinary(m01)
       }
       sbCrypto.unwrap(encryptionKey, m.encrypted_contents!, 'string').then((unwrapped) => {
-        let m2: ChannelMessage = { ...m, ...JSON.parse(unwrapped) };
+        let m2: ChannelMessage = { ...m, ...jsonParseWrapper(unwrapped, 'L1977') };
         if (m2.contents) {
           m2.text = m2.contents
           // if(!m2?.contents?.hasOwnProperty('isVerfied')){
@@ -1991,6 +2029,40 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
     }
   })
 }
+
+
+/**
+ *
+ * ChannelEndpoint
+ *
+ * Gives access to a Channel API (without needing to connect to socket)
+ */
+export class ChannelEndpoint extends Channel {
+  #keys?: ChannelKeys
+
+  adminData?: Dictionary<any> // TODO: make into getter
+  
+  constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string) {
+    super(sbServer, key, channelId)
+  }
+
+  get keys(): ChannelKeys {
+    if (!this.#keys) _sb_assert(false, "ChannelEndpoint.keys: not initialized (?)")
+    return (this.#keys!)
+  }
+
+  send(_m: SBMessage | string, _messageType?: 'string' | 'SBMessage'): Promise<string> {
+    return new Promise<string>((_resolve, reject) => {
+      reject('ChannelEndpoint.send(): not implemented')
+    })
+  }
+
+  set onMessage(_f: CallableFunction) {
+    _sb_assert(false, "ChannelEndpoint.onMessage: not implemented")
+  }
+
+}
+
 
 /**
  *
@@ -2156,8 +2228,7 @@ export class ChannelSocket extends Channel {
     let processingKeys = false
     return new Promise<ChannelSocket>((resolve, reject) => {
       try {
-        console.log("++++++++ readyPromise() has url:")
-        console.log(url)
+        if (DBG) { console.log("++++++++ readyPromise() has url:"); console.log(url); }
 
         // this.checkServerStatus(this.#sbServer.channel_server, 500, function (online) {
         //   if (online) {
@@ -2179,11 +2250,8 @@ export class ChannelSocket extends Channel {
         this.#ws.websocket.addEventListener('open', () => {
           this.#ws.closed = false
           this.channelReady.then(() => {
-            // console.log("++++++++ readyPromise() has identity:")
-            // console.log(id)
             this.#ws.init = { name: JSON.stringify(this.exportable_pubKey) } // TODO: sometimes this is null?
-            // console.log("++++++++ readyPromise() constructed init:")
-            // console.log(this.#ws.init)
+            if (DBG) { console.log("++++++++ readyPromise() constructed init:"); console.log(this.#ws.init); }
             this.#ws.websocket!.send(JSON.stringify(this.#ws.init))
             // note: not ready until channel responds with keys
           })
@@ -2191,33 +2259,32 @@ export class ChannelSocket extends Channel {
         this.#ws.websocket.addEventListener('message', (e: MessageEvent) => {
           // the 'root' administrative messages are processed first before
           // anything else can be processed, when this is done it self-replaces
-          // console.log("++++++++ readyPromise() received ChannelKeysMessage:")
-          // console.log(e)
+          if (DBG) { console.log("++++++++ readyPromise() received ChannelKeysMessage:"); console.log(e); }
           if (processingKeys) {
             backlog.push(e.data)
-            // console.log("++++++++ readyPromise() pushing message to backlog:")
-            // console.log(e)
+            if (DBG) { console.log("++++++++ readyPromise() pushing message to backlog:"); console.log(e); }
             return
           }
           processingKeys = true // helps not drop messages
           // const message: ChannelKeysMessage = deserializeMessage(e.data, 'channelKeys')! as ChannelKeysMessage
-          const message = JSON.parse(e.data) as ChannelKeysMessage
-          // console.log(message)
+          const message = jsonParseWrapper(e.data, 'L2239') as ChannelKeysMessage
+          if (DBG) console.log(message)
           _sb_assert(message.ready, 'got roomKeys but channel reports it is not ready (?)')
           this.motd = message.motd
           this.locked = message.roomLocked
 
-          const exportable_owner_pubKey = JSON.parse(message.keys.ownerKey)
+          const exportable_owner_pubKey = jsonParseWrapper(message.keys.ownerKey, 'L2246')
           this.#exportable_owner_pubKey = exportable_owner_pubKey;
-          // console.log(this.#exportable_owner_pubKey )
+          if (DBG) console.log(this.#exportable_owner_pubKey )
           Promise.all([
-            sbCrypto.importKey('jwk', JSON.parse(message.keys.ownerKey), 'ECDH', false, []),
-            sbCrypto.importKey('jwk', JSON.parse(message.keys.encryptionKey), 'AES', false, ['encrypt', 'decrypt']),
-            sbCrypto.importKey('jwk', JSON.parse(message.keys.signKey), 'ECDH', true, ['deriveKey']),
-            sbCrypto.importKey('jwk', sbCrypto.extractPubKey(JSON.parse(message.keys.signKey))!, 'ECDH', true, []),
+            sbCrypto.importKey('jwk', jsonParseWrapper(message.keys.ownerKey, 'L2249'), 'ECDH', false, []),
+            sbCrypto.importKey('jwk', jsonParseWrapper(message.keys.encryptionKey, 'L2250'), 'AES', false, ['encrypt', 'decrypt']),
+            sbCrypto.importKey('jwk', jsonParseWrapper(message.keys.signKey, 'L2251'), 'ECDH', true, ['deriveKey']),
+            sbCrypto.importKey('jwk', sbCrypto.extractPubKey(jsonParseWrapper(message.keys.signKey, 'L2252'))!, 'ECDH', true, []),
             // this.identity!.privateKey // we know we have id by now
-          ]).then((v) => {
-            // console.log("++++++++ readyPromise() processed first batch of keys")
+          ])
+          .then((v) => {
+            if (DBG) console.log("++++++++ readyPromise() processed first batch of keys")
             const ownerKey = v[0]
             const encryptionKey = v[1]
             const signKey = v[2]
@@ -2226,7 +2293,8 @@ export class ChannelSocket extends Channel {
             Promise.all([
               // we derive the HMAC key we use when *we* sign outgoing messages
               sbCrypto.deriveKey(privateKey, publicSignKey, 'HMAC', false, ['sign', 'verify'])
-            ]).then((w) => {
+            ])
+            .then((w) => {
               // console.log("++++++++ readyPromise() second phase of key processing")
               const channelSignKey = w[0]
               this.#keys = {
@@ -2242,11 +2310,10 @@ export class ChannelSocket extends Channel {
 
               Promise.all([
                 adminData,
-              ]).then((d) => {
-                // console.log("++++++++ readyPromise() getting adminData:")
-                // console.log(adminData)
+              ])
+              .then((d) => {
+                if (DBG) { console.log("++++++++ readyPromise() getting adminData:"); console.log(adminData); }
                 this.adminData = d[0] as Dictionary<any>
-
                 // TODO: until we have better logic here a shim from old code
                 this.admin = this.owner
                 if (backlog.length > 0) {
@@ -2254,8 +2321,7 @@ export class ChannelSocket extends Channel {
                   queueMicrotask(() => {
                     console.log("++++++++ readyPromise() inside micro task")
                     for (let d in backlog) {
-                      // console.log("++++++++ pulling this message from the backlog:")
-                      // console.log(e)
+                      if (DBG) { console.log("++++++++ pulling this message from the backlog:"); console.log(e); }
                       this.#processMessage(d)
                     }
                   });
@@ -2272,7 +2338,19 @@ export class ChannelSocket extends Channel {
                 // console.log("++++++++ readyPromise() all done - resolving!")
                 resolve(this)
               })
+              .catch((e) => {
+                console.error(e)
+                reject('ChannelSocket() failed to process admin data (L2314)')
+              })
             })
+            .catch((e) => {
+              console.error(e)
+              reject('ChannelSocket() failed to process keys (L2314)')
+            })
+          })
+          .catch((e) => {
+            console.error(e)
+            reject('ChannelSocket() failed to process keys (L2319)')
           })
         })
         this.#ws.websocket.addEventListener('close', (e: CloseEvent) => {
@@ -2293,7 +2371,7 @@ export class ChannelSocket extends Channel {
         })
       } catch (e) {
         this.#ws.closed = true
-        // console.error(e)
+        if (DBG) console.error(e)
         reject(`failed to create ChannelSocket, see log ${WrapError(e)}`)
       }
     })
@@ -3024,7 +3102,7 @@ class StorageApi {
       // console.log(payload)
       // console.log(h)
       try {
-        let j = JSON.parse(sbCrypto.ab2str(new Uint8Array(payload)))
+        let j = jsonParseWrapper(sbCrypto.ab2str(new Uint8Array(payload)), 'L3062')
         // normal operation is to break on the JSON.parse() and continue to finally clause
         if (j.error) reject(`#processData() error: ${j.error}`)
         if (DBG) {
@@ -3254,6 +3332,11 @@ class StorageApi {
 
 /**
  * Channel API
+ * 
+ * Requires a Channel object to initialize. That can be a ChannelSocket, for
+ * example, or if you just need access to send commands to the channel you
+ * can use ChannelEndpoint (since "Channel" is an abstract class)
+ * 
  * @class
  * @constructor
  * @public
@@ -3267,7 +3350,7 @@ class ChannelApi {
 
   // #payload: Payload;
 
-  constructor(/* sbServer: Snackabra, */ channel: Channel /*, identity?: Identity */) {
+  constructor(channel: Channel) {
     this.#channel = channel
     this.#sbServer = this.#channel.sbServer
     this.#server = this.#sbServer.channel_server
@@ -3366,6 +3449,23 @@ class ChannelApi {
    */
   getCapacity() {
     return (this.#callApi('/getRoomCapacity'))
+  }
+
+  /**
+   * getStorageLimit (current storage budget)
+   */
+  getStorageLimit() {
+    return (this.#callApi('/getStorageLimit'))
+  }
+
+  /**
+   * getMother
+   * 
+   * Get the channelID from which this channel was budded. Note that
+   * this is only accessible by Owner (as well as hosting server)
+   */
+  getMother() {
+    return (this.#callApi('/getMother'))
   }
 
   /**
@@ -3595,13 +3695,76 @@ class ChannelApi {
     });
   }
 
+
+  /**
+   * "budd" will spin a channel off an existing one.
+   * You need to provide one of the following combinations of info:
+   * 
+   * - nothing (special case, create new channel and transfer all storage budget)
+   * - just storage amount (creates new channel with that amount)
+   * - just a target channel (moves all storage budget to that channel)
+   * - just keys (creates new channel with those keys and transfers all storage budget)
+   * - keys and storage amount (creates new channel with those keys and that storage amount)
+   * 
+   * In the first (special) case you can just call budd(), in the other
+   * cases you need to fill out the options object.
+   * 
+   * Another way to remember the above: all combinations are valid except
+   * both a target channel and assigning keys.
+   * 
+   * Note: if you're specifying the target channel, then the return values will
+   * not include the private key (that return value will be empty).
+   */
+  budd(): Promise<SBChannelHandle> // clone and full plunder
+  budd(options:
+    {
+      keys?: JsonWebKey;
+      storage?: number;
+      targetChannel?: SBChannelId;
+    }): Promise<SBChannelHandle> // clone with specified keys, storage, and target channel
+  budd(options?:
+    {
+      keys?: JsonWebKey;
+      storage?: number;
+      targetChannel?: SBChannelId;
+    }): Promise<SBChannelHandle> {
+    let { keys, storage, targetChannel } = options ?? {};
+    return new Promise<SBChannelHandle>(async (resolve, reject) => {
+      try {
+        if (!storage) storage = Infinity;
+        if (targetChannel) {
+          // just a straight up transfer of budget
+          if (keys) throw new Error("[budd()]: You can't specify both a target channel and keys");
+          return this.#callApi(`/budd?targetChannel=${targetChannel}&transferBudget=${storage}`)
+        } else {
+          const { channelData, exportable_privateKey } = await newChannelData(keys);
+          const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
+          // if we are creating a new channel, it'll be in both the search parameters and the body
+          let resp: Dictionary<any> = await SBFetch(this.#channelServer + this.#channel.channelId + `/budd?targetChannel=${channelData.roomId}&transferBudget=${storage}`, {
+            method: 'POST',
+            body: data
+          });
+          resp = await resp.json();
+          if (resp.success) {
+            resolve({ channelId: channelData.roomId!, key: exportable_privateKey })
+          } else {
+            reject(JSON.stringify(resp));
+          }
+        }
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+
   /*
   mtg: These methods have no implementation in the current webclient so I have skipped them for the time being
   // unused
   notifications() {
   }
 
-  //unused
+  // unused
   getPubKeys() {
   }
 
@@ -3618,7 +3781,6 @@ class ChannelApi {
 
 //#region - class ChannelAPI - TODO implement these methods
 
-let DBG = false;
 
 /**
    * Snackabra is the main class for interacting with the Snackable backend.
@@ -3665,13 +3827,14 @@ class Snackabra {
       this.#preferredServer = Object.assign({}, args)
       this.#storage = new StorageApi(args.storage_server, args.channel_server, args.shard_server ? args.shard_server : undefined)
       if (DEBUG) DBG = true
+      if (DEBUG) console.log("++++ Snackabra constructor ++++ setting DBG to TRUE ++++");
     }
 
   }
 
   /**
    * Connects to :term:`Channel Name` on this SB config.
-   * Returns a channel object right away, but the channel
+   * Returns a channel socket promise right away, but it
    * will not be ready until the ``ready`` promise is resolved.
    * Note that if you have a preferred server then the channel
    * object will be returned right away, but the ``ready`` promise
@@ -3710,13 +3873,6 @@ class Snackabra {
   /// })
   // }
 
-  // return this.#preferredServer
-  //   ? new Promise<ChannelSocket>((resolve, reject) => resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId)))
-  //   : Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId))))
-  //   .then((c) => resolve(c.ready))
-  //   .catch((e) => { console.log("No known servers responding to channel"); reject(e); })
-
-
   /**
    * Creates a new channel. Currently uses trivial authentication.
    * Returns a promise to a ''SBChannelHandle'' object
@@ -3731,34 +3887,10 @@ class Snackabra {
   create(sbServer: SBServer, serverSecret: string, keys?: JsonWebKey): Promise<SBChannelHandle> {
     return new Promise<SBChannelHandle>(async (resolve, reject) => {
       try {
-        const owner384 = new SB384(keys)
-        const ownerKeyPair = await owner384.ready.then((x) => x.keyPair!)
-        // const ownerKeyPair: CryptoKeyPair = await crypto.subtle.generateKey({
-        //   name: 'ECDH',
-        //   namedCurve: 'P-384'
-        // }, true, ['deriveKey']);
-        const exportable_privateKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', ownerKeyPair.privateKey);
-        const exportable_pubKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', ownerKeyPair.publicKey);
-        // const channelId: string = await this.#generateRoomId(exportable_pubKey.x, exportable_pubKey.y);
-        const channelId = owner384.ownerChannelId!
-        const encryptionKey: CryptoKey = await crypto.subtle.generateKey({
-          name: 'AES-GCM',
-          length: 256
-        }, true, ['encrypt', 'decrypt']);
-        const exportable_encryptionKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', encryptionKey);
-        const signKeyPair: CryptoKeyPair = await crypto.subtle.generateKey({
-          name: 'ECDH', namedCurve: 'P-384'
-        }, true, ['deriveKey']);
-        const exportable_signKey: Dictionary<any> = await crypto.subtle.exportKey('jwk', signKeyPair.privateKey);
-        const channelData: ChannelData = {
-          roomId: channelId,
-          ownerKey: JSON.stringify(exportable_pubKey),
-          encryptionKey: JSON.stringify(exportable_encryptionKey),
-          signKey: JSON.stringify(exportable_signKey),
-          SERVER_SECRET: serverSecret
-        };
+        const { channelData, exportable_privateKey } = await newChannelData(keys)
+        channelData.SERVER_SECRET = serverSecret
         const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
-        let resp: Dictionary<any> = await SBFetch(sbServer.channel_server + '/api/room/' + channelId + '/uploadRoom', {
+        let resp: Dictionary<any> = await SBFetch(sbServer.channel_server + '/api/room/' + channelData.roomId + '/uploadRoom', {
           method: 'POST',
           body: data
         });
@@ -3766,7 +3898,7 @@ class Snackabra {
         if (resp.success) {
           // await this.connect(channelId, identity);
           // _localStorage.setItem(channelId, JSON.stringify(exportable_privateKey)) // TODO
-          resolve({ channelId: channelId, key: exportable_privateKey })
+          resolve({ channelId: channelData.roomId!, key: exportable_privateKey })
         } else {
           reject(JSON.stringify(resp));
         }
@@ -3823,6 +3955,7 @@ class Snackabra {
 
 export {
   Channel,
+  ChannelApi,
   SBMessage,
   Snackabra,
   SBCrypto,
