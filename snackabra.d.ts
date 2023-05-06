@@ -117,7 +117,14 @@ export interface ChannelMessage {
     };
     verificationToken?: string;
 }
-/** sample channelKeys contents
+/**
+ * ChannelKeys
+ *
+ * All keys relevant for a given channel, in decoded (CryptoKey) form.
+ * They are sent over channels as a message (see ChannelKeysMessage);
+ * in export/import code they may be in the intermediary form of
+ * strings (see ChannelKeyStrings).
+ *
  *
  * ::
  *
@@ -141,6 +148,17 @@ export interface ChannelMessage {
  * "motd": "",
  * "roomLocked": false}
  */
+export interface ChannelKeys {
+    ownerKey: CryptoKey;
+    ownerPubKeyX: string;
+    guestKey?: CryptoKey;
+    encryptionKey: CryptoKey;
+    signKey: CryptoKey;
+    lockedKey?: CryptoKey;
+    channelSignKey: CryptoKey;
+    publicSignKey: CryptoKey;
+    privateKey?: CryptoKey;
+}
 interface ChannelKeyStrings {
     encryptionKey: string;
     guestKey?: string;
@@ -152,16 +170,6 @@ export interface ChannelAdminData {
     room_id?: SBChannelId;
     join_requests: Array<string>;
     capacity: number;
-}
-export interface ChannelKeys {
-    ownerKey: CryptoKey;
-    guestKey?: CryptoKey;
-    encryptionKey: CryptoKey;
-    signKey: CryptoKey;
-    lockedKey?: CryptoKey;
-    channelSignKey: CryptoKey;
-    publicSignKey: CryptoKey;
-    privateKey?: CryptoKey;
 }
 /** Encryptedcontents
 
@@ -931,7 +939,7 @@ declare class ChannelApi {
     storageRequest(byteLength: number): Promise<Dictionary<any>>;
     lock(): Promise<unknown>;
     acceptVisitor(pubKey: string): Promise<unknown>;
-    ownerKeyRotation(): Promise<unknown>;
+    ownerKeyRotation(): void;
     /**
      * "budd" will spin a channel off an existing one.
      * You need to provide one of the following combinations of info:

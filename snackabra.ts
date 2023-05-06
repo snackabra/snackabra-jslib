@@ -73,10 +73,11 @@ export interface SBServer {
  */
 const SBKnownServers: Array<SBServer> = [
   {
-    // Preview Servers
+    // Preview / Development Servers
     channel_server: 'https://channel.384co.workers.dev',
     channel_ws: 'wss://channel.384co.workers.dev',
-    storage_server: 'https://storage.384co.workers.dev'
+    storage_server: 'https://storage.384co.workers.dev',
+    shard_server: 'https://shard.3.8.4.land'
   },
   // {
   //   // local (miniflare) servers
@@ -110,6 +111,7 @@ interface WSProtocolOptions {
   // locked?: boolean,
 }
 
+// for future use / tighter typing
 type StorableDataType = string | number | bigint | boolean | symbol | object
 
 // TODO: there are many uses of 'Dictionary<any>' that should be tightened up
@@ -207,7 +209,14 @@ interface ChannelAckMessage {
   _id: string,
 }
 
-/** sample channelKeys contents
+/**
+ * ChannelKeys
+ * 
+ * All keys relevant for a given channel, in decoded (CryptoKey) form.
+ * They are sent over channels as a message (see ChannelKeysMessage);
+ * in export/import code they may be in the intermediary form of
+ * strings (see ChannelKeyStrings).
+ * 
  *
  * ::
  *
@@ -231,6 +240,22 @@ interface ChannelAckMessage {
  * "motd": "",
  * "roomLocked": false}
  */
+export interface ChannelKeys {
+  // these come from the channel server;
+  ownerKey: CryptoKey,
+  ownerPubKeyX: string, // the 'x' part of ownerKey, used as channelID / name
+  guestKey?: CryptoKey,
+  encryptionKey: CryptoKey,
+  signKey: CryptoKey,
+  lockedKey?: CryptoKey,
+  // derived from the above and used for signing messages we send:
+  channelSignKey: CryptoKey,
+  publicSignKey: CryptoKey,
+  // our identity in case we want easy access to that:
+  // update: not generic enough, servers don't have this
+  privateKey?: CryptoKey
+}
+
 interface ChannelKeyStrings {
   encryptionKey: string,
   guestKey?: string,
@@ -253,21 +278,6 @@ export interface ChannelAdminData {
   capacity: number,
 }
 
-// TODO: cross-reference with the old 'loadKeys()'
-export interface ChannelKeys {
-  // these come from the channel server;
-  ownerKey: CryptoKey,
-  guestKey?: CryptoKey,
-  encryptionKey: CryptoKey,
-  signKey: CryptoKey,
-  lockedKey?: CryptoKey,
-  // derived from the above and used for signing messages we send:
-  channelSignKey: CryptoKey,
-  publicSignKey: CryptoKey,
-  // our identity in case we want easy access to that:
-  // update: not generic enough, servers don't have this
-  privateKey?: CryptoKey
-}
 
 /** Encryptedcontents
 
@@ -1500,8 +1510,9 @@ class SBCrypto {  /*************************************************************
 
   async channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings): Promise<ChannelKeys> {
     return new Promise(async (resolve, reject) => {
+      let ownerKeyParsed: JsonWebKey = jsonParseWrapper(keyStrings.ownerKey, 'L1513')
       Promise.all([
-        sbCrypto.importKey('jwk', jsonParseWrapper(keyStrings.ownerKey, 'L2249'), 'ECDH', false, []),
+        sbCrypto.importKey('jwk', ownerKeyParsed, 'ECDH', false, []),
         sbCrypto.importKey('jwk', jsonParseWrapper(keyStrings.encryptionKey, 'L2250'), 'AES', false, ['encrypt', 'decrypt']),
         sbCrypto.importKey('jwk', jsonParseWrapper(keyStrings.signKey, 'L2251'), 'ECDH', true, ['deriveKey']),
         sbCrypto.importKey('jwk', sbCrypto.extractPubKey(jsonParseWrapper(keyStrings.signKey, 'L2252'))!, 'ECDH', true, []),
@@ -1515,6 +1526,7 @@ class SBCrypto {  /*************************************************************
           const publicSignKey = v[3]
           resolve({
             ownerKey: ownerKey,
+            ownerPubKeyX: ownerKeyParsed.x!,
             encryptionKey: encryptionKey,
             signKey: signKey,
             channelSignKey: signKey,
@@ -3336,6 +3348,7 @@ class ChannelApi {
   #channel: Channel;
   #channelApi: string;
   #channelServer: string;
+  #cursor: string = ''; // last (oldest) message key seen
 
   // #payload: Payload;
 
@@ -3386,22 +3399,34 @@ class ChannelApi {
     // console.log("warning: this might throw an exception on keys() if ChannelSocket is not ready")
     return new Promise((resolve, reject) => {
       // const encryptionKey = this.#channel.keys.encryptionKey
-      SBFetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength + "&paginate=" + paginate, {
+      // TODO: we want to cache (merge) these messages into a local cached list (since they are immutable)
+      let cursorOption = '';
+      if (paginate)
+        cursorOption = '&cursor=' + this.#cursor;
+      SBFetch(this.#channelServer + this.#channel.channelId + '/oldMessages?currentMessagesLength=' + currentMessagesLength + cursorOption, {
         method: 'GET',
-      }).then((response: Response) => {
-        if (!response.ok) { reject(new Error('Network response was not OK')); }
+      }).then(async (response: Response) => {
+        if (!response.ok) reject(new Error('Network response was not OK'));
         return response.json();
       }).then((messages) => {
-        // console.log("getOldMessages")
-        // console.log(structuredClone(Object.values(messages)))
+        if (DBG) {
+          console.log("getOldMessages")
+          console.log(structuredClone(Object.values(messages)))
+        }
         Promise.all(Object
           .keys(messages)
           .filter((v) => messages[v].hasOwnProperty('encrypted_contents'))
           // .map((v) => { console.log("#*#*#*#*#*#*#"); console.log(structuredClone(messages[v].encrypted_contents)); return v; })
           .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, this.#channel.keys)))
           .then((decryptedMessageArray) => {
-            // console.log("getOldMessages is returning:")
-            // console.log(decryptedMessageArray)
+            let lastMessage = decryptedMessageArray[decryptedMessageArray.length - 1];
+            this.#cursor = lastMessage._id || lastMessage.id || '';
+            if (DBG) {
+              console.log("getOldMessages() is returning:");
+              console.log(decryptedMessageArray);
+              console.log("cursor is now:")
+              console.log(this.#cursor);
+            }
             resolve(decryptedMessageArray)
           })
       }).catch((e: Error) => {
@@ -3596,13 +3621,9 @@ class ChannelApi {
     })
   }
 
-  // we post our pub key if we're first
+  // deprecated - this is now implicitly done on first connect
   postPubKey(_exportable_pubKey: JsonWebKey): Promise<{ success: boolean }> {
-    return this.#callApi('/postPubKey?type=guestKey', {
-      method: 'POST',
-      body: JSON.stringify(_exportable_pubKey),
-      headers: { 'Content-Type': 'application/json' }
-    })
+    throw new Error("postPubKey() deprecated")
   }
 
   storageRequest(byteLength: number): Promise<Dictionary<any>> {
@@ -3640,7 +3661,7 @@ class ChannelApi {
 
   // TODO: test this guy, i doubt if it's working post-re-factor
   acceptVisitor(pubKey: string) {
-    console.trace("WARNING: acceptVisitor() on channel api has not been tested/debugged fully ..")
+    console.warn("WARNING: acceptVisitor() on channel api has not been tested/debugged fully ..")
     return new Promise(async (resolve, reject) => {
       _sb_assert(this.#channel.keys.privateKey, "acceptVisitor(): no private key")
       const shared_key = await sbCrypto.deriveKey(this.#channel.keys.privateKey!,
@@ -3667,27 +3688,37 @@ class ChannelApi {
     });
   }
 
-  // TODO: test this guy, i doubt if it's working post-re-factor
+  // 2023.05.06:
+  // In previous hosting strategy, the concept was that the host / SSO would
+  // create and allocate a channel, but the SSO would keep track of owner key;
+  // thus we needed a mechanism to rotate the owner key, should the user
+  // wish to not have the SSO have access.  That way on a per-hosting service
+  // basis, the provider could decide policy (eg an enterprise might disallow
+  // owner key rotation).  In our new (2023) design, we have generalized channels
+  // to be (much) more than a "room".  In the new design, channels are also
+  // carriers of api and storage budget, and to control all the keys, a user
+  // can "budd()" off a channel provided by server. Thus in the new design,
+  // owner keys are NEVER rotated (other keys can be rotated). 
   ownerKeyRotation() {
-    console.trace("WARNING: ownerKeyRotation() on channel api has not been tested/debugged fully ..")
-    return new Promise((resolve, reject) => {
-      SBFetch(this.#channelServer + this.#channel.channelId + '/ownerKeyRotation', {
-        method: 'GET', credentials: 'include', headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-        .then((response: Response) => {
-          if (!response.ok) {
-            reject(new Error('Network response was not OK'));
-          }
-          return response.json();
-        })
-        .then((data: Dictionary<any>) => {
-          resolve(data);
-        }).catch((error: Error) => {
-          reject(error);
-        });
-    });
+    throw new Error("ownerKeyRotation() replaced by new budd() approach")
+    // return new Promise((resolve, reject) => {
+    //   SBFetch(this.#channelServer + this.#channel.channelId + '/ownerKeyRotation', {
+    //     method: 'GET', credentials: 'include', headers: {
+    //       'Content-Type': 'application/json'
+    //     }
+    //   })
+    //     .then((response: Response) => {
+    //       if (response.ok)
+    //         return response.json()
+    //       else
+    //         reject(new Error('Network response was not OK'));
+    //     })
+    //     .then((data: Dictionary<any>) => {
+    //       resolve(data);
+    //     }).catch((error: Error) => {
+    //       reject(error);
+    //     });
+    // });
   }
 
 
