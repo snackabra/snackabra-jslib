@@ -148,6 +148,11 @@ interface ChannelKeyStrings {
     signKey: string;
     lockedKey?: string;
 }
+export interface ChannelAdminData {
+    room_id?: SBChannelId;
+    join_requests: Array<string>;
+    capacity: number;
+}
 export interface ChannelKeys {
     ownerKey: CryptoKey;
     guestKey?: CryptoKey;
@@ -155,7 +160,8 @@ export interface ChannelKeys {
     signKey: CryptoKey;
     lockedKey?: CryptoKey;
     channelSignKey: CryptoKey;
-    privateKey: CryptoKey;
+    publicSignKey: CryptoKey;
+    privateKey?: CryptoKey;
 }
 /** Encryptedcontents
 
@@ -374,7 +380,7 @@ export declare function partition(str: string, n: number): void;
  * The 'loc' parameter should be a (unique) string that allows you to find the usage
  * in the code; one approach is the line number in the file (at some point).
  */
-export declare function jsonParseWrapper(str: string, loc: string): any;
+export declare function jsonParseWrapper(str: string | null, loc: string): any;
 export interface SBPayload {
     [index: string]: ArrayBuffer;
 }
@@ -500,6 +506,7 @@ declare class SBCrypto {
      * Compare JSON keys, true if the 'same', false if different.
      */
     compareKeys(key1: Dictionary<any>, key2: Dictionary<any>): boolean;
+    channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings): Promise<ChannelKeys>;
 }
 /**
  *
@@ -616,11 +623,11 @@ declare abstract class Channel extends SB384 {
     admin: boolean;
     verifiedGuest: boolean;
     userName: string;
-    abstract get keys(): ChannelKeys;
     abstract send(m: SBMessage | string, messageType?: 'string' | 'SBMessage'): Promise<string>;
-    abstract set onMessage(f: CallableFunction);
     abstract adminData?: Dictionary<any>;
     constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string);
+    importKeys(keyStrings: ChannelKeyStrings): Promise<void>;
+    get keys(): ChannelKeys;
     /** @type {ChannelApi} */ get api(): ChannelApi;
     /** @type {SBServer} */ get sbServer(): SBServer;
     /** @type {string} */ get channelId(): string | undefined;
@@ -649,7 +656,7 @@ export declare class ChannelEndpoint extends Channel {
 export declare class ChannelSocket extends Channel {
     #private;
     ready: Promise<ChannelSocket>;
-    adminData?: Dictionary<any>;
+    adminData?: ChannelAdminData;
     /**
      * ChannelSocket
      *
@@ -661,12 +668,6 @@ export declare class ChannelSocket extends Channel {
     set onMessage(f: (m: ChannelMessage) => void);
     get onMessage(): (m: ChannelMessage) => void;
     set enableTrace(b: boolean);
-    /**
-     * ChannelSocket.keys
-     *
-     * Will throw an exception if keys are unknown or not yet loaded
-     */
-    get keys(): ChannelKeys;
     /**
      * ChannelSocket.sendSbObject()
      *
@@ -873,11 +874,16 @@ declare class ChannelApi {
     /**
      * getOldMessages
      *
+     * Will return most recent messages from the channel.
+     *
+     * @param currentMessagesLength - number to fetch (default 100)
+     * @param paginate - if true, will paginate from last request (default false)
+     *
      * TODO: this needs to be able to check that the channel socket
      *       is ready, otherwise the keys might not be ... currently
      *       before calling this, make a ready check on the socket
      */
-    getOldMessages(currentMessagesLength: number): Promise<Array<ChannelMessage>>;
+    getOldMessages(currentMessagesLength?: number, paginate?: boolean): Promise<Array<ChannelMessage>>;
     /**
      * Update (set) the capacity of the channel; Owner only
      */
@@ -912,7 +918,7 @@ declare class ChannelApi {
     /**
      * getAdminData
      */
-    getAdminData(): Promise<unknown>;
+    getAdminData(): Promise<ChannelAdminData>;
     /**
      * downloadData
      */
@@ -1035,6 +1041,7 @@ declare class Snackabra {
      */
     sendFile(file: SBFile): void;
 }
+export type { ChannelData };
 export { Channel, ChannelApi, SBMessage, Snackabra, SBCrypto, SB384, arrayBufferToBase64 };
 export declare var SB: {
     Snackabra: typeof Snackabra;
