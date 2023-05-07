@@ -154,7 +154,7 @@ export interface ChannelKeys {
     guestKey?: CryptoKey;
     encryptionKey: CryptoKey;
     signKey: CryptoKey;
-    lockedKey?: CryptoKey;
+    lockedKey?: JsonWebKey;
     channelSignKey: CryptoKey;
     publicSignKey: CryptoKey;
     privateKey?: CryptoKey;
@@ -168,7 +168,7 @@ interface ChannelKeyStrings {
 }
 export interface ChannelAdminData {
     room_id?: SBChannelId;
-    join_requests: Array<string>;
+    join_requests: Array<JsonWebKey>;
     capacity: number;
 }
 /** Encryptedcontents
@@ -511,9 +511,17 @@ declare class SBCrypto {
     /**
      * SBCrypto.compareKeys()
      *
-     * Compare JSON keys, true if the 'same', false if different.
+     * Compare JSON keys, true if the 'same', false if different. We consider
+     * them "equal" if both have 'x' and 'y' properties and they are the same.
      */
     compareKeys(key1: Dictionary<any>, key2: Dictionary<any>): boolean;
+    /**
+     * SBCrypto.lookupKey()
+     *
+     * Uses compareKeys() to check for presense of a key in a list of keys.
+     * Returns index of key if found, -1 if not found.
+     */
+    lookupKey(key: JsonWebKey, array: Array<JsonWebKey>): number;
     channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings): Promise<ChannelKeys>;
 }
 /**

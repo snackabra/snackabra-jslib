@@ -247,7 +247,7 @@ export interface ChannelKeys {
   guestKey?: CryptoKey,
   encryptionKey: CryptoKey,
   signKey: CryptoKey,
-  lockedKey?: CryptoKey,
+  lockedKey?: JsonWebKey,
   // derived from the above and used for signing messages we send:
   channelSignKey: CryptoKey,
   publicSignKey: CryptoKey,
@@ -274,7 +274,7 @@ interface ChannelKeysMessage {
 
 export interface ChannelAdminData {
   room_id?: SBChannelId,
-  join_requests: Array<string>,
+  join_requests: Array<JsonWebKey>,
   capacity: number,
 }
 
@@ -1499,13 +1499,27 @@ class SBCrypto {  /*************************************************************
   /**
    * SBCrypto.compareKeys()
    *
-   * Compare JSON keys, true if the 'same', false if different.
+   * Compare JSON keys, true if the 'same', false if different. We consider
+   * them "equal" if both have 'x' and 'y' properties and they are the same.
    */
   compareKeys(key1: Dictionary<any>, key2: Dictionary<any>): boolean {
     if (key1 != null && key2 != null && typeof key1 === 'object' && typeof key2 === 'object') {
       return key1['x'] === key2['x'] && key1['y'] === key2['y'];
     }
     return false;
+  }
+
+  /**
+   * SBCrypto.lookupKey()
+   *
+   * Uses compareKeys() to check for presense of a key in a list of keys.
+   * Returns index of key if found, -1 if not found.
+   */
+  lookupKey(key: JsonWebKey, array: Array<JsonWebKey>): number {
+    for (let i = 0; i < array.length; i++) {
+      if (sbCrypto.compareKeys(key, array[i])) return i;
+    }
+    return -1;
   }
 
   async channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings): Promise<ChannelKeys> {

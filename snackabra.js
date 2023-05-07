@@ -1125,13 +1125,27 @@ class SBCrypto {
     /**
      * SBCrypto.compareKeys()
      *
-     * Compare JSON keys, true if the 'same', false if different.
+     * Compare JSON keys, true if the 'same', false if different. We consider
+     * them "equal" if both have 'x' and 'y' properties and they are the same.
      */
     compareKeys(key1, key2) {
         if (key1 != null && key2 != null && typeof key1 === 'object' && typeof key2 === 'object') {
             return key1['x'] === key2['x'] && key1['y'] === key2['y'];
         }
         return false;
+    }
+    /**
+     * SBCrypto.lookupKey()
+     *
+     * Uses compareKeys() to check for presense of a key in a list of keys.
+     * Returns index of key if found, -1 if not found.
+     */
+    lookupKey(key, array) {
+        for (let i = 0; i < array.length; i++) {
+            if (sbCrypto.compareKeys(key, array[i]))
+                return i;
+        }
+        return -1;
     }
     async channelKeyStringsToCryptoKeys(keyStrings) {
         return new Promise(async (resolve, reject) => {
