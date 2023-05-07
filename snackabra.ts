@@ -112,7 +112,7 @@ interface WSProtocolOptions {
 }
 
 // for future use / tighter typing
-type StorableDataType = string | number | bigint | boolean | symbol | object
+// type StorableDataType = string | number | bigint | boolean | symbol | object
 
 // TODO: there are many uses of 'Dictionary<any>' that should be tightened up
 interface Dictionary<T> {
@@ -204,10 +204,10 @@ export interface ChannelMessage {
   verificationToken?: string,
 }
 
-interface ChannelAckMessage {
-  type: 'ack',
-  _id: string,
-}
+// interface ChannelAckMessage {
+//   type: 'ack',
+//   _id: string,
+// }
 
 /**
  * ChannelKeys
@@ -461,6 +461,8 @@ function SBFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response
   else return fetch(input, { method: 'GET' /*, credentials: 'include' */ })
 }
 
+// TODO: sort out cors wrt credentials (include)
+
 function WrapError(e: any) {
   if (e instanceof Error) {
     return e;
@@ -640,13 +642,14 @@ function ensureSafe(base64: string): string {
   collisions), by a bit less than 1.5 bits (out of 384).
 */
 
+// For possible future use:
 // RFC 3986 (updates 1738 and obsoletes 1808, 2396, and 2732)
-type ALPHA = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
-type alpha = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z'
-type digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
-type genDelims = ':' | '/' | '?' | '#' | '[' | ']' | '@'
-type subDelims = '!' | '$' | '&' | "'" | '(' | ')' | '*' | '+' | ',' | ';' | '='
-type unReserved = ALPHA | alpha | digit | '-' | '.' | '_' | '~'
+// type ALPHA = 'A' | 'B' | 'C' | 'D' | 'E' | 'F' | 'G' | 'H' | 'I' | 'J' | 'K' | 'L' | 'M' | 'N' | 'O' | 'P' | 'Q' | 'R' | 'S' | 'T' | 'U' | 'V' | 'W' | 'X' | 'Y' | 'Z'
+// type alpha = 'a' | 'b' | 'c' | 'd' | 'e' | 'f' | 'g' | 'h' | 'i' | 'j' | 'k' | 'l' | 'm' | 'n' | 'o' | 'p' | 'q' | 'r' | 's' | 't' | 'u' | 'v' | 'w' | 'x' | 'y' | 'z'
+// type digit = '0' | '1' | '2' | '3' | '4' | '5' | '6' | '7' | '8' | '9'
+// type genDelims = ':' | '/' | '?' | '#' | '[' | ']' | '@'
+// type subDelims = '!' | '$' | '&' | "'" | '(' | ')' | '*' | '+' | ',' | ';' | '='
+// type unReserved = ALPHA | alpha | digit | '-' | '.' | '_' | '~'
 
 /**
  * based on https://github.com/qwtel/base64-encoding/blob/master/base64-js.ts
@@ -1565,8 +1568,8 @@ const sbCrypto = new SBCrypto();
 //#region Decorators
 
 // Decorator
-function Memoize(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-  if (descriptor.get) {
+function Memoize(target: any, propertyKey: ClassGetterDecoratorContext, descriptor?: PropertyDescriptor) {
+  if ((descriptor) && (descriptor.get)) {
     let get = descriptor.get
     descriptor.get = function () {
       const prop = `__${target.constructor.name}__${propertyKey}__`
@@ -1587,8 +1590,8 @@ function Memoize(target: any, propertyKey: string, descriptor: PropertyDescripto
 }
 
 // Decorator
-function Ready(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
-  if (descriptor.get) {
+function Ready(target: any, propertyKey: ClassGetterDecoratorContext, descriptor?: PropertyDescriptor) {
+  if ((descriptor) && (descriptor.get)) {
     // console.log("Checking ready for:")
     // console.log(target.constructor.name)
     let get = descriptor.get
@@ -1612,50 +1615,53 @@ function Ready(target: any, propertyKey: string, descriptor: PropertyDescriptor)
 }
 
 // Decorator
-function VerifyParameters(_target: any, _propertyKey: string, descriptor: PropertyDescriptor) {
-  const operation = descriptor.value
-  descriptor.value = function (...args: any[]) {
-    for (let x of args) {
-      const m = x.constructor.name
-      if (isSBClass(m)) _sb_assert(SBValidateObject(x, m), `invalid parameter: ${x} (expecting ${m})`)
-    }
-    return operation.call(this, ...args)
-  }
-}
-
-// Decorator
-function ExceptionReject(target: any, _propertyKey: string, descriptor: PropertyDescriptor) {
-  const operation = descriptor.value
-  descriptor.value = function (...args: any[]) {
-    try {
+function VerifyParameters(_target: any, _propertyKey: ClassMethodDecoratorContext, descriptor?: PropertyDescriptor): any {
+  if ((descriptor) && (descriptor.value)) {
+    const operation = descriptor.value
+    descriptor.value = function (...args: any[]) {
+      for (let x of args) {
+        const m = x.constructor.name
+        if (isSBClass(m)) _sb_assert(SBValidateObject(x, m), `invalid parameter: ${x} (expecting ${m})`)
+      }
       return operation.call(this, ...args)
-    } catch (e) {
-      console.log(`ExceptionReject: ${WrapError(e)}`)
-      console.log(target)
-      console.log(_propertyKey)
-      console.log(descriptor)
-      return new Promise((_resolve, reject) => reject(`Reject: ${WrapError(e)}`))
     }
   }
 }
 
-// variation of "ready" pattern: an object is ready whenever it's validated,
-// and any setter that might impact this needs to be decorated. 
 // Decorator
-function Validate(_target: any, _propertyKey: string, descriptor: PropertyDescriptor) {
-  const operation = descriptor.value
-  descriptor.value = function (...args: any[]) {
-    for (let x of args) {
-      const m = x.constructor.name
-      if (isSBClass(m)) _sb_assert(SBValidateObject(x, m), `invalid parameter: ${x} (expecting ${m})`)
+function ExceptionReject(target: any, _propertyKey: ClassMethodDecoratorContext, descriptor?: PropertyDescriptor) {
+  if ((descriptor) && (descriptor.value)) {
+    const operation = descriptor.value
+    descriptor.value = function (...args: any[]) {
+      try {
+        return operation.call(this, ...args)
+      } catch (e) {
+        console.log(`ExceptionReject: ${WrapError(e)}`)
+        console.log(target)
+        console.log(_propertyKey)
+        console.log(descriptor)
+        return new Promise((_resolve, reject) => reject(`Reject: ${WrapError(e)}`))
+      }
     }
-    return operation.call(this, ...args)
   }
 }
 
+// // possible alternate decorator:
+// // variation of "ready" pattern: an object is ready whenever it's validated,
+// // and any setter that might impact this needs to be decorated. 
+// function Validate(_target: any, _propertyKey: string, descriptor: PropertyDescriptor) {
+//   const operation = descriptor.value
+//   descriptor.value = function (...args: any[]) {
+//     for (let x of args) {
+//       const m = x.constructor.name
+//       if (isSBClass(m)) _sb_assert(SBValidateObject(x, m), `invalid parameter: ${x} (expecting ${m})`)
+//     }
+//     return operation.call(this, ...args)
+//   }
+// }
 
 // Decorator
-// TODO: (see design note [5]_)
+// Not useful: (see design note [5]_)
 // function Online(_target: any, _propertyKey: string, descriptor: PropertyDescriptor): void {
 //   const operation = descriptor.value
 //   descriptor.value = function (...args: any[]) {
@@ -1752,7 +1758,7 @@ class SB384 {
   }
 
   #generateRoomHash(channelBytes: ArrayBuffer): Promise<string> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
         const k = encodeB64Url(arrayBufferToBase64(channelBytesHash))
         if (k.includes('-')) {
@@ -1767,7 +1773,7 @@ class SB384 {
   }
 
   #generateRoomId(x: string, y: string): Promise<SBChannelId> {
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       const xBytes = base64ToArrayBuffer(decodeB64Url(x))
       const yBytes = base64ToArrayBuffer(decodeB64Url(y))
       const channelBytes = _appendBuffer(xBytes, yBytes)
@@ -1891,61 +1897,64 @@ class SBMessage {
   }
 } /* class SBMessage */
 
-/**
- * SBFile
- * @class
- * @constructor
- * @public
- */
-export class SBFile extends SBMessage {
-  // encrypted = false
-  // contents: string = ''
-  // senderPubKey: CryptoKey
-  // sign: Promise<string>
-  data: Dictionary<string> = {
-    previewImage: '',
-    fullImage: ''
-  }
-  // (now extending SBMessage)
-  image = '';
-  image_sign: string = '';
-  imageMetaData: ImageMetaData = {}
+// Left here for reference; we're putting anything like a concep of a "file"
+// in SBFileHelper and similar.  we're moving jslib towards minimalism of
+// simply implementing core SB (aka infrastructure) functionality.
+// /**
+//  * SBFile
+//  * @class
+//  * @constructor
+//  * @public
+//  */
+// export class SBFile extends SBMessage {
+//   // encrypted = false
+//   // contents: string = ''
+//   // senderPubKey: CryptoKey
+//   // sign: Promise<string>
+//   data: Dictionary<string> = {
+//     previewImage: '',
+//     fullImage: ''
+//   }
+//   // (now extending SBMessage)
+//   image = '';
+//   image_sign: string = '';
+//   imageMetaData: ImageMetaData = {}
 
-  // file is an instance of File
-  constructor(channel: Channel, file: File /* signKey: CryptoKey, key: CryptoKey */) {
-    throw new Error('working on SBFile()!')
-    super(channel, '')
-    // all is TODO with new image code
-    // this.senderPubKey = key;
-    // ... done by SBMessage parent?
-    // this.sign = sbCrypto.sign(channel.keys.channelSignKey, this.contents);
-    // if (file.type.match(/^image/i)) {
-    //   this.#asImage(file, signKey)
-    // } else {
-    //   throw new Error('Unsupported file type: ' + file.type);
-    // }
-  }
+//   // file is an instance of File
+//   constructor(channel: Channel, file: File /* signKey: CryptoKey, key: CryptoKey */) {
+//     throw new Error('working on SBFile()!')
+//     super(channel, '')
+//     // all is TODO with new image code
+//     // this.senderPubKey = key;
+//     // ... done by SBMessage parent?
+//     // this.sign = sbCrypto.sign(channel.keys.channelSignKey, this.contents);
+//     // if (file.type.match(/^image/i)) {
+//     //   this.#asImage(file, signKey)
+//     // } else {
+//     //   throw new Error('Unsupported file type: ' + file.type);
+//     // }
+//   }
 
-  async #asImage(image: File, signKey: CryptoKey) {
-    // TODO: the getfile/restrict should be done by SBImage etc, other stuff is SB messaging
-    throw new Error(`#asImage() needs carryover from SBImage etc (${image}, ${signKey})`)
+//   async #asImage(image: File, signKey: CryptoKey) {
+//     // TODO: the getfile/restrict should be done by SBImage etc, other stuff is SB messaging
+//     throw new Error(`#asImage() needs carryover from SBImage etc (${image}, ${signKey})`)
 
-    //   this.data.previewImage = this.#padImage(await(await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
-    //   const previewHash: Dictionary = await this.#generateImageHash(this.data.previewImage);
-    //   this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await(await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
-    //   const fullHash: Dictionary = await this.#generateImageHash(this.data.fullImage);
-    //   this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
-    //   this.image_sign = await sbCrypto.sign(signKey, this.image);
-    //   this.imageMetaData = JSON.stringify({
-    //     imageId: fullHash.id,
-    //     previewId: previewHash.id,
-    //     imageKey: fullHash.key,
-    //     previewKey: previewHash.key
-    //   });
-    //   this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
-  }
+//     //   this.data.previewImage = this.#padImage(await(await this.#restrictPhoto(image, 4096, 'image/jpeg', 0.92)).arrayBuffer());
+//     //   const previewHash: Dictionary = await this.#generateImageHash(this.data.previewImage);
+//     //   this.data.fullImage = image.byteLength > 15728640 ? this.#padImage(await(await this.#restrictPhoto(image, 15360, 'image/jpeg', 0.92)).arrayBuffer()) : this.#padImage(image);
+//     //   const fullHash: Dictionary = await this.#generateImageHash(this.data.fullImage);
+//     //   this.image = await this.#getFileData(await this.#restrictPhoto(image, 15, 'image/jpeg', 0.92), 'url');
+//     //   this.image_sign = await sbCrypto.sign(signKey, this.image);
+//     //   this.imageMetaData = JSON.stringify({
+//     //     imageId: fullHash.id,
+//     //     previewId: previewHash.id,
+//     //     imageKey: fullHash.key,
+//     //     previewKey: previewHash.key
+//     //   });
+//     //   this.imageMetadata_sign = await sbCrypto.sign(signKey, this.imageMetaData)
+//   }
 
-} /* class SBFile */
+// } /* class SBFile */
 
 /** SB384 */
 
@@ -2005,11 +2014,13 @@ abstract class Channel extends SB384 {
         resolve(this)
       } else {
         this.sb384Ready.then((x) => {
-          // console.log('using this channelId')
-          // console.log(Object.assign({}, this))
-          // console.log(Object.assign({}, x))
-          // console.log(Object.assign({}, this.ownerChannelId))
-          // console.log(Object.assign({}, x))
+          if (DBG) {
+            console.log('using this channelId')
+            console.log(Object.assign({}, this))
+            console.log(Object.assign({}, x))
+            console.log(Object.assign({}, this.ownerChannelId))
+            console.log(Object.assign({}, x))
+          }
           this.#channelId = this.ownerChannelId!
           this.#ChannelReadyFlag = true
           resolve(this)
@@ -2427,21 +2438,21 @@ export class ChannelSocket extends Channel {
     console.log(`Tracing ${b ? 'en' : 'dis'}abled`);
   }
 
-  /**
-   * ChannelSocket.sendSbObject()
-   *
-   * Send SB object (file) on channel socket
-   */
-  // todo - move to API?
-  async sendSbObject(file: SBFile) {
-    return (this.send(file))
-    // this.ready.then(() => {
-    //   this.#wrap(file /* , this.#keys!.encryptionKey */).then((payload) => this.send(payload));
-    // } else {
-    //   this.#queue.push(file);
-    // }
-  }
-
+  // // see comments above on SBFile
+  // /**
+  //  * ChannelSocket.sendSbObject()
+  //  *
+  //  * Send SB object (file) on channel socket
+  //  */
+  // // todo - move to API?
+  // async sendSbObject(file: SBFile) {
+  //   return (this.send(file))
+  //   // this.ready.then(() => {
+  //   //   this.#wrap(file /* , this.#keys!.encryptionKey */).then((payload) => this.send(payload));
+  //   // } else {
+  //   //   this.#queue.push(file);
+  //   // }
+  // }
 
   /**
     * ChannelSocket.send()
@@ -3031,29 +3042,30 @@ class StorageApi {
     })
   }
 
-  /**
-   * StorageApi.saveFile()
-   *
-   * @param channel
-   * @param sbFile
-   */
-  saveFile(channel: Channel, sbFile: SBFile) {
-    console.log("saveFile()")
-    // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
-    const metaData: ImageMetaData = sbFile.imageMetaData
-    const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId!, metaData.imageKey!, 'f');
-    const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId!, metaData.previewKey!, 'p');
-    // TODO: We should probably discuss this in more detail
-    Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
-      results.forEach((controlData) => {
-        // @ts-ignore
-        channel.sendSbObject({ ...controlData, control: true });
-      });
-      // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
-      // channel.sendSbObject(sbFile);
-      channel.send(sbFile)
-    });
-  }
+  // // see comments above on class SBFile
+  // /**
+  //  * StorageApi.saveFile()
+  //  *
+  //  * @param channel
+  //  * @param sbFile
+  //  */
+  // saveFile(channel: Channel, sbFile: SBFile) {
+  //   console.log("saveFile()")
+  //   // const metaData: Dictionary = jsonParseWrapper(sbFile.imageMetaData, 'L1732');
+  //   const metaData: ImageMetaData = sbFile.imageMetaData
+  //   const fullStorePromise = this.storeImage(sbFile.data.fullImage, metaData.imageId!, metaData.imageKey!, 'f');
+  //   const previewStorePromise = this.storeImage(sbFile.data.previewImage, metaData.previewId!, metaData.previewKey!, 'p');
+  //   // TODO: We should probably discuss this in more detail
+  //   Promise.all([fullStorePromise, previewStorePromise]).then((results) => {
+  //     results.forEach((controlData) => {
+  //       // @ts-ignore
+  //       channel.sendSbObject({ ...controlData, control: true });
+  //     });
+  //     // psm: need to generalize classes ... sbFile and sbImage descent from sbMessage?
+  //     // channel.sendSbObject(sbFile);
+  //     channel.send(sbFile)
+  //   });
+  // }
 
   /**
    * StorageApi().storeRequest
@@ -3102,14 +3114,15 @@ class StorageApi {
     });
   }
 
-  /**
-   * StorageApi().storeImage()
-   */
-  storeImage(image: string | ArrayBuffer, image_id: string, keyData: string, type: string) {
-    // latest and greatest JS version is in:
-    // 384-snackabra-webclient/src/utils/ImageProcessor.js
-    throw new Error('StorageApi.storeImate() needs TS version')
-  }
+  // // Deprecated
+  // /**
+  //  * StorageApi().storeImage()
+  //  */
+  // storeImage(image: string | ArrayBuffer, image_id: string, keyData: string, type: string) {
+  //   // latest and greatest JS version is in:
+  //   // 384-snackabra-webclient/src/utils/ImageProcessor.js
+  //   throw new Error('StorageApi.storeImate() needs TS version')
+  // }
 
   #processData(payload: ArrayBuffer, h: SBObjectHandle): Promise<ArrayBuffer> {
     return new Promise((resolve, reject) => {
@@ -3539,7 +3552,7 @@ class ChannelApi {
         .then((token_sign: string) => {
           resolve(this.#callApi('/getAdminData', {
             method: 'GET',
-            credentials: 'include',
+            // credentials: 'include',
             headers: {
               'authorization': token_data + '.' + token_sign,
               'Content-Type': 'application/json'
@@ -3643,7 +3656,7 @@ class ChannelApi {
   storageRequest(byteLength: number): Promise<Dictionary<any>> {
     return this.#callApi('/storageRequest?size=' + byteLength, {
       method: 'GET',
-      credentials: 'include',
+      // credentials: 'include',
       headers: { 'Content-Type': 'application/json' }
     })
   }
@@ -3890,11 +3903,11 @@ class Snackabra {
   connect(onMessage: (m: ChannelMessage) => void, key?: JsonWebKey, channelId?: string /*, identity?: SB384 */): Promise<ChannelSocket> {
     if ((DBG) && (key)) console.log(key)
     if ((DBG) && (channelId)) console.log(channelId)
-    return new Promise<ChannelSocket>((resolve, reject) => {
+    return new Promise<ChannelSocket>((resolve) => {
       // if we have a preferred server then we do not have to wait for 'ready'
       if (this.#preferredServer) resolve(new ChannelSocket(this.#preferredServer!, onMessage, key, channelId))
       // otherwise we have to wait for at least one of them to be 'ready', or we won't know which one to use
-      else return Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready))
+      else resolve(Promise.any(SBKnownServers.map((s) => (new ChannelSocket(s, onMessage, key, channelId)).ready)))
     })
   }
 
@@ -3983,14 +3996,16 @@ class Snackabra {
   //   this.channel.send(message);
   // }
 
-  /**
-   * Sends a file to the channel.
-   * 
-   * @param file - the file to send
-   */
-  sendFile(file: SBFile) {
-    this.storage.saveFile(this.#channel, file);
-  }
+  // // see comments above re: SBFile:
+  // /**
+  //  * Sends a file to the channel.
+  //  * 
+  //  * @param file - the file to send
+  //  */
+  // sendFile(file: SBFile) {
+  //   this.storage.saveFile(this.#channel, file);
+  // }
+  
 } /* class Snackabra */
 
 export type {

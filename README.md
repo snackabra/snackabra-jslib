@@ -22,6 +22,8 @@ changes, for example ''0.5.159'' is currently released as
 
 A few notes / reiterations:
 
+* We are using Typescript 5.0.x
+
 * there is no specific relationship between a pre-release
   and the next stable. For example ''0.5.185'' might be the last
   pre-release before ''0.6.0'', and ''0.5.203'' might later
@@ -60,33 +62,6 @@ file](LICENSE.md) for details.
 _Note: this module is under active development_
 
 
-## Usage in Node
-
-Install:
-
-```
-npm install snackabra -g
-```
-
-A couple of ways to load ES module version in nodejs:
-
-```javascript
-// method 1:
-import * as sb from 'snackabra';
-console.log(sb.str2ab('hello'));
-
-// method 2 (the default export)
-import Snackabra from 'snackabra';
-console.log(Snackabra.str2ab('hello'));
-
-// method 3
-const sb = await import('snackabra');
-console.log(sb.str2ab('hello'));
-
-// method 4
-import {str2ab} from 'snackabra';
-console.log(str2ab('hello'));
-```
 
 ## Usage in browsers
 
@@ -119,6 +94,36 @@ Dynamic import of latest version from unpkg:
 ```
 
 You can also access the loaded functions globally, e.g. ``window.Snackabra.str2ab('hello')``.
+
+## Usage in Node
+
+_Note: node usage is not a priority at the moment_
+
+Install:
+
+```
+npm install snackabra -g
+```
+
+A couple of ways to load ES module version in nodejs:
+
+```javascript
+// method 1:
+import * as sb from 'snackabra';
+console.log(sb.str2ab('hello'));
+
+// method 2 (the default export)
+import Snackabra from 'snackabra';
+console.log(Snackabra.str2ab('hello'));
+
+// method 3
+const sb = await import('snackabra');
+console.log(sb.str2ab('hello'));
+
+// method 4
+import {str2ab} from 'snackabra';
+console.log(str2ab('hello'));
+```
 
 
 ## Development
