@@ -256,6 +256,15 @@ export interface ChannelKeys {
   privateKey?: CryptoKey
 }
 
+// // Roughly what it looks like on the wire from a client:
+// {
+//   "roomId": "DL5hgKneBl_...tMLCv4fEyWnxE01O",
+//   "ownerKey": "{\"crv\":\"P-384\",\"ext\":true,\"key_ops\":[],\"kty\":\"EC\",\"x\":\"A0rUue9TlSgK...Nx54d3\",\"y\":\"uGfIqc....fP1tF66jL\"}",
+//   "encryptionKey": "{\"alg\":\"A256GCM\",\"ext\":true,\"k\":\"62mgVb...Shmc\",\"key_ops\":[\"encrypt\",\"decrypt\"],\"kty\":\"oct\"}",
+//   "signKey": "{\"crv\":\"P-384\",\"d\":\"Vw2HwY...oYl6qJ\",\"ext\":true,\"key_ops\":[\"deriveKey\"],\"kty\":\"EC\",\"x\":\"6lz3m...v9J2IjCj8\",\"y\":\"M6Ta8...ncnH1G\"}",
+//   "SERVER_SECRET": "..."
+// }
+
 interface ChannelKeyStrings {
   encryptionKey: string,
   guestKey?: string,
@@ -277,7 +286,6 @@ export interface ChannelAdminData {
   join_requests: Array<JsonWebKey>,
   capacity: number,
 }
-
 
 /** Encryptedcontents
 
@@ -637,9 +645,9 @@ function ensureSafe(base64: string): string {
   strings (such as when copy-pasting). however, that means we break
   code that tries to use 'regular' atob(), because it's not as forgiving.
   this is also referred to as RFC4648 (section 5). note also that when
-  we generate GUID from public keys, we iterate hashing until '-' is not
-  present in the hash, which does reduct entropy (since it slightly increases
-  collisions), by a bit less than 1.5 bits (out of 384).
+  we generate GUID from public keys, we iterate hashing until '-' and '_'
+  are not present in the hash, which does reduce entropy by about three
+  (3) bits (out of 384).
 */
 
 // For possible future use:
@@ -1274,6 +1282,94 @@ class SBCrypto {  /*************************************************************
     }
   }
 
+  #generateChannelHash(channelBytes: ArrayBuffer, count: number): Promise<string> {
+    const b62regex = /^[0-9A-Za-z]+$/;
+    if (count > 14)
+      throw new Error('generateChannelHash() - exceeded 14 iterations')
+    return new Promise((resolve) => {
+      crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
+        const k = encodeB64Url(arrayBufferToBase64(channelBytesHash))
+        if (b62regex.test(k)) {
+          resolve(k)
+        } else {
+          // see discussion elsewhere - but we constrain to names that are friendly
+          // to both URL/browser environments, and copy-paste functions
+          resolve(this.#generateChannelHash(channelBytesHash, count + 1)) // tail recursion
+        }
+      })
+    })
+  }
+
+  // For compatibilty with various versions, we accept any of the first 14 hashes.
+  #testChannelHash(channelBytes: ArrayBuffer, channel_id: SBChannelId, count: number): Promise<boolean> {
+    return new Promise((resolve) => {
+      if (count > 14)
+        resolve(false) // less than 1 in 4 trillion chance of exceeding this
+      crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
+        const k = encodeB64Url(arrayBufferToBase64(channelBytesHash))
+        if (k === channel_id) {
+          resolve(true)
+        } else {
+          resolve(this.#testChannelHash(channelBytesHash, channel_id, count + 1)) // tail recursion
+        }
+      })
+    })
+  }
+
+  /**
+   * Generates a channel ID from a public (owner) key. This is deterministic,
+   * used both for creating channels as well as at any time verifying ownership.
+   * Returns the SBChannelId, or error code if there are any issues:
+   * 
+   * 'InvalidJsonWebKey' - format (eg basic JWK) has issues
+   * 'InvalidOwnerKey' - the key itself is not valid
+   * 
+   * (Also does basic verification of the owner key itself)
+   * 
+   * The channel ID is base64 encoding of the SHA-384 hash of the public key,
+   * taking the 'x' and 'y' fields. Not that is slightly restricted, it only
+   * allows [A-Za-z0-9_], eg does not allow the '-' character. This makes the
+   * encoding more practical for end-user interactions like copy-paste. This
+   * is accomplished by simply re-hashing until the result is valid. This 
+   * reduces the entropy of the channel ID by approximately 1.5 bits. 
+   */
+  async generateChannelId(owner_key: JsonWebKey | null): Promise<SBChannelId | string> {
+    if (owner_key && owner_key.x && owner_key.y) {
+      const xBytes = base64ToArrayBuffer(decodeB64Url(owner_key!.x!))
+      const yBytes = base64ToArrayBuffer(decodeB64Url(owner_key!.y!))
+      const channelBytes = _appendBuffer(xBytes, yBytes)
+      return await this.#generateChannelHash(channelBytes, 0)
+    } else {
+      return 'InvalidJsonWebKey'; // invalid owner key
+    }
+  }
+
+  /**
+   * 'Compare' two channel IDs. Note that this is not constant time.
+   */
+  async verifyChannelId(owner_key: JsonWebKey | null, channel_id: SBChannelId): Promise<boolean> {
+    if (owner_key) {
+      let x = owner_key.x
+      let y = owner_key.y
+      if (!(x && y)) {
+        try {
+          // we try to be tolerant of code that loses track of if JWK has been parsed or not
+          const tryParse = JSON.parse(owner_key as unknown as string);
+          if (tryParse.x) x = tryParse.x;
+          if (tryParse.y) y = tryParse.y;
+        } catch {
+          return false;
+        }
+      }
+      const xBytes = base64ToArrayBuffer(decodeB64Url(x!))
+      const yBytes = base64ToArrayBuffer(decodeB64Url(y!))
+      const channelBytes = _appendBuffer(xBytes, yBytes)
+      return await this.#testChannelHash(channelBytes, channel_id, 0)
+    } else {
+      return false;
+    }
+  }
+
   /**
    * SBCrypto.generatekeys()
    *
@@ -1290,6 +1386,7 @@ class SBCrypto {  /*************************************************************
       }
     });
   }
+
 
   /**
    * SBCrypto.importKey()
@@ -1554,7 +1651,7 @@ class SBCrypto {  /*************************************************************
           console.error(`readyPromise(): failed to import keys: ${e}`)
           reject(e)
         })
-    }) 
+    })
 
 
   }
@@ -1568,7 +1665,7 @@ const sbCrypto = new SBCrypto();
 //#region Decorators
 
 // Decorator
-function Memoize(target: any, propertyKey: ClassGetterDecoratorContext, descriptor?: PropertyDescriptor) {
+function Memoize(target: any, propertyKey: string /* ClassGetterDecoratorContext */, descriptor?: PropertyDescriptor) {
   if ((descriptor) && (descriptor.get)) {
     let get = descriptor.get
     descriptor.get = function () {
@@ -1590,7 +1687,7 @@ function Memoize(target: any, propertyKey: ClassGetterDecoratorContext, descript
 }
 
 // Decorator
-function Ready(target: any, propertyKey: ClassGetterDecoratorContext, descriptor?: PropertyDescriptor) {
+function Ready(target: any, propertyKey: string /* ClassGetterDecoratorContext */, descriptor?: PropertyDescriptor) {
   if ((descriptor) && (descriptor.get)) {
     // console.log("Checking ready for:")
     // console.log(target.constructor.name)
@@ -1615,7 +1712,7 @@ function Ready(target: any, propertyKey: ClassGetterDecoratorContext, descriptor
 }
 
 // Decorator
-function VerifyParameters(_target: any, _propertyKey: ClassMethodDecoratorContext, descriptor?: PropertyDescriptor): any {
+function VerifyParameters(_target: any, _propertyKey: string /* ClassMethodDecoratorContext */, descriptor?: PropertyDescriptor): any {
   if ((descriptor) && (descriptor.value)) {
     const operation = descriptor.value
     descriptor.value = function (...args: any[]) {
@@ -1629,7 +1726,7 @@ function VerifyParameters(_target: any, _propertyKey: ClassMethodDecoratorContex
 }
 
 // Decorator
-function ExceptionReject(target: any, _propertyKey: ClassMethodDecoratorContext, descriptor?: PropertyDescriptor) {
+function ExceptionReject(target: any, _propertyKey: string /* ClassMethodDecoratorContext */, descriptor?: PropertyDescriptor) {
   if ((descriptor) && (descriptor.value)) {
     const operation = descriptor.value
     descriptor.value = function (...args: any[]) {
@@ -1716,7 +1813,7 @@ class SB384 {
           this.#exportable_pubKey = pk!
           sbCrypto.importKey('jwk', key, 'ECDH', true, ['deriveKey']).then((k) => {
             this.#privateKey = k
-            this.#generateRoomId(this.#exportable_pubKey!.x!, this.#exportable_pubKey!.y!).then((channelId) => {
+            sbCrypto.generateChannelId(this.#exportable_pubKey).then((channelId) => {
               // console.log('******** setting ownerChannelId')
               // console.log(channelId)
               this.#ownerChannelId = channelId
@@ -1737,7 +1834,7 @@ class SB384 {
             ]).then((v) => {
               this.#exportable_pubKey = v[0]
               this.#exportable_privateKey = v[1]
-              this.#generateRoomId(this.#exportable_pubKey.x!, this.#exportable_pubKey.y!).then((channelId) => {
+              sbCrypto.generateChannelId(this.#exportable_pubKey).then((channelId) => {
                 // console.log('******** setting ownerChannelId')
                 // console.log(channelId)
                 this.#ownerChannelId = channelId
@@ -1755,30 +1852,6 @@ class SB384 {
       }
     })
     this.sb384Ready = this.ready
-  }
-
-  #generateRoomHash(channelBytes: ArrayBuffer): Promise<string> {
-    return new Promise((resolve) => {
-      crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
-        const k = encodeB64Url(arrayBufferToBase64(channelBytesHash))
-        if (k.includes('-')) {
-          // see earlier discussion - but we constrain to names that are friendly
-          // to both URL/browser environments, and copy-paste functions
-          resolve(this.#generateRoomHash(channelBytesHash)) // tail recursion
-        } else {
-          resolve(k)
-        }
-      })
-    })
-  }
-
-  #generateRoomId(x: string, y: string): Promise<SBChannelId> {
-    return new Promise((resolve) => {
-      const xBytes = base64ToArrayBuffer(decodeB64Url(x))
-      const yBytes = base64ToArrayBuffer(decodeB64Url(y))
-      const channelBytes = _appendBuffer(xBytes, yBytes)
-      resolve(this.#generateRoomHash(channelBytes))
-    })
   }
 
   /** @type {boolean}       */ @Memoize get readyFlag() { return this.#SB384ReadyFlag }
@@ -2037,7 +2110,7 @@ abstract class Channel extends SB384 {
     channelKeys.channelSignKey = await sbCrypto.deriveKey(
       this.privateKey!,
       channelKeys.publicSignKey, 'HMAC', false, ['sign', 'verify']
-      )
+    )
     this.#channelKeys = channelKeys
   }
 
@@ -2133,7 +2206,7 @@ export class ChannelEndpoint extends Channel {
   #keys?: ChannelKeys
 
   adminData?: Dictionary<any> // TODO: make into getter
-  
+
   constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string) {
     super(sbServer, key, channelId)
   }
@@ -4005,11 +4078,12 @@ class Snackabra {
   // sendFile(file: SBFile) {
   //   this.storage.saveFile(this.#channel, file);
   // }
-  
+
 } /* class Snackabra */
 
 export type {
-  ChannelData
+  ChannelData,
+  ChannelKeyStrings
 }
 
 export {
