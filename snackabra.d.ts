@@ -66,7 +66,6 @@ export interface ChannelKeys {
     encryptionKey: CryptoKey;
     signKey: CryptoKey;
     lockedKey?: JsonWebKey;
-    channelSignKey: CryptoKey;
     publicSignKey: CryptoKey;
     privateKey?: CryptoKey;
 }
@@ -76,6 +75,7 @@ interface ChannelKeyStrings {
     ownerKey: string;
     signKey: string;
     lockedKey?: string;
+    error?: string;
 }
 export interface ChannelAdminData {
     room_id?: SBChannelId;
@@ -140,6 +140,7 @@ declare class SBCrypto {
     verifyChannelId(owner_key: JsonWebKey | null, channel_id: SBChannelId): Promise<boolean>;
     generateKeys(): Promise<CryptoKeyPair>;
     importKey(format: KeyFormat, key: BufferSource | JsonWebKey, type: 'ECDH' | 'AES' | 'PBKDF2', extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
+    exportKey(format: 'jwk', key: CryptoKey): Promise<JsonWebKey>;
     deriveKey(privateKey: CryptoKey, publicKey: CryptoKey, type: string, extractable: boolean, keyUsages: KeyUsage[]): Promise<CryptoKey>;
     encrypt(data: BufferSource, key: CryptoKey, _iv?: Uint8Array | null, returnType?: 'encryptedContents'): Promise<EncryptedContents>;
     encrypt(data: BufferSource, key: CryptoKey, _iv?: Uint8Array | null, returnType?: 'arrayBuffer'): Promise<ArrayBuffer>;
@@ -153,7 +154,7 @@ declare class SBCrypto {
     ab2str(buffer: Uint8Array): string;
     compareKeys(key1: Dictionary<any>, key2: Dictionary<any>): boolean;
     lookupKey(key: JsonWebKey, array: Array<JsonWebKey>): number;
-    channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings, privateKey?: CryptoKey): Promise<ChannelKeys>;
+    channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings): Promise<ChannelKeys>;
 }
 declare class SB384 {
     #private;
@@ -161,12 +162,11 @@ declare class SB384 {
     sb384Ready: Promise<SB384>;
     constructor(key?: JsonWebKey);
     get readyFlag(): boolean;
-    get exportable_pubKey(): JsonWebKey | null;
-    get exportable_privateKey(): JsonWebKey | null;
-    get privateKey(): CryptoKey | null;
-    get keyPair(): CryptoKeyPair | null;
+    get exportable_pubKey(): JsonWebKey;
+    get exportable_privateKey(): JsonWebKey;
+    get privateKey(): CryptoKey;
     get _id(): string;
-    get ownerChannelId(): string | null;
+    get ownerChannelId(): string;
 }
 interface SBMessageContents {
     sender_pubKey?: JsonWebKey;
@@ -206,16 +206,15 @@ declare abstract class Channel extends SB384 {
     constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string);
     importKeys(keyStrings: ChannelKeyStrings): Promise<void>;
     get keys(): ChannelKeys;
-    get api(): ChannelApi;
     get sbServer(): SBServer;
-    get channelId(): string | undefined;
     get readyFlag(): boolean;
+    get api(): ChannelApi;
+    get channelId(): string | undefined;
+    get channelSignKey(): CryptoKey;
 }
 export declare class ChannelEndpoint extends Channel {
-    #private;
     adminData?: Dictionary<any>;
     constructor(sbServer: SBServer, key?: JsonWebKey, channelId?: string);
-    get keys(): ChannelKeys;
     send(_m: SBMessage | string, _messageType?: 'string' | 'SBMessage'): Promise<string>;
     set onMessage(_f: CallableFunction);
 }
