@@ -570,8 +570,8 @@ class SBCrypto {
     }
     #generateChannelHash(channelBytes, count) {
         const b62regex = /^[0-9A-Za-z]+$/;
-        if (count > 14)
-            throw new Error('generateChannelHash() - exceeded 14 iterations');
+        if (count > 16)
+            throw new Error('generateChannelHash() - exceeded 16 iterations');
         return new Promise((resolve) => {
             crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
                 const k = encodeB64Url(arrayBufferToBase64(channelBytesHash));
@@ -804,8 +804,10 @@ class SBCrypto {
         }
         return -1;
     }
-    async channelKeyStringsToCryptoKeys(keyStrings) {
+    async channelKeyStringsToCryptoKeys(keyStrings, privateKey) {
         return new Promise(async (resolve, reject) => {
+            console.log("channelKeyStringsToCryptoKeys()");
+            console.log(keyStrings);
             let ownerKeyParsed = jsonParseWrapper(keyStrings.ownerKey, 'L1513');
             Promise.all([
                 sbCrypto.importKey('jwk', ownerKeyParsed, 'ECDH', false, []),
@@ -820,12 +822,15 @@ class SBCrypto {
                 const encryptionKey = v[1];
                 const signKey = v[2];
                 const publicSignKey = v[3];
+                let channelSignKey = privateKey ?
+                    await sbCrypto.deriveKey(privateKey, publicSignKey, 'HMAC', false, ['sign', 'verify']) :
+                    signKey;
                 resolve({
                     ownerKey: ownerKey,
                     ownerPubKeyX: ownerKeyParsed.x,
                     encryptionKey: encryptionKey,
                     signKey: signKey,
-                    channelSignKey: signKey,
+                    channelSignKey: channelSignKey,
                     publicSignKey: publicSignKey
                 });
             })
@@ -1084,9 +1089,7 @@ class Channel extends SB384 {
         this.channelReady = this.ready;
     }
     async importKeys(keyStrings) {
-        const channelKeys = await sbCrypto.channelKeyStringsToCryptoKeys(keyStrings);
-        channelKeys.channelSignKey = await sbCrypto.deriveKey(this.privateKey, channelKeys.publicSignKey, 'HMAC', false, ['sign', 'verify']);
-        this.#channelKeys = channelKeys;
+        this.#channelKeys = await sbCrypto.channelKeyStringsToCryptoKeys(keyStrings, this.privateKey);
     }
     get keys() {
         if (!this.#channelKeys)
@@ -1970,12 +1973,24 @@ class ChannelApi {
     #channelApi;
     #channelServer;
     #cursor = '';
+    #channelKeysLoaded = false;
+    #channelKeys;
     constructor(channel) {
         this.#channel = channel;
         this.#sbServer = this.#channel.sbServer;
         this.#server = this.#sbServer.channel_server;
         this.#channelApi = this.#server + '/api/';
         this.#channelServer = this.#server + '/api/room/';
+        this.#channelKeys = new Promise((resolve, reject) => {
+            this.#callApi('/getChannelKeys').then((keys) => {
+                sbCrypto.channelKeyStringsToCryptoKeys(keys, this.#channel.privateKey ?? undefined)
+                    .then((channelKeys) => {
+                    this.#channelKeysLoaded = true;
+                    resolve(channelKeys);
+                })
+                    .catch((e) => reject(e));
+            }).catch((e) => reject(e));
+        });
     }
     getLastMessageTimes() {
         return new Promise((resolve, reject) => {
@@ -2029,29 +2044,39 @@ class ChannelApi {
             });
         });
     }
-    #callApi(path, init) {
+    async #callApi(path, body) {
         if (DBG)
             console.log(path);
-        if ((DBG) && (init))
-            console.log(init);
-        return new Promise((resolve, reject) => {
-            try {
-                SBFetch(this.#channelServer + this.#channel.channelId + path, init)
-                    .then((response) => {
-                    if (!response.ok)
-                        reject(new Error('Network response was not OK'));
-                    return response.json();
-                })
-                    .then((data) => {
-                    if (data.error)
-                        reject(new Error(data.error));
-                    resolve(data);
-                })
-                    .catch((e) => { reject("ChannelApi Error [1]: " + WrapError(e)); });
+        const method = body ? 'POST' : 'GET';
+        return new Promise(async (resolve, reject) => {
+            let authString = '';
+            if (this.#channelKeysLoaded) {
+                const token_data = new Date().getTime().toString();
+                const channelKeys = await this.#channelKeys;
+                authString = token_data + '.' + await sbCrypto.sign(channelKeys.channelSignKey, token_data);
             }
-            catch (e) {
-                reject("ChannelApi Error [2]: " + WrapError(e));
-            }
+            let init = {
+                method: method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'authorization': authString
+                }
+            };
+            if (body)
+                init.body = JSON.stringify(body);
+            await (this.#channel.ready);
+            SBFetch(this.#channelServer + this.#channel.channelId + path, init)
+                .then((response) => {
+                if (!response.ok)
+                    reject(new Error('Network response was not OK'));
+                return response.json();
+            })
+                .then((data) => {
+                if (data.error)
+                    reject(new Error(data.error));
+                resolve(data);
+            })
+                .catch((e) => { reject("ChannelApi Error [1]: " + WrapError(e)); });
         });
     }
     updateCapacity(capacity) {
@@ -2073,29 +2098,10 @@ class ChannelApi {
         return new Promise((resolve) => (this.#callApi('/roomLocked')).then((d) => { console.log(d); resolve(d.locked === true); }));
     }
     setMOTD(motd) {
-        return this.#callApi('/motd', {
-            method: 'POST',
-            body: JSON.stringify({ motd: motd }),
-            headers: {
-                'Content-Type': 'application/json'
-            }
-        });
+        return this.#callApi('/motd', { motd: motd });
     }
     getAdminData() {
-        return new Promise(async (resolve, reject) => {
-            const token_data = new Date().getTime().toString();
-            sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
-                .then((token_sign) => {
-                resolve(this.#callApi('/getAdminData', {
-                    method: 'GET',
-                    headers: {
-                        'authorization': token_data + '.' + token_sign,
-                        'Content-Type': 'application/json'
-                    }
-                }));
-            })
-                .catch((e) => reject(e));
-        });
+        return this.#callApi('/getAdminData');
     }
     downloadData() {
         return new Promise((resolve, reject) => {
@@ -2149,40 +2155,16 @@ class ChannelApi {
         });
     }
     uploadChannel(channelData) {
-        return new Promise((resolve, reject) => {
-            SBFetch(this.#channelServer + this.#channel.channelId + '/uploadRoom', {
-                method: 'POST',
-                body: JSON.stringify(channelData), headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-                .then((response) => {
-                if (!response.ok) {
-                    reject(new Error('Network response was not OK'));
-                }
-                return response.json();
-            })
-                .then((data) => {
-                resolve(data);
-            }).catch((error) => {
-                reject(error);
-            });
-        });
+        return this.#callApi('/uploadRoom', channelData);
     }
     authorize(ownerPublicKey, serverSecret) {
-        return this.#callApi('/authorizeRoom', {
-            method: 'POST',
-            body: JSON.stringify({ roomId: this.#channel.channelId, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey }),
-        });
+        return this.#callApi('/authorizeRoom', { roomId: this.#channel.channelId, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey });
     }
     postPubKey(_exportable_pubKey) {
         throw new Error("postPubKey() deprecated");
     }
     storageRequest(byteLength) {
-        return this.#callApi('/storageRequest?size=' + byteLength, {
-            method: 'GET',
-            headers: { 'Content-Type': 'application/json' }
-        });
+        return this.#callApi('/storageRequest?size=' + byteLength);
     }
     lock() {
         console.trace("WARNING: lock() on channel api has not been tested/debugged fully ..");
@@ -2210,28 +2192,11 @@ class ChannelApi {
     }
     acceptVisitor(pubKey) {
         console.warn("WARNING: acceptVisitor() on channel api has not been tested/debugged fully ..");
-        return new Promise(async (resolve, reject) => {
+        return new Promise(async (resolve) => {
             _sb_assert(this.#channel.keys.privateKey, "acceptVisitor(): no private key");
             const shared_key = await sbCrypto.deriveKey(this.#channel.keys.privateKey, await sbCrypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
             const _encrypted_locked_key = await sbCrypto.encrypt(sbCrypto.str2ab(JSON.stringify(this.#channel.keys.lockedKey)), shared_key);
-            SBFetch(this.#channelServer + this.#channel.channelId + '/acceptVisitor', {
-                method: 'POST',
-                body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
-                headers: {
-                    'Content-Type': 'application/json'
-                }
-            })
-                .then((response) => {
-                if (!response.ok) {
-                    reject(new Error('Network response was not OK'));
-                }
-                return response.json();
-            })
-                .then((data) => {
-                resolve(data);
-            }).catch((error) => {
-                reject(error);
-            });
+            resolve(this.#callApi('/acceptVisitor', { pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }));
         });
     }
     ownerKeyRotation() {
@@ -2250,12 +2215,9 @@ class ChannelApi {
                 }
                 else {
                     const { channelData, exportable_privateKey } = await newChannelData(keys);
-                    const data = new TextEncoder().encode(JSON.stringify(channelData));
-                    let resp = await SBFetch(this.#channelServer + this.#channel.channelId + `/budd?targetChannel=${channelData.roomId}&transferBudget=${storage}`, {
-                        method: 'POST',
-                        body: data
-                    });
-                    resp = await resp.json();
+                    let resp = await this.#callApi(`/budd?targetChannel=${channelData.roomId}&transferBudget=${storage}`, channelData);
+                    console.log("budd() response:");
+                    console.log(resp);
                     if (resp.success) {
                         resolve({ channelId: channelData.roomId, key: exportable_privateKey });
                     }

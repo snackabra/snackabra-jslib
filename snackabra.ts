@@ -1284,8 +1284,9 @@ class SBCrypto {  /*************************************************************
 
   #generateChannelHash(channelBytes: ArrayBuffer, count: number): Promise<string> {
     const b62regex = /^[0-9A-Za-z]+$/;
-    if (count > 14)
-      throw new Error('generateChannelHash() - exceeded 14 iterations')
+    if (count > 16)
+      // TODO: this should never go above even 14, but it has ... need to investigate
+      throw new Error('generateChannelHash() - exceeded 16 iterations')
     return new Promise((resolve) => {
       crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
         const k = encodeB64Url(arrayBufferToBase64(channelBytesHash))
@@ -1622,8 +1623,10 @@ class SBCrypto {  /*************************************************************
     return -1;
   }
 
-  async channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings): Promise<ChannelKeys> {
+  async channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings, privateKey?: CryptoKey): Promise<ChannelKeys> {
     return new Promise(async (resolve, reject) => {
+      console.log("channelKeyStringsToCryptoKeys()")
+      console.log(keyStrings)
       let ownerKeyParsed: JsonWebKey = jsonParseWrapper(keyStrings.ownerKey, 'L1513')
       Promise.all([
         sbCrypto.importKey('jwk', ownerKeyParsed, 'ECDH', false, []),
@@ -1638,12 +1641,18 @@ class SBCrypto {  /*************************************************************
           const encryptionKey = v[1]
           const signKey = v[2]
           const publicSignKey = v[3]
+          let channelSignKey = 
+            privateKey ? 
+              await sbCrypto.deriveKey(
+                privateKey, publicSignKey, 'HMAC', false, ['sign', 'verify']
+              ) :
+              signKey;
           resolve({
             ownerKey: ownerKey,
             ownerPubKeyX: ownerKeyParsed.x!,
             encryptionKey: encryptionKey,
             signKey: signKey,
-            channelSignKey: signKey,
+            channelSignKey: channelSignKey,
             publicSignKey: publicSignKey
           })
         })
@@ -2106,12 +2115,7 @@ abstract class Channel extends SB384 {
   }
 
   async importKeys(keyStrings: ChannelKeyStrings): Promise<void> {
-    const channelKeys = await sbCrypto.channelKeyStringsToCryptoKeys(keyStrings)
-    channelKeys.channelSignKey = await sbCrypto.deriveKey(
-      this.privateKey!,
-      channelKeys.publicSignKey, 'HMAC', false, ['sign', 'verify']
-    )
-    this.#channelKeys = channelKeys
+    this.#channelKeys = await sbCrypto.channelKeyStringsToCryptoKeys(keyStrings, this.privateKey!)
   }
 
   get keys(): ChannelKeys {
@@ -2203,6 +2207,7 @@ function deCryptChannelMessage(m00: string, m01: EncryptedContents, keys: Channe
  * Gives access to a Channel API (without needing to connect to socket)
  */
 export class ChannelEndpoint extends Channel {
+
   #keys?: ChannelKeys
 
   adminData?: Dictionary<any> // TODO: make into getter
@@ -3450,6 +3455,10 @@ class ChannelApi {
   #channelServer: string;
   #cursor: string = ''; // last (oldest) message key seen
 
+  // channelKeys bootstrap goes through a self-api-call
+  #channelKeysLoaded: boolean = false;
+  #channelKeys: Promise<ChannelKeys>;
+
   // #payload: Payload;
 
   constructor(channel: Channel) {
@@ -3460,6 +3469,15 @@ class ChannelApi {
     this.#channelApi = this.#server + '/api/'
     this.#channelServer = this.#server + '/api/room/'
     // if (identity) this.#identity = identity!
+    this.#channelKeys = new Promise((resolve, reject) => {
+      this.#callApi('/getChannelKeys').then((keys) => {
+        sbCrypto.channelKeyStringsToCryptoKeys(keys, this.#channel.privateKey ?? undefined)
+          .then((channelKeys) => {
+            this.#channelKeysLoaded = true
+            resolve(channelKeys)
+          })
+          .catch((e) => reject(e))}).catch((e) => reject(e))
+    })
   }
 
   /**
@@ -3535,24 +3553,39 @@ class ChannelApi {
     });
   }
 
-  #callApi(path: string, init?: RequestInit): Promise<any> {
+
+  async #callApi(path: string): Promise<any>
+  async #callApi(path: string, body: any): Promise<any>
+  async #callApi(path: string, body?: any): Promise<any> {
     if (DBG) console.log(path)
-    if ((DBG) && (init)) console.log(init)
-    return new Promise((resolve, reject) => {
-      try {
-        SBFetch(this.#channelServer + this.#channel.channelId + path, init)
-          .then((response: Response) => {
-            if (!response.ok) reject(new Error('Network response was not OK'))
-            return response.json()
-          })
-          .then((data: Dictionary<any>) => {
-            if (data.error) reject(new Error(data.error))
-            resolve(data)
-          })
-          .catch((e: Error) => { reject("ChannelApi Error [1]: " + WrapError(e)) })
-      } catch (e) {
-        reject("ChannelApi Error [2]: " + WrapError(e))
+    const method = body ? 'POST' : 'GET'
+    return new Promise(async (resolve, reject) => {
+      let authString = '';
+      if (this.#channelKeysLoaded) {
+        const token_data: string = new Date().getTime().toString()
+        const channelKeys = await this.#channelKeys
+        authString = token_data + '.' + await sbCrypto.sign(channelKeys.channelSignKey, token_data)
       }
+      let init: RequestInit = {
+        method: method,
+        headers: {
+          'Content-Type': 'application/json',
+          'authorization': authString
+        }
+      }
+      if (body) 
+        init.body = JSON.stringify(body);
+      await (this.#channel.ready)
+      SBFetch(this.#channelServer + this.#channel.channelId + path, init)
+        .then((response: Response) => {
+          if (!response.ok) reject(new Error('Network response was not OK'))
+          return response.json()
+        })
+        .then((data: Dictionary<any>) => {
+          if (data.error) reject(new Error(data.error))
+          resolve(data)
+        })
+        .catch((e: Error) => { reject("ChannelApi Error [1]: " + WrapError(e)) })
     })
   }
 
@@ -3606,34 +3639,29 @@ class ChannelApi {
    * Set message of the day
    */
   setMOTD(motd: string) {
-    return this.#callApi('/motd', {
-      method: 'POST',
-      body: JSON.stringify({ motd: motd }),
-      headers: {
-        'Content-Type': 'application/json'
-      }
-    })
+    return this.#callApi('/motd', { motd: motd })
   }
 
   /**
    * getAdminData
    */
   getAdminData(): Promise<ChannelAdminData> {
-    return new Promise(async (resolve, reject) => {
-      const token_data: string = new Date().getTime().toString()
-      sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
-        .then((token_sign: string) => {
-          resolve(this.#callApi('/getAdminData', {
-            method: 'GET',
-            // credentials: 'include',
-            headers: {
-              'authorization': token_data + '.' + token_sign,
-              'Content-Type': 'application/json'
-            }
-          }) as Promise<ChannelAdminData>)
-        })
-        .catch((e) => reject(e));
-    })
+    return this.#callApi('/getAdminData')
+    // return new Promise(async (resolve, reject) => {
+    //   const token_data: string = new Date().getTime().toString()
+    //   sbCrypto.sign(this.#channel.keys.channelSignKey, token_data)
+    //     .then((token_sign: string) => {
+    //       resolve(this.#callApi('/getAdminData', {
+    //         method: 'GET',
+    //         // credentials: 'include',
+    //         headers: {
+    //           'authorization': token_data + '.' + token_sign,
+    //           'Content-Type': 'application/json'
+    //         }
+    //       }) as Promise<ChannelAdminData>)
+    //     })
+    //     .catch((e) => reject(e));
+    // })
   }
 
   /**
@@ -3693,32 +3721,30 @@ class ChannelApi {
   }
 
   uploadChannel(channelData: ChannelData) {
-    return new Promise((resolve, reject) => {
-      SBFetch(this.#channelServer + this.#channel.channelId + '/uploadRoom', {
-        method: 'POST',
-        body: JSON.stringify(channelData), headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-        .then((response: Response) => {
-          if (!response.ok) {
-            reject(new Error('Network response was not OK'));
-          }
-          return response.json();
-        })
-        .then((data: Dictionary<any>) => {
-          resolve(data);
-        }).catch((error: Error) => {
-          reject(error);
-        });
-    });
+    return this.#callApi('/uploadRoom', channelData)
+    // return new Promise((resolve, reject) => {
+    //   SBFetch(this.#channelServer + this.#channel.channelId + '/uploadRoom', {
+    //     method: 'POST',
+    //     body: JSON.stringify(channelData), headers: {
+    //       'Content-Type': 'application/json'
+    //     }
+    //   })
+    //     .then((response: Response) => {
+    //       if (!response.ok) {
+    //         reject(new Error('Network response was not OK'));
+    //       }
+    //       return response.json();
+    //     })
+    //     .then((data: Dictionary<any>) => {
+    //       resolve(data);
+    //     }).catch((error: Error) => {
+    //       reject(error);
+    //     });
+    // });
   }
 
   authorize(ownerPublicKey: Dictionary<any>, serverSecret: string) {
-    return this.#callApi('/authorizeRoom', {
-      method: 'POST',
-      body: JSON.stringify({ roomId: this.#channel.channelId, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey }),
-    })
+    return this.#callApi('/authorizeRoom', { roomId: this.#channel.channelId, SERVER_SECRET: serverSecret, ownerKey: ownerPublicKey })
   }
 
   // deprecated - this is now implicitly done on first connect
@@ -3727,11 +3753,7 @@ class ChannelApi {
   }
 
   storageRequest(byteLength: number): Promise<Dictionary<any>> {
-    return this.#callApi('/storageRequest?size=' + byteLength, {
-      method: 'GET',
-      // credentials: 'include',
-      headers: { 'Content-Type': 'application/json' }
-    })
+    return this.#callApi('/storageRequest?size=' + byteLength)
   }
 
   // TODO: test this guy, i doubt if it's working post-re-factor
@@ -3762,29 +3784,31 @@ class ChannelApi {
   // TODO: test this guy, i doubt if it's working post-re-factor
   acceptVisitor(pubKey: string) {
     console.warn("WARNING: acceptVisitor() on channel api has not been tested/debugged fully ..")
-    return new Promise(async (resolve, reject) => {
+    return new Promise(async (resolve) => {
       _sb_assert(this.#channel.keys.privateKey, "acceptVisitor(): no private key")
       const shared_key = await sbCrypto.deriveKey(this.#channel.keys.privateKey!,
         await sbCrypto.importKey('jwk', jsonParseWrapper(pubKey, 'L2276'), 'ECDH', false, []), 'AES', false, ['encrypt', 'decrypt']);
       const _encrypted_locked_key = await sbCrypto.encrypt(sbCrypto.str2ab(JSON.stringify(this.#channel.keys.lockedKey!)), shared_key)
-      SBFetch(this.#channelServer + this.#channel.channelId + '/acceptVisitor', {
-        method: 'POST',
-        body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
-        headers: {
-          'Content-Type': 'application/json'
-        }
-      })
-        .then((response: Response) => {
-          if (!response.ok) {
-            reject(new Error('Network response was not OK'));
-          }
-          return response.json();
-        })
-        .then((data: Dictionary<any>) => {
-          resolve(data);
-        }).catch((error: Error) => {
-          reject(error);
-        });
+      resolve(this.#callApi('/acceptVisitor', { pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }))
+
+      // SBFetch(this.#channelServer + this.#channel.channelId + '/acceptVisitor', {
+      //   method: 'POST',
+      //   body: JSON.stringify({ pubKey: pubKey, lockedKey: JSON.stringify(_encrypted_locked_key) }),
+      //   headers: {
+      //     'Content-Type': 'application/json'
+      //   }
+      // })
+      //   .then((response: Response) => {
+      //     if (!response.ok) {
+      //       reject(new Error('Network response was not OK'));
+      //     }
+      //     return response.json();
+      //   })
+      //   .then((data: Dictionary<any>) => {
+      //     resolve(data);
+      //   }).catch((error: Error) => {
+      //     reject(error);
+      //   });
     });
   }
 
@@ -3801,26 +3825,7 @@ class ChannelApi {
   // owner keys are NEVER rotated (other keys can be rotated). 
   ownerKeyRotation() {
     throw new Error("ownerKeyRotation() replaced by new budd() approach")
-    // return new Promise((resolve, reject) => {
-    //   SBFetch(this.#channelServer + this.#channel.channelId + '/ownerKeyRotation', {
-    //     method: 'GET', credentials: 'include', headers: {
-    //       'Content-Type': 'application/json'
-    //     }
-    //   })
-    //     .then((response: Response) => {
-    //       if (response.ok)
-    //         return response.json()
-    //       else
-    //         reject(new Error('Network response was not OK'));
-    //     })
-    //     .then((data: Dictionary<any>) => {
-    //       resolve(data);
-    //     }).catch((error: Error) => {
-    //       reject(error);
-    //     });
-    // });
   }
-
 
   /**
    * "budd" will spin a channel off an existing one.
@@ -3864,13 +3869,16 @@ class ChannelApi {
           return this.#callApi(`/budd?targetChannel=${targetChannel}&transferBudget=${storage}`)
         } else {
           const { channelData, exportable_privateKey } = await newChannelData(keys);
-          const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
+          // const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
           // if we are creating a new channel, it'll be in both the search parameters and the body
-          let resp: Dictionary<any> = await SBFetch(this.#channelServer + this.#channel.channelId + `/budd?targetChannel=${channelData.roomId}&transferBudget=${storage}`, {
-            method: 'POST',
-            body: data
-          });
-          resp = await resp.json();
+          let resp: Dictionary<any> = await this.#callApi(`/budd?targetChannel=${channelData.roomId}&transferBudget=${storage}`, channelData)
+          // await SBFetch(this.#channelServer + this.#channel.channelId + `/budd?targetChannel=${channelData.roomId}&transferBudget=${storage}`, {
+          //   method: 'POST',
+          //   body: data
+          // });
+          console.log("budd() response:")
+          console.log(resp)
+          // resp = await resp.json();
           if (resp.success) {
             resolve({ channelId: channelData.roomId!, key: exportable_privateKey })
           } else {

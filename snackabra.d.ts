@@ -153,7 +153,7 @@ declare class SBCrypto {
     ab2str(buffer: Uint8Array): string;
     compareKeys(key1: Dictionary<any>, key2: Dictionary<any>): boolean;
     lookupKey(key: JsonWebKey, array: Array<JsonWebKey>): number;
-    channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings): Promise<ChannelKeys>;
+    channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings, privateKey?: CryptoKey): Promise<ChannelKeys>;
 }
 declare class SB384 {
     #private;
@@ -316,7 +316,7 @@ declare class ChannelApi {
     setMOTD(motd: string): Promise<any>;
     getAdminData(): Promise<ChannelAdminData>;
     downloadData(): Promise<unknown>;
-    uploadChannel(channelData: ChannelData): Promise<unknown>;
+    uploadChannel(channelData: ChannelData): Promise<any>;
     authorize(ownerPublicKey: Dictionary<any>, serverSecret: string): Promise<any>;
     postPubKey(_exportable_pubKey: JsonWebKey): Promise<{
         success: boolean;
