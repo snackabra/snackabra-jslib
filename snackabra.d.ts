@@ -306,6 +306,7 @@ declare class ChannelApi {
     constructor(channel: Channel);
     getLastMessageTimes(): Promise<unknown>;
     getOldMessages(currentMessagesLength?: number, paginate?: boolean): Promise<Array<ChannelMessage>>;
+    get channelId(): string | undefined;
     updateCapacity(capacity: number): Promise<any>;
     getCapacity(): Promise<any>;
     getStorageLimit(): Promise<any>;

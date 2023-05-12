@@ -807,8 +807,6 @@ class SBCrypto {
     }
     async channelKeyStringsToCryptoKeys(keyStrings) {
         return new Promise(async (resolve, reject) => {
-            console.log("channelKeyStringsToCryptoKeys()");
-            console.log(keyStrings);
             let ownerKeyParsed = jsonParseWrapper(keyStrings.ownerKey, 'L1513');
             Promise.all([
                 sbCrypto.importKey('jwk', ownerKeyParsed, 'ECDH', false, []),
@@ -2036,7 +2034,6 @@ class ChannelApi {
         const method = body ? 'POST' : 'GET';
         return new Promise(async (resolve, reject) => {
             await (this.#channel.ready);
-            console.log(this.#channel);
             let authString = '';
             const token_data = new Date().getTime().toString();
             authString = token_data + '.' + await sbCrypto.sign(this.#channel.channelSignKey, token_data);
@@ -2064,6 +2061,7 @@ class ChannelApi {
                 .catch((e) => { reject("ChannelApi Error [1]: " + WrapError(e)); });
         });
     }
+    get channelId() { _sb_assert(this.#channel.readyFlag, 'ChannedlApi.channelId(): channel not ready (?)'); return this.#channel.channelId; }
     updateCapacity(capacity) { return this.#callApi('/updateRoomCapacity?capacity=' + capacity); }
     getCapacity() { return (this.#callApi('/getRoomCapacity')); }
     getStorageLimit() { return (this.#callApi('/getStorageLimit')); }
@@ -2177,8 +2175,6 @@ class ChannelApi {
                 else {
                     const { channelData, exportable_privateKey } = await newChannelData(keys);
                     let resp = await this.#callApi(`/budd?targetChannel=${channelData.roomId}&transferBudget=${storage}`, channelData);
-                    console.log("budd() response:");
-                    console.log(resp);
                     if (resp.success) {
                         resolve({ channelId: channelData.roomId, key: exportable_privateKey });
                     }
@@ -2206,7 +2202,7 @@ class Snackabra {
             this.#storage = new StorageApi(args.storage_server, args.channel_server, args.shard_server ? args.shard_server : undefined);
             if (DEBUG)
                 DBG = true;
-            if (DEBUG)
+            if (DBG)
                 console.log("++++ Snackabra constructor ++++ setting DBG to TRUE ++++");
         }
     }

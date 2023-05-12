@@ -1629,8 +1629,8 @@ class SBCrypto {  /*************************************************************
 
   async channelKeyStringsToCryptoKeys(keyStrings: ChannelKeyStrings): Promise<ChannelKeys> {
     return new Promise(async (resolve, reject) => {
-      console.log("channelKeyStringsToCryptoKeys()")
-      console.log(keyStrings)
+      // console.log("channelKeyStringsToCryptoKeys()")
+      // console.log(keyStrings)
       let ownerKeyParsed: JsonWebKey = jsonParseWrapper(keyStrings.ownerKey, 'L1513')
       Promise.all([
         sbCrypto.importKey('jwk', ownerKeyParsed, 'ECDH', false, []),
@@ -3548,7 +3548,7 @@ class ChannelApi {
     const method = body ? 'POST' : 'GET'
     return new Promise(async (resolve, reject) => {
       await (this.#channel.ready)
-      console.log(this.#channel)
+      // console.log(this.#channel)
       let authString = '';
       const token_data: string = new Date().getTime().toString()
       authString = token_data + '.' + await sbCrypto.sign(this.#channel.channelSignKey, token_data)
@@ -3576,6 +3576,8 @@ class ChannelApi {
         .catch((e: Error) => { reject("ChannelApi Error [1]: " + WrapError(e)) })
     })
   }
+
+  get channelId() { _sb_assert(this.#channel.readyFlag, 'ChannedlApi.channelId(): channel not ready (?)' ) ; return this.#channel.channelId }
 
   /**
    * Update (set) the capacity of the channel; Owner only
@@ -3769,17 +3771,9 @@ class ChannelApi {
           if (keys) throw new Error("[budd()]: You can't specify both a target channel and keys");
           return this.#callApi(`/budd?targetChannel=${targetChannel}&transferBudget=${storage}`)
         } else {
+          // we are creating a new channel
           const { channelData, exportable_privateKey } = await newChannelData(keys);
-          // const data: Uint8Array = new TextEncoder().encode(JSON.stringify(channelData));
-          // if we are creating a new channel, it'll be in both the search parameters and the body
           let resp: Dictionary<any> = await this.#callApi(`/budd?targetChannel=${channelData.roomId}&transferBudget=${storage}`, channelData)
-          // await SBFetch(this.#channelServer + this.#channel.channelId + `/budd?targetChannel=${channelData.roomId}&transferBudget=${storage}`, {
-          //   method: 'POST',
-          //   body: data
-          // });
-          console.log("budd() response:")
-          console.log(resp)
-          // resp = await resp.json();
           if (resp.success) {
             resolve({ channelId: channelData.roomId!, key: exportable_privateKey })
           } else {
@@ -3862,7 +3856,7 @@ class Snackabra {
       this.#preferredServer = Object.assign({}, args)
       this.#storage = new StorageApi(args.storage_server, args.channel_server, args.shard_server ? args.shard_server : undefined)
       if (DEBUG) DBG = true
-      if (DEBUG) console.log("++++ Snackabra constructor ++++ setting DBG to TRUE ++++");
+      if (DBG) console.log("++++ Snackabra constructor ++++ setting DBG to TRUE ++++");
     }
 
   }
