@@ -566,43 +566,37 @@ class SBCrypto {
             return null;
         }
     }
-    #generateChannelHash(channelBytes, count) {
+    async #generateChannelHash(channelBytes) {
+        const MAX_REHASH_ITERATIONS = 160;
         const b62regex = /^[0-9A-Za-z]+$/;
-        if (count > 16)
-            throw new Error('generateChannelHash() - exceeded 16 iterations');
-        return new Promise((resolve) => {
-            crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
-                const k = encodeB64Url(arrayBufferToBase64(channelBytesHash));
-                if (b62regex.test(k)) {
-                    resolve(k);
-                }
-                else {
-                    resolve(this.#generateChannelHash(channelBytesHash, count + 1));
-                }
-            });
-        });
+        let count = 0;
+        let hash = arrayBufferToBase64(channelBytes);
+        while (!b62regex.test(hash)) {
+            if (count++ > MAX_REHASH_ITERATIONS)
+                throw new Error(`generateChannelHash() - exceeded ${MAX_REHASH_ITERATIONS} iterations:`);
+            channelBytes = await crypto.subtle.digest('SHA-384', channelBytes);
+            hash = arrayBufferToBase64(channelBytes);
+        }
+        return arrayBufferToBase64(channelBytes);
     }
-    #testChannelHash(channelBytes, channel_id, count) {
-        return new Promise((resolve) => {
-            if (count > 14)
-                resolve(false);
-            crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
-                const k = encodeB64Url(arrayBufferToBase64(channelBytesHash));
-                if (k === channel_id) {
-                    resolve(true);
-                }
-                else {
-                    resolve(this.#testChannelHash(channelBytesHash, channel_id, count + 1));
-                }
-            });
-        });
+    async #testChannelHash(channelBytes, channel_id) {
+        const MAX_REHASH_ITERATIONS = 160;
+        let count = 0;
+        let hash = arrayBufferToBase64(channelBytes);
+        while (hash !== channel_id) {
+            if (count++ > MAX_REHASH_ITERATIONS)
+                return false;
+            channelBytes = await crypto.subtle.digest('SHA-384', channelBytes);
+            hash = arrayBufferToBase64(channelBytes);
+        }
+        return true;
     }
     async generateChannelId(owner_key) {
         if (owner_key && owner_key.x && owner_key.y) {
             const xBytes = base64ToArrayBuffer(decodeB64Url(owner_key.x));
             const yBytes = base64ToArrayBuffer(decodeB64Url(owner_key.y));
             const channelBytes = _appendBuffer(xBytes, yBytes);
-            return await this.#generateChannelHash(channelBytes, 0);
+            return await this.#generateChannelHash(channelBytes);
         }
         else {
             return 'InvalidJsonWebKey';
@@ -627,7 +621,7 @@ class SBCrypto {
             const xBytes = base64ToArrayBuffer(decodeB64Url(x));
             const yBytes = base64ToArrayBuffer(decodeB64Url(y));
             const channelBytes = _appendBuffer(xBytes, yBytes);
-            return await this.#testChannelHash(channelBytes, channel_id, 0);
+            return await this.#testChannelHash(channelBytes, channel_id);
         }
         else {
             return false;

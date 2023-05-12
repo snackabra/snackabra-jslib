@@ -1280,39 +1280,30 @@ class SBCrypto {  /*************************************************************
     }
   }
 
-  #generateChannelHash(channelBytes: ArrayBuffer, count: number): Promise<string> {
+  async #generateChannelHash(channelBytes: ArrayBuffer): Promise<string> {
+    const MAX_REHASH_ITERATIONS = 160
     const b62regex = /^[0-9A-Za-z]+$/;
-    if (count > 16)
-      // TODO: this should never go above even 14, but it has ... need to investigate
-      throw new Error('generateChannelHash() - exceeded 16 iterations')
-    return new Promise((resolve) => {
-      crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
-        const k = encodeB64Url(arrayBufferToBase64(channelBytesHash))
-        if (b62regex.test(k)) {
-          resolve(k)
-        } else {
-          // see discussion elsewhere - but we constrain to names that are friendly
-          // to both URL/browser environments, and copy-paste functions
-          resolve(this.#generateChannelHash(channelBytesHash, count + 1)) // tail recursion
-        }
-      })
-    })
+    let count = 0
+    let hash = arrayBufferToBase64(channelBytes)
+    while (!b62regex.test(hash)) {
+      if (count++ > MAX_REHASH_ITERATIONS) throw new Error(`generateChannelHash() - exceeded ${MAX_REHASH_ITERATIONS} iterations:`)
+      channelBytes = await crypto.subtle.digest('SHA-384', channelBytes)
+      hash = arrayBufferToBase64(channelBytes)
+    }
+    return arrayBufferToBase64(channelBytes)
   }
 
-  // For compatibilty with various versions, we accept any of the first 14 hashes.
-  #testChannelHash(channelBytes: ArrayBuffer, channel_id: SBChannelId, count: number): Promise<boolean> {
-    return new Promise((resolve) => {
-      if (count > 14)
-        resolve(false) // less than 1 in 4 trillion chance of exceeding this
-      crypto.subtle.digest('SHA-384', channelBytes).then((channelBytesHash) => {
-        const k = encodeB64Url(arrayBufferToBase64(channelBytesHash))
-        if (k === channel_id) {
-          resolve(true)
-        } else {
-          resolve(this.#testChannelHash(channelBytesHash, channel_id, count + 1)) // tail recursion
-        }
-      })
-    })
+  // For compatibilty with various versions, we accept any of the first 160 hashes.
+  async #testChannelHash(channelBytes: ArrayBuffer, channel_id: SBChannelId): Promise<boolean> {
+    const MAX_REHASH_ITERATIONS = 160
+    let count = 0
+    let hash = arrayBufferToBase64(channelBytes)
+    while (hash !== channel_id) {
+      if (count++ > MAX_REHASH_ITERATIONS) return false
+      channelBytes = await crypto.subtle.digest('SHA-384', channelBytes)
+      hash = arrayBufferToBase64(channelBytes)
+    }
+    return true
   }
 
   /**
@@ -1330,14 +1321,15 @@ class SBCrypto {  /*************************************************************
    * allows [A-Za-z0-9_], eg does not allow the '-' character. This makes the
    * encoding more practical for end-user interactions like copy-paste. This
    * is accomplished by simply re-hashing until the result is valid. This 
-   * reduces the entropy of the channel ID by approximately 1.5 bits. 
+   * reduces the entropy of the channel ID by a neglible amount. 
    */
   async generateChannelId(owner_key: JsonWebKey | null): Promise<SBChannelId | string> {
     if (owner_key && owner_key.x && owner_key.y) {
       const xBytes = base64ToArrayBuffer(decodeB64Url(owner_key!.x!))
       const yBytes = base64ToArrayBuffer(decodeB64Url(owner_key!.y!))
       const channelBytes = _appendBuffer(xBytes, yBytes)
-      return await this.#generateChannelHash(channelBytes, 0)
+      // return await this.#generateChannelHash(channelBytes, 0)
+      return await this.#generateChannelHash(channelBytes)
     } else {
       return 'InvalidJsonWebKey'; // invalid owner key
     }
@@ -1363,7 +1355,7 @@ class SBCrypto {  /*************************************************************
       const xBytes = base64ToArrayBuffer(decodeB64Url(x!))
       const yBytes = base64ToArrayBuffer(decodeB64Url(y!))
       const channelBytes = _appendBuffer(xBytes, yBytes)
-      return await this.#testChannelHash(channelBytes, channel_id, 0)
+      return await this.#testChannelHash(channelBytes, channel_id)
     } else {
       return false;
     }
