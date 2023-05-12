@@ -3769,7 +3769,7 @@ class ChannelApi {
         if (targetChannel) {
           // just a straight up transfer of budget
           if (keys) throw new Error("[budd()]: You can't specify both a target channel and keys");
-          return this.#callApi(`/budd?targetChannel=${targetChannel}&transferBudget=${storage}`)
+          resolve(this.#callApi(`/budd?targetChannel=${targetChannel}&transferBudget=${storage}`))
         } else {
           // we are creating a new channel
           const { channelData, exportable_privateKey } = await newChannelData(keys);

@@ -2170,7 +2170,7 @@ class ChannelApi {
                 if (targetChannel) {
                     if (keys)
                         throw new Error("[budd()]: You can't specify both a target channel and keys");
-                    return this.#callApi(`/budd?targetChannel=${targetChannel}&transferBudget=${storage}`);
+                    resolve(this.#callApi(`/budd?targetChannel=${targetChannel}&transferBudget=${storage}`));
                 }
                 else {
                     const { channelData, exportable_privateKey } = await newChannelData(keys);
