@@ -17,7 +17,7 @@ const SBKnownServers = [
         storage_server: 'https://s.384co.workers.dev'
     },
 ];
-var DBG = true;
+var DBG = false;
 export function encryptedContentsMakeBinary(o) {
     try {
         let t;
@@ -1018,6 +1018,7 @@ class SBMessage {
     }
 }
 class Channel extends SB384 {
+    ready;
     channelReady;
     #ChannelReadyFlag = false;
     #sbServer;
@@ -1035,9 +1036,10 @@ class Channel extends SB384 {
     #api;
     constructor(sbServer, key, channelId) {
         super(key);
+        let superThis = this;
         this.#sbServer = sbServer;
         this.#api = new ChannelApi(this);
-        this.channelReady = new Promise(async (resolve) => {
+        this.ready = new Promise(async (resolve) => {
             if (channelId) {
                 this.#channelId = channelId;
             }
@@ -1045,17 +1047,17 @@ class Channel extends SB384 {
                 await this.sb384Ready;
                 this.#channelId = this.ownerChannelId;
             }
-            new Promise(f => {
+            new Promise((channelKeysResolve) => {
+                const f = channelKeysResolve;
                 this.#channelKeysResolve = f;
             })
                 .then(() => {
                 this.#channelKeysLoaded = true;
                 this.#ChannelReadyFlag = true;
-                console.warn('Channel.ready: channel keys loaded');
-                this.ready = Promise.resolve(this);
-                resolve(this);
+                resolve(superThis);
             });
         });
+        this.channelReady = this.ready;
     }
     async importKeys(keyStrings) {
         this.#channelKeys = await sbCrypto.channelKeyStringsToCryptoKeys(keyStrings);
@@ -1071,10 +1073,7 @@ class Channel extends SB384 {
         return (this.#channelKeys);
     }
     get sbServer() { return this.#sbServer; }
-    get readyFlag() {
-        console.warn('Channel.readyFlag: ', this.#ChannelReadyFlag);
-        return this.#ChannelReadyFlag;
-    }
+    get readyFlag() { return this.#ChannelReadyFlag; }
     get api() { return this.#api; }
     get channelId() { return this.#channelId; }
     get channelSignKey() { _sb_assert(this.#channelKeysLoaded, "Channel.keys: not loaded (?)"); return (this.#channelSignKey); }
@@ -1152,8 +1151,7 @@ export class ChannelEndpoint extends Channel {
     adminData;
     constructor(sbServer, key, channelId) {
         super(sbServer, key, channelId);
-        SBFetch(this.sbServer.channel_server + '/api/room/' + this.channelId + '/getChannelKeys', {
-            method: 'GET',
+        SBFetch(this.sbServer.channel_server + '/api/room/' + this.channelId + '/getChannelKeys', { method: 'GET',
             headers: { 'Content-Type': 'application/json' },
         })
             .then((response) => {
@@ -1161,7 +1159,6 @@ export class ChannelEndpoint extends Channel {
             return response.json();
         })
             .then((data) => {
-            console.warn(data);
             _sb_assert(!data.error, "ChannelEndpoint(): failed to get channel keys (error in response)");
             this.importKeys(data);
         })
@@ -1320,12 +1317,14 @@ export class ChannelSocket extends Channel {
             }
             this.#ws.websocket.addEventListener('open', () => {
                 this.#ws.closed = false;
-                this.#ws.init = { name: JSON.stringify(this.exportable_pubKey) };
-                if (DBG) {
-                    console.log("++++++++ readyPromise() constructed init:");
-                    console.log(this.#ws.init);
-                }
-                this.#ws.websocket.send(JSON.stringify(this.#ws.init));
+                this.channelReady.then(() => {
+                    this.#ws.init = { name: JSON.stringify(this.exportable_pubKey) };
+                    if (DBG) {
+                        console.log("++++++++ readyPromise() constructed init:");
+                        console.log(this.#ws.init);
+                    }
+                    this.#ws.websocket.send(JSON.stringify(this.#ws.init));
+                });
             });
             this.#ws.websocket.addEventListener('message', async (e) => {
                 if (DBG) {
@@ -1352,41 +1351,38 @@ export class ChannelSocket extends Channel {
                 if (DBG)
                     console.log(this.#exportable_owner_pubKey);
                 await this.importKeys(message.keys);
-                this.channelReady.then(async () => {
-                    console.warn(this.api);
-                    this.adminData = await this.api.getAdminData();
-                    this.owner = sbCrypto.compareKeys(exportable_owner_pubKey, this.exportable_pubKey);
-                    if (DBG) {
-                        console.log("++++++++ readyPromise() getting adminData:");
-                        console.log(this.adminData);
-                    }
-                    this.admin = this.owner;
-                    if (backlog.length > 0) {
-                        queueMicrotask(() => {
-                            if (DBG)
-                                console.log("++++++++ readyPromise() inside micro task");
-                            for (let d in backlog) {
-                                if (DBG) {
-                                    console.log("++++++++ pulling this message from the backlog:");
-                                    console.log(e);
-                                }
-                                this.#processMessage(d);
-                            }
-                        });
-                    }
-                    else {
+                this.adminData = await this.api.getAdminData();
+                this.owner = sbCrypto.compareKeys(exportable_owner_pubKey, this.exportable_pubKey);
+                if (DBG) {
+                    console.log("++++++++ readyPromise() getting adminData:");
+                    console.log(this.adminData);
+                }
+                this.admin = this.owner;
+                if (backlog.length > 0) {
+                    queueMicrotask(() => {
                         if (DBG)
-                            console.log("++++++++ readyPromise() there were NO messages queued up");
-                    }
-                    this.#ws.websocket.addEventListener('message', (e) => {
-                        this.#processMessage(e.data);
+                            console.log("++++++++ readyPromise() inside micro task");
+                        for (let d in backlog) {
+                            if (DBG) {
+                                console.log("++++++++ pulling this message from the backlog:");
+                                console.log(e);
+                            }
+                            this.#processMessage(d);
+                        }
                     });
-                    _sb_assert(this.readyFlag, 'ChannelSocket.readyPromise(): parent channel not ready (?)');
-                    this.#ChannelSocketReadyFlag = true;
+                }
+                else {
                     if (DBG)
-                        console.log("++++++++ readyPromise() all done - resolving!");
-                    resolve(this);
+                        console.log("++++++++ readyPromise() there were NO messages queued up");
+                }
+                this.#ws.websocket.addEventListener('message', (e) => {
+                    this.#processMessage(e.data);
                 });
+                _sb_assert(super.readyFlag, 'ChannelSocket.readyPromise(): parent channel not ready (?)');
+                this.#ChannelSocketReadyFlag = true;
+                if (DBG)
+                    console.log("++++++++ readyPromise() all done - resolving!");
+                resolve(this);
             });
             this.#ws.websocket.addEventListener('close', (e) => {
                 this.#ws.closed = true;
@@ -2012,7 +2008,7 @@ class ChannelApi {
                     .map((v) => deCryptChannelMessage(v, messages[v].encrypted_contents, this.#channel.keys)))
                     .then((decryptedMessageArray) => {
                     let lastMessage = decryptedMessageArray[decryptedMessageArray.length - 1];
-                    this.#cursor = lastMessage?._id || lastMessage?.id || '';
+                    this.#cursor = lastMessage._id || lastMessage.id || '';
                     if (DBG) {
                         console.log("getOldMessages() is returning:");
                         console.log(decryptedMessageArray);
@@ -2031,7 +2027,6 @@ class ChannelApi {
             console.log(path);
         const method = body ? 'POST' : 'GET';
         return new Promise(async (resolve, reject) => {
-            console.warn(this.#channel.ready);
             await (this.#channel.ready);
             let authString = '';
             const token_data = new Date().getTime().toString();
@@ -2053,9 +2048,8 @@ class ChannelApi {
                 return response.json();
             })
                 .then((data) => {
-                if (data.error) {
+                if (data.error)
                     reject(new Error(data.error));
-                }
                 resolve(data);
             })
                 .catch((e) => { reject("ChannelApi Error [1]: " + WrapError(e)); });
