@@ -193,6 +193,7 @@ declare class SBMessage {
 }
 declare abstract class Channel extends SB384 {
     #private;
+    ready: Promise<Channel>;
     channelReady: Promise<Channel>;
     motd?: string;
     locked?: boolean;
