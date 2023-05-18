@@ -1,15 +1,15 @@
 {
-  "name": "snackabra060",
+  "name": "snackabra",
   "//": "Pre-relase of 0.6.0 (version numbers will be 0.5.x)",
-  "version": "0.5.182",
+  "version": "0.5.184",
   "description": "Snackabra Core Library 0.5.x/0.6.0 ('jslib')",
-  "main": "snackabra.js",
-  "types": "snackabra.d.ts",
+  "main": "dist/snackabra.js",
+  "types": "dist/snackabra.d.ts",
   "scripts": {
     "start": "npm run watch",
     "build": "tsc -p tsconfig.json && npm run minify",
     "watch": "concurrently -k -p \"[{name}]\" -n \"TypeScript, Nodemon, Minify\" -c \"green.bold,cyan.bold,magenta.bold,white.bold\"  \"npm run watch-ts\" \"npm run nodemon\" \"npm run minify\"",
-    "nodemon": "nodemon --watch snackabra.ts -L -e ts --ignore node_modules/ --exec \"npm run build\"",
+    "nodemon": "nodemon --watch src/snackabra.ts -L -e ts --ignore node_modules/ --exec \"npm run build\"",
     "watch-ts": "tsc -p tsconfig.json -w",
     "minify": "webpack --config webpack.config.js"
   },
@@ -31,13 +31,13 @@
   "bugs": {
     "url": "https://github.com/snackabra/snackabra-jslib/issues"
   },
-  "homepage": "https://snackabra-050-docs.readthedocs.io/en/latest/",
+  "homepage": "https://snackabra.io",
   "files": [
-    "snackabra.d.ts",
-    "snackabra.js.map",
-    "snackabra.js",
-    "snackabra.ts",
-    "snackabra.min.js"
+    "dist/snackabra.d.ts",
+    "dist/snackabra.js.map",
+    "dist/snackabra.js",
+    "src/snackabra.ts",
+    "dist/snackabra.min.js"
   ],
   "sideEffects": false,
   "devDependencies": {
