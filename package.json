@@ -1,7 +1,7 @@
 {
   "name": "snackabra",
   "//": "Pre-relase of 0.6.0 (version numbers will be 0.5.x)",
-  "version": "0.5.184",
+  "version": "0.5.185",
   "description": "Snackabra Core Library 0.5.x/0.6.0 ('jslib')",
   "main": "dist/snackabra.js",
   "types": "dist/snackabra.d.ts",
