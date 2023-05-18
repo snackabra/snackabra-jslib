@@ -1,5 +1,5 @@
 module.exports = {
-    entry: './snackabra.js', // the entry point of your application
+    entry: './dist/snackabra.js', // the entry point of your application
     mode: 'production',
     watch: true,
     optimization: {
@@ -8,7 +8,7 @@ module.exports = {
     output: {
         library: 'SB', // the name exported to window
         libraryTarget: 'umd',
-        filename: 'snackabra.min.js',
+        filename: './dist/snackabra.min.js',
         path: __dirname + '/'
     }
 };

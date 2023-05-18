@@ -2,7 +2,6 @@ aside.*
 *~
 node_modules
 coverage/
-dist/
 /FileSystemDB/
 #*
 .#*
@@ -10,11 +9,6 @@ __tests__/cov_profile
 temp/
 .vscode/
 yarn.lock
-
-# actually we DO want this committed
-#*.js.map
-
-src/snackabra.ts.html
-scratch
 scratch/
 .DS_Store
+tmp/
