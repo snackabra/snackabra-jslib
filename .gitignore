@@ -3,3 +3,9 @@ aside.*
 node_modules
 coverage/
 dist/
+/FileSystemDB/
+#*
+.#*
+__tests__/cov_profile
+temp/
+.vscode/

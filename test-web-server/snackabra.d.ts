@@ -1,0 +1,1 @@
+../src/snackabra.d.ts
