@@ -17,7 +17,7 @@ const SBKnownServers = [
         storage_server: 'https://s.384co.workers.dev'
     },
 ];
-var DBG = false;
+var DBG = true;
 export function encryptedContentsMakeBinary(o) {
     try {
         let t;
