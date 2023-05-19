@@ -1,9 +1,9 @@
 {
   "name": "snackabra",
   "//": "Pre-relase of 0.6.0 (version numbers will be 0.5.x)",
-  "version": "0.5.189",
+  "version": "0.6.3",
   "description": "Snackabra Core Library 0.5.x/0.6.0 ('jslib')",
-  "main": "dist/snackabra.js",
+  "main": "dist/snackabra.min.js",
   "types": "dist/snackabra.d.ts",
   "scripts": {
     "start": "npm run watch",
@@ -31,7 +31,7 @@
   "bugs": {
     "url": "https://github.com/snackabra/snackabra-jslib/issues"
   },
-  "homepage": "https://snackabra.io",
+  "homepage": "https://snackabra.readthedocs.io",
   "files": [
     "dist/snackabra.d.ts",
     "dist/snackabra.js.map",

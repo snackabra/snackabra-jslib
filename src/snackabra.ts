@@ -218,7 +218,7 @@ export interface ChannelMessage {
  * strings (see ChannelKeyStrings).
  * 
  *
- * ::
+ * @example
  *
  * { "ready": true,
  *    "keys": {
@@ -492,6 +492,7 @@ function WrapError(e: any) {
 // }
 // throw new RethrownError(`Oh no a "${error.message}" error`, error)
 
+/** @private */
 export function _sb_exception(loc: string, msg: string) {
   const m = '<< SB lib error (' + loc + ': ' + msg + ') >>';
   // for now disabling this to keep node testing less noisy
@@ -502,6 +503,7 @@ export function _sb_exception(loc: string, msg: string) {
 // internal - general handling of paramaters that might be promises
 // (basically the "anti" of resolve, if it's *not* a promise then
 // it becomes one
+/** @private */
 export function _sb_resolve(val: any) {
   if (val.then) {
     // it's already a promise
@@ -514,6 +516,7 @@ export function _sb_resolve(val: any) {
 }
 
 // internal - handle assertions
+/** @private */
 export function _sb_assert(val: unknown, msg: string) {
   if (!(val)) {
     const m = `<< SB assertion error: ${msg} >>`;
@@ -684,6 +687,7 @@ function getLens(b64: string) {
   return [validLen, placeHoldersLen]
 }
 
+/** @private */
 function _byteLength(validLen: number, placeHoldersLen: number) {
   return ((validLen + placeHoldersLen) * 3 / 4) - placeHoldersLen;
 }
@@ -988,16 +992,20 @@ export function simpleRandomString(n: number, code: string): string {
 }
 
 /**
- * Disambiguates strings that are known to be 'base32mi' type
+ * This function disambiguates strings that are known to be 'base32mi' type.
+ * Below is the list of base32 characters, and the disambiguation table.
+ * base32mi is designed to be human-friendly, so this function can be 
+ * safely called anywhere you have human input - including as an 
+ * event on an input field that immediately makes any correction. 
+ * 
+ * You can think of the translation either in terms of many-to-one
+ * (all entered characters that map to a specific base32mi character),
+ * or as a one-to-one correspondence (where '.' means 'no change').
  *
- * ::
+ * @example
  *
  *     'base32mi': '0123456789abcdefyhEjkLmNHpFrRTUW'
- *
- * This is the base32mi disambiguation table
- *
- *  ::
- *
+ * 
  *     [OoQD] -> '0'
  *     [lIiJ] -> '1'
  *     [Zz] -> '2'
@@ -1015,10 +1023,6 @@ export function simpleRandomString(n: number, code: string): string {
  *     [P] -> 'p'
  *     [uvV] -> 'U'
  *     [w] -> 'W'
- *
- * Another way to think of it is this transform ('.' means no change):
- *
- * ::
  *
  *     0123456789abcdefghijklmnopqrstuvxyzABCDEFGHIJKLMNOPQRSTUVXYZ
  *     ................9.1..1.N0.9.57UUk.248c0EF6.11kLm.0p0.5..Uky2
@@ -1796,7 +1800,9 @@ class SB384 {
    * Like most SB classes, SB384 follows the "ready template" design
    * pattern: the object is immediately available upon creation,
    * but isn't "ready" until it says it's ready. See `Channel Class`_
-   * example below.
+   * example below. Also see Design Note [4]_.
+   * 
+   * { @link https://snackabra.io/jslib.html#dn-004-the-ready-pattern }
    *
    * @param key a jwk with which to create identity; if not provided,
    * it will 'mint' (generate) them randomly, in other words it will
@@ -2029,7 +2035,8 @@ abstract class Channel extends SB384 {
   /**
    * @param Snackabra - server to join
    * @param JsonWebKey - key to use to join (optional)
-   * @param string - the [Channel Name](glossary.md#term-channel-name) to find on that server (optional)
+   * @param string - the <a href="../glossary.html#term-channel-name">Channel Name</a> to find on that server (optional)
+   * 
    */
   channelReady: Promise<Channel>
   #ChannelReadyFlag: boolean = false // must be named <class>ReadyFlag
@@ -2939,10 +2946,6 @@ class StorageApi {
         .then((r) => { /* console.log('got storage reply:'); console.log(r); */ return r.arrayBuffer(); })
         .then((b) => {
           const par = extractPayload(b)
-          // console.log("_allocateObject() returned salt/iv::")
-          // console.log(`object ID: ${image_id}`)
-          // console.log(`     salt: ${arrayBufferToBase64(par.salt)}`)
-          // console.log(`       iv:  ${arrayBufferToBase64(par.iv)}`)
           resolve({ salt: new Uint8Array(par.salt), iv: new Uint8Array(par.iv) })
         })
         .catch((e) => {
@@ -3007,9 +3010,6 @@ class StorageApi {
         // return { full: { id: fullHash.id, key: fullHash.key }, preview: { id: previewHash.id, key: previewHash.key } }
         this.#_allocateObject(fullHash.id, type)
           .then((p) => {
-            // console.log('got these instructions from the storage server:')
-            // storage server returns the salt and nonce it wants us to use
-            // console.log(p)
             const r: SBObjectMetadata = {
               [SB_OBJECT_HANDLE_SYMBOL]: true,
               version: '1',
@@ -3020,8 +3020,6 @@ class StorageApi {
               salt: p.salt,
               paddedBuffer: paddedBuf
             }
-            // console.log("SBObj is:")
-            // console.log(r)
             resolve(r)
           })
           .catch((e) => reject(e))
@@ -3834,9 +3832,6 @@ class ChannelApi {
   *     })
   * ```
   *
-  * Testing glossary links:
-  * 
-  * * {@link glossary.html}
   */
 class Snackabra {
   #storage!: StorageApi
