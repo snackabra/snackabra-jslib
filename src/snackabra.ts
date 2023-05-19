@@ -311,7 +311,7 @@ export interface EncryptedContentsBin {
 }
 
 // set by creation of Snackabra object
-var DBG = false;
+var DBG = true;
 
 /**
  * Force EncryptedContents object to binary (interface
