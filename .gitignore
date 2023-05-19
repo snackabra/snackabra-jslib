@@ -12,3 +12,5 @@ yarn.lock
 scratch/
 .DS_Store
 tmp/
+.DS_Store/
+.DS_Store
