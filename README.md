@@ -1,19 +1,17 @@
 <img src="https://user-images.githubusercontent.com/844289/156240563-cfa8d1ff-fd55-43d7-a867-e9e7c77d183e.svg" width="100">
 
-_Stay tuned, this is shortly to be 0.6.0_
-
 # Snackabra Library (aka "jslib")
 
 If you would like to contribute or help out with the snackabra
-project, please feel free to reach out to us at snackabra@gmail.com or
-snackabra@protonmail.com
+project, please feel free to reach out to us at <snackabra@gmail.com> or
+<snackabra@protonmail.com>
 
 Snackabra is licensed under GPL-v3, see [GPL v3 license
 file](LICENSE.md) for details.
 
 ## Build
 
-```
+```bash
 yarn install
 yarn start
 ```
@@ -22,26 +20,24 @@ yarn start
 
 From a local copy:
 
-```
-  <script type="module" src="browser.mjs"></script>
+```html
+  <script type="module" src="snackabra.min.js"></script>
 ```
 
 Or from npm package:
 
-```
+```html
   <!-- This gets latest version: -->
-  <script type="module" src="https://unpkg.com/snackabra/browser.mjs"></script>
-  <!-- This gets specific version: -->
-  <script type="module" src="https://unpkg.com/snackabra@0.4.10/browser.mjs"></script>
+  <script type="module" src="https://unpkg.com/snackabra"></script>
 ```
 
 Dynamic import of latest version from unpkg:
 
-```
+```html
   <h2>Test Results</h2>
   <p id='testResults'></p>
   <script>
-    import('https://unpkg.com/snackabra/browser.mjs').then((sb) => {
+    import('https://unpkg.com/snackabra').then((sb) => {
       let z = document.getElementById("testResults");
       z.innerHTML += `Test: ${sb.str2ab('hello')}`;
     });
@@ -52,11 +48,9 @@ You can also access the loaded functions globally, e.g. ``window.Snackabra.str2a
 
 ## Usage in Node
 
-_Note: node usage is not a priority at the moment_
-
 Install:
 
-```
+```bash
 npm install snackabra -g
 ```
 
@@ -80,39 +74,33 @@ import {str2ab} from 'snackabra';
 console.log(str2ab('hello'));
 ```
 
-
 ## Development
 
 First time around, remember to:
 
-```
+```bash
 # install devDependencies
 yarn install
 ```
 
 Build components (and install dependencies):
 
-```
+```bash
 yarn pack
 ```
-
-This will generate the ``browser.mjs`` and ``index.mjs`` files;
-the former is for use in browsers, the latter for use with node.
-
 
 ## Publishing
 
 If you have write/admin access to ``npmjs``:
 
-```
+```bash
 yarn login  # if needed
 yarn publish
 ```
 
 Remember to bump the version number in ![package.json](package.json) before publishing.
 
-Package should get updated at https://www.npmjs.com/package/snackabra 
-
+Package should get updated at <https://www.npmjs.com/package/snackabra>
 
 ## LICENSE
 
