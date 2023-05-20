@@ -14,8 +14,7 @@ file](LICENSE.md) for details.
 For documentation see:
 
 * <https://snackabra.readthedocs.io> (latest)
-* <https://snackabra.io> (version 0.4.3)
-
+* <https://snackabra.io> (archive of version 0.4.3)
 
 Source and related projects: <https://github.com/snackabra>
 
